@@ -978,10 +978,25 @@ textarea {
   gap: 10px;
 }
 
+/* 
 .output-check-line {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+*/
+
+.output-check-line > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 16px;
+  font-size: 14px;
+}
+
+.output-check-line > label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
 }
 
 .simple-check-item,
@@ -1030,6 +1045,31 @@ textarea {
 
 .output-result-grid-3col {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.output-result-row {
+  display: grid;
+  grid-template-columns: 80px 80px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.output-result-row-title {
+  font-weight: 600;
+}
+
+.output-result-row-status {
+  color: #666;
+}
+
+.output-result-row-file {
+  min-width: 0;
+}
+
+.output-result-row-action {
+  white-space: nowrap;
 }
 
 .output-result-item {

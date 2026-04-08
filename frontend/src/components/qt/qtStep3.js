@@ -77,15 +77,20 @@ export function renderQTStep3(audienceId, appState) {
         <div class="hint">다음의 확장자로 결과물이 생성됩니다.</div>
 
         <div class="output-check-line topgap">
-          <label class="simple-check-item">
+          <label>
             <input type="checkbox" id="makeHtmlChk" checked />
             <span>HTML</span>
           </label>
 
-          <label class="simple-check-item">
+          <label>
             <input type="checkbox" id="makePdfChk" checked />
             <span>PDF</span>
           </label>
+
+          <!--
+          TODO(step3-docx-pptx):
+          DOCX / PPTX는 현재 Step3에서 임시 제외.
+          추후 품질 검토 후 다시 노출할 때 아래 체크박스를 복구한다.
 
           <label class="simple-check-item">
             <input type="checkbox" id="makeDocxChk" />
@@ -96,9 +101,10 @@ export function renderQTStep3(audienceId, appState) {
             <input type="checkbox" id="makePptxChk" />
             <span>PPTX</span>
           </label>
+          -->
 
-          <label class="simple-check-item">
-            <input type="checkbox" id="makePngChk" />
+          <label>
+            <input type="checkbox" id="makePngChk" checked />
             <span>PNG</span>
           </label>
         </div>
@@ -111,8 +117,16 @@ export function renderQTStep3(audienceId, appState) {
       <section class="output-result-grid output-result-grid-3col">
         ${renderOutputItem('HTML', output.htmlFile || '', output.htmlFile ? '완료' : '대기', 'htmlFilePath', 'htmlFileStatus', 'html')}
         ${renderOutputItem('PDF', output.pdfFile || '', output.pdfFile ? '완료' : '대기', 'pdfFilePath', 'pdfFileStatus', 'pdf')}
-        ${renderOutputItem('DOCX', output.docxFile || '', output.docxFile ? '완료' : '대기', 'docxFilePath', 'docxFileStatus', 'docx')}
-        ${renderOutputItem('PPTX', output.pptxFile || '', output.pptxFile ? '완료' : '대기', 'pptxFilePath', 'pptxFileStatus', 'pptx')}
+
+        <!--
+        TODO(step3-docx-pptx):
+        DOCX / PPTX는 현재 Step3에서 임시 제외.
+        추후 품질 검토 후 다시 노출할 때 아래 결과 카드도 함께 복구한다.
+
+        //${renderOutputItem('DOCX', output.docxFile || '', output.docxFile ? '완료' : '대기', 'docxFilePath', 'docxFileStatus', 'docx')}
+        //${renderOutputItem('PPTX', output.pptxFile || '', output.pptxFile ? '완료' : '대기', 'pptxFilePath', 'pptxFileStatus', 'pptx')}
+        -->
+
         ${renderOutputItem('PNG', output.pngFile || '', output.pngFile ? '완료' : '대기', 'pngFilePath', 'pngFileStatus', 'png')}
       </section>
 

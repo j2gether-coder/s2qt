@@ -411,7 +411,7 @@ function renderAudienceLayout(audienceId) {
           data-audience-step="step1"
           data-audience-id="${audienceId}"
         >
-          Step1. LLM 이용
+          Step1. AI(LLM) 이용
         </button>
 
         <button
