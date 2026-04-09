@@ -132,7 +132,7 @@ export function renderQTStep3(audienceId, appState) {
 
       <section class="step-status-grid step-status-grid-3col">
         <div class="step-status-item">
-          <div class="step-status-label">Step1. LLM 이용</div>
+          <div class="step-status-label">Step1. AI(LLM) 이용</div>
           <div class="step-status-value" id="qtStep1DoneState">대기</div>
         </div>
 

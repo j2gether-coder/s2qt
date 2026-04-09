@@ -12,7 +12,7 @@ export function LoadQTStep2Data():Promise<service.QTStep2Data>;
 
 export function LoadTextFile(arg1:string):Promise<string>;
 
-export function OpenOutputFile(arg1:string):Promise<void>;
+export function OpenGeneratedFile(arg1:string):Promise<void>;
 
 export function OpenTempHTMLPreview():Promise<void>;
 
@@ -24,9 +24,9 @@ export function RunQTStep3(arg1:service.QTStep3Request):Promise<service.QTStep3R
 
 export function RunSourcePrepare(arg1:service.SourcePrepareRequest):Promise<service.SourcePrepareResult>;
 
-export function SaveManualLLMResult(arg1:string):Promise<void>;
+export function SaveGeneratedFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
-export function SaveQTOutputAs(arg1:service.SaveOutputAsRequest):Promise<service.SaveOutputAsResult>;
+export function SaveManualLLMResult(arg1:string):Promise<void>;
 
 export function SaveQTStep2Data(arg1:service.QTStep2Data):Promise<void>;
 

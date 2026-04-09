@@ -17,15 +17,19 @@ import (
 )
 
 type App struct {
-	ctx context.Context
+	ctx               context.Context
+	outputFileService *service.OutputFileService
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{
+		outputFileService: service.NewOutputFileService(),
+	}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.outputFileService.SetContext(ctx)
 }
 
 func (a *App) SelectTextFile() (string, error) {
@@ -238,27 +242,37 @@ func (a *App) GeneratePNG(dpi int) (*service.PNGGenerateResult, error) {
 	return pngSvc.GenerateFromTempHTML(dpi)
 }
 
-func (a *App) OpenOutputFile(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return errors.New("파일 경로가 비어 있습니다")
-	}
+// TODO(step3-legacy-output):
+// 기존 출력 열기/다른 저장 방식은 현재 Step3에서 사용하지 않음.
+// 필요 시 이후 구조 정리 후 재사용 검토.
+// func (a *App) OpenOutputFile(path string) error {
+// 	path = strings.TrimSpace(path)
+// 	if path == "" {
+// 		return errors.New("파일 경로가 비어 있습니다")
+// 	}
+//
+// 	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", path)
+// 	if err := cmd.Start(); err != nil {
+// 		return fmt.Errorf("파일 열기 실패: %w", err)
+// 	}
+// 	return nil
+// }
+//
+// func (a *App) SaveQTOutputAs(req service.SaveOutputAsRequest) (*service.SaveOutputAsResult, error) {
+// 	svc, err := service.NewFileSaveService()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	return svc.SaveOutputAs(&req, func(defaultFilename string, filters []service.DialogFileFilter) (string, error) {
+// 		return "", nil
+// 	})
+// }
 
-	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", path)
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("파일 열기 실패: %w", err)
-	}
-	return nil
+func (a *App) OpenGeneratedFile(filePath string) error {
+	return a.outputFileService.OpenGeneratedFile(filePath)
 }
 
-func (a *App) SaveQTOutputAs(req service.SaveOutputAsRequest) (*service.SaveOutputAsResult, error) {
-	svc, err := service.NewFileSaveService()
-	if err != nil {
-		return nil, err
-	}
-
-	return svc.SaveOutputAs(&req, func(defaultFilename string, filters []service.DialogFileFilter) (string, error) {
-		// 여기서 Wails SaveFileDialog 연결
-		return "", nil
-	})
+func (a *App) SaveGeneratedFile(filePath, audienceID, formatKey string) (string, error) {
+	return a.outputFileService.SaveGeneratedFile(filePath, audienceID, formatKey)
 }

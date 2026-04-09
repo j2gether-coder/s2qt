@@ -218,48 +218,6 @@ export namespace service {
 		    return a;
 		}
 	}
-	export class SaveOutputAsRequest {
-	    sourcePath: string;
-	    format: string;
-	    sermonDate: string;
-	    audience: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new SaveOutputAsRequest(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sourcePath = source["sourcePath"];
-	        this.format = source["format"];
-	        this.sermonDate = source["sermonDate"];
-	        this.audience = source["audience"];
-	    }
-	}
-	export class SaveOutputAsResult {
-	    success: boolean;
-	    message: string;
-	    sourcePath: string;
-	    savedPath: string;
-	    fileName: string;
-	    format: string;
-	    dialogOpened: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new SaveOutputAsResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.success = source["success"];
-	        this.message = source["message"];
-	        this.sourcePath = source["sourcePath"];
-	        this.savedPath = source["savedPath"];
-	        this.fileName = source["fileName"];
-	        this.format = source["format"];
-	        this.dialogOpened = source["dialogOpened"];
-	    }
-	}
 	export class SourcePrepareRequest {
 	    sourceType: string;
 	    inputMode: string;

@@ -1,4 +1,4 @@
-import { RunQTStep3, SaveQTOutputAs } from '../../../wailsjs/go/main/App';
+import { RunQTStep3, OpenGeneratedFile, SaveGeneratedFile } from '../../../wailsjs/go/main/App';
 import { setAudienceStep } from '../../state/appState';
 import { mountAppShell } from '../appShell';
 
@@ -31,17 +31,29 @@ function applyOne(resultKey, item) {
   const statusMap = {
     html: 'htmlFileStatus',
     pdf: 'pdfFileStatus',
+    png: 'pngFileStatus',
+
+    /*
+    TODO(step3-docx-pptx):
+    DOCX / PPTX 재개 시 상태 표시 복구
+
     docx: 'docxFileStatus',
     pptx: 'pptxFileStatus',
-    png: 'pngFileStatus',
+    */
   };
 
   const fileMap = {
     html: 'htmlFilePath',
     pdf: 'pdfFilePath',
+    png: 'pngFilePath',
+
+    /*
+    TODO(step3-docx-pptx):
+    DOCX / PPTX 재개 시 파일 경로 표시 복구
+
     docx: 'docxFilePath',
     pptx: 'pptxFilePath',
-    png: 'pngFilePath',
+    */
   };
 
   setText(statusMap[resultKey], item?.status || '대기');
@@ -52,11 +64,67 @@ function buildStep3Payload() {
   return {
     makeHtml: getChecked('makeHtmlChk'),
     makePdf: getChecked('makePdfChk'),
+    makePng: getChecked('makePngChk'),
+
+    /*
+    TODO(step3-docx-pptx):
+    DOCX / PPTX 재개 시 체크박스 payload 복구
+
     makeDocx: getChecked('makeDocxChk'),
     makePptx: getChecked('makePptxChk'),
-    makePng: getChecked('makePngChk'),
+    */
+
     dpi: 300,
   };
+}
+
+function bindFileOpenLinks() {
+  const links = document.querySelectorAll('.output-file-link[data-file]');
+
+  links.forEach((link) => {
+    link.addEventListener('click', async (event) => {
+      event.preventDefault();
+
+      const filePath = link.dataset.file || '';
+      if (!filePath.trim()) {
+        window.alert('열 파일이 없습니다.');
+        return;
+      }
+
+      try {
+        await OpenGeneratedFile(filePath);
+      } catch (error) {
+        console.error(error);
+        window.alert(error?.message || '파일 열기 중 오류가 발생했습니다.');
+      }
+    });
+  });
+}
+
+function bindSaveAsButtons(audienceId) {
+  const buttons = document.querySelectorAll('.output-save-btn[data-file]');
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const filePath = btn.dataset.file || '';
+      const formatKey = btn.dataset.format || '';
+
+      if (!filePath.trim()) {
+        window.alert('저장할 파일이 없습니다.');
+        return;
+      }
+
+      try {
+        const savedPath = await SaveGeneratedFile(filePath, audienceId, formatKey);
+        if (savedPath) {
+          window.alert('파일 저장이 완료되었습니다.');
+        }
+      } catch (error) {
+        console.error(error);
+        window.alert(error?.message || '파일 저장 중 오류가 발생했습니다.');
+      }
+    });
+  });
 }
 
 export function bindQTStep3Events(audienceId) {
@@ -64,8 +132,9 @@ export function bindQTStep3Events(audienceId) {
   const backBtn = document.getElementById('backToStep2Btn');
   const finishBtn = document.getElementById('finishQtFlowBtn');
 
-  bindSaveAsButtons();
-  
+  bindFileOpenLinks();
+  bindSaveAsButtons(audienceId);
+
   if (runBtn) {
     runBtn.addEventListener('click', async () => {
       try {
@@ -74,11 +143,18 @@ export function bindQTStep3Events(audienceId) {
 
         applyOne('html', result?.html);
         applyOne('pdf', result?.pdf);
-        applyOne('docx', result?.docx);
-        applyOne('pptx', result?.pptx);
         applyOne('png', result?.png);
 
-        bindSaveAsButtons
+        /*
+        TODO(step3-docx-pptx):
+        DOCX / PPTX 재개 시 결과 반영 복구
+
+        applyOne('docx', result?.docx);
+        applyOne('pptx', result?.pptx);
+        */
+
+        bindFileOpenLinks();
+        bindSaveAsButtons(audienceId);
 
         setText('qtStep1DoneState', '완료');
         setText('qtStep2DoneState', '완료');
@@ -102,30 +178,4 @@ export function bindQTStep3Events(audienceId) {
       window.alert('QT 문서 생성 작업이 완료되었습니다.');
     });
   }
-}
-
-function bindSaveAsButtons() {
-  const buttons = document.querySelectorAll('.output-save-btn[data-file]');
-
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const filePath = btn.dataset.file || '';
-      const format = btn.dataset.format || '';
-
-      if (!filePath.trim()) {
-        window.alert('저장할 파일이 없습니다.');
-        return;
-      }
-
-      try {
-        await SaveQTOutputAs({
-          sourcePath: filePath,
-          format,
-        });
-      } catch (error) {
-        console.error(error);
-        window.alert(error?.message || '파일 저장 중 오류가 발생했습니다.');
-      }
-    });
-  });
 }

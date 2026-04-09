@@ -22,8 +22,8 @@ export function LoadTextFile(arg1) {
   return window['go']['main']['App']['LoadTextFile'](arg1);
 }
 
-export function OpenOutputFile(arg1) {
-  return window['go']['main']['App']['OpenOutputFile'](arg1);
+export function OpenGeneratedFile(arg1) {
+  return window['go']['main']['App']['OpenGeneratedFile'](arg1);
 }
 
 export function OpenTempHTMLPreview() {
@@ -46,12 +46,12 @@ export function RunSourcePrepare(arg1) {
   return window['go']['main']['App']['RunSourcePrepare'](arg1);
 }
 
-export function SaveManualLLMResult(arg1) {
-  return window['go']['main']['App']['SaveManualLLMResult'](arg1);
+export function SaveGeneratedFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveGeneratedFile'](arg1, arg2, arg3);
 }
 
-export function SaveQTOutputAs(arg1) {
-  return window['go']['main']['App']['SaveQTOutputAs'](arg1);
+export function SaveManualLLMResult(arg1) {
+  return window['go']['main']['App']['SaveManualLLMResult'](arg1);
 }
 
 export function SaveQTStep2Data(arg1) {
