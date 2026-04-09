@@ -14,8 +14,8 @@ export function renderQTStep1(audienceId, appState) {
   return `
     <section class="workspace-step-panel">
       <section class="card card-plain">
-        <div class="step-badge">Step1. LLM 이용</div>
-        <p class="body-note topgap-sm">LLM을 이용하여 초안 작업을 합니다.</p>
+        <div class="step-badge">Step1. AI(LLM) 이용</div>
+        <p class="body-note topgap-sm">AI(LLM)를 이용하여 초안 작업을 합니다.</p>
       </section>
 
       <section class="card">
@@ -26,7 +26,7 @@ export function renderQTStep1(audienceId, appState) {
         <textarea
           id="qtPromptPreview"
           class="promptbox-sm topgap"
-          placeholder="여기에 LLM용 프롬프트가 표시됩니다."
+          placeholder="여기에 AI(LLM)용 프롬프트가 표시됩니다."
         ></textarea>
 
         <div class="row single-action-row topgap-sm">
@@ -35,7 +35,7 @@ export function renderQTStep1(audienceId, appState) {
       </section>
 
       <section class="card">
-        <h3 class="mini-title">LLM 처리 및 결과 저장</h3>
+        <h3 class="mini-title">AI(LLM) 처리 및 결과 저장</h3>
 
         <div class="mode-strip">
           <span class="mode-label">현재 모드</span>
@@ -51,7 +51,7 @@ export function renderQTStep1(audienceId, appState) {
             `
             : `
               <div class="hint topgap-sm" id="llmGuideText">
-                외부 LLM 결과를 붙여 넣는 방식입니다.
+                외부 AI(LLM) 결과를 붙여 넣는 방식입니다.
               </div>
             `
         }
@@ -59,7 +59,7 @@ export function renderQTStep1(audienceId, appState) {
         <textarea
           id="qtResultText"
           class="resultbox-sm topgap"
-          placeholder="LLM 결과를 확인하거나 붙여넣어 주세요."
+          placeholder="AI(LLM) 결과를 확인하거나 붙여넣어 주세요."
         ></textarea>
 
         <div class="row single-action-row topgap-sm">

@@ -143,9 +143,12 @@ func buildPNGSourcePath(tempHTMLPath string) string {
 
 func (s *PNGService) wrapHTMLForPNG(content string) (string, error) {
 	pngStyle := loadQTPNGStyle()
-	cleaned := stripStyleBlock(content)
+	cleaned := normalizeHTMLFragment(content)
 
-	return wrapHTMLDocument("S2QT PNG", pngStyle, cleaned), nil
+	bodyWithFooter := appendQTBottomFooter(cleaned)
+	bodyWithQR := appendQTCornerQR(bodyWithFooter, s.Paths.TempHtml)
+
+	return wrapHTMLDocument("S2QT PNG", pngStyle, bodyWithQR), nil
 }
 
 func wrapHTMLDocument(title, css, body string) string {
@@ -166,8 +169,6 @@ func wrapHTMLDocument(title, css, body string) string {
 }
 
 func loadQTPNGStyle() string {
-	// PNG는 PDF와 같은 인쇄 기준 레이아웃을 따르되,
-	// 화면 캡처에서는 @page margin이 적용되지 않으므로 동일 값을 screen 레이아웃에 다시 반영한다.
 	return loadQTPDFStyle() + `
 
 html{
@@ -198,14 +199,12 @@ body{
 }
 
 func a4PixelSize(dpi int) (int, int) {
-	// A4 = 8.2677165 x 11.692913 inches
 	width := int(8.2677165*float64(dpi) + 0.5)
 	height := int(11.692913*float64(dpi) + 0.5)
 	return width, height
 }
 
 func a4ViewportSizeCSSPx() (int, int) {
-	// Browsers lay out CSS using 96 CSS px per inch.
 	cssDPI := 96.0
 	width := int(float64(8.2677165)*cssDPI + 0.5)
 	height := int(float64(11.692913)*cssDPI + 0.5)
@@ -220,7 +219,6 @@ func toFileURL(path string) (string, error) {
 
 	slashed := filepath.ToSlash(abs)
 
-	// Windows: C:/path/to/file.html -> file:///C:/path/to/file.html
 	u := &url.URL{
 		Scheme: "file",
 		Path:   "/" + slashed,
@@ -242,7 +240,6 @@ func findBrowserExecutable() (string, error) {
 		}
 	}
 
-	// PATH 에 등록된 경우도 시도
 	for _, name := range []string{"msedge.exe", "chrome.exe"} {
 		if path, err := exec.LookPath(name); err == nil {
 			return path, nil

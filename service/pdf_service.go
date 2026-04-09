@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -44,6 +45,139 @@ type QTJSONBlock struct {
 	Title string   `json:"title,omitempty"`
 	Items []string `json:"items,omitempty"`
 }
+
+const qtFooterMessage = "말씀을 묵상으로, 묵상을 삶으로"
+const qtPDFScript = `
+(function() {
+  function fitQTPage() {
+    var body = document.querySelector('.qt-page-body');
+    var scaled = document.querySelector('.qt-page-content-scaled');
+    if (!body || !scaled) {
+      return;
+    }
+
+    scaled.style.transform = 'scale(1)';
+    scaled.style.width = '';
+    scaled.style.maxWidth = '';
+
+    var availableHeight = body.clientHeight;
+    var contentHeight = scaled.scrollHeight;
+    if (!availableHeight || !contentHeight) {
+      return;
+    }
+
+    var scale = Math.min(1, availableHeight / contentHeight);
+    if (scale < 1) {
+      scaled.style.transform = 'scale(' + scale + ')';
+      scaled.style.width = (100 / scale) + '%';
+      scaled.style.maxWidth = 'none';
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fitQTPage, { once: true });
+  } else {
+    fitQTPage();
+  }
+
+  window.addEventListener('load', fitQTPage, { once: true });
+})();
+`
+
+const qtPDFLayoutStyle = `
+html, body{
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  width: 210mm !important;
+  height: 297mm !important;
+  overflow: hidden !important;
+}
+
+body{
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  box-sizing: border-box;
+}
+
+.qt-page-shell{
+  position: relative;
+  width: 190mm;
+  height: 277mm;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.qt-page-body{
+  position: relative;
+  width: 100%;
+  height: 247mm;
+  overflow: hidden;
+}
+
+.qt-page-content{
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.qt-page-content-scaled{
+  width: 100%;
+  transform-origin: top center;
+}
+
+.qt-wrap{
+  width: 100% !important;
+  max-width: 186mm !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+.qt-footer{
+  position: absolute !important;
+  left: 0 !important;
+  right: 36mm !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 4mm 0 0 0 !important;
+  border-top: 1px solid #d1d5db !important;
+  color: #4b5563 !important;
+  text-align: center !important;
+  z-index: 2 !important;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.qt-footer-line{
+  display: none !important;
+}
+
+.qt-footer-text{
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+}
+
+.qt-page-qr{
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 25mm !important;
+  height: 25mm !important;
+  max-width: 25mm !important;
+  max-height: 25mm !important;
+  object-fit: contain !important;
+  display: block !important;
+  z-index: 3 !important;
+  pointer-events: none;
+}
+
+h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+`
 
 const defaultQTHTMLStyle = `
 .qt-wrap{
@@ -178,11 +312,41 @@ html, body{
   margin: 0;
   padding: 0;
   background: #ffffff;
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
 }
 
 body{
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+  box-sizing: border-box;
+}
+
+.qt-page-shell{
+  position: relative;
+  width: 100%;
+  height: 277mm;
+  overflow: hidden;
+}
+
+.qt-page-body{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0 0 26mm 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.qt-page-content{
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.qt-page-content-scaled{
+  transform-origin: top center;
 }
 
 .qt-wrap{
@@ -296,24 +460,39 @@ body{
 }
 
 .qt-footer{
-  margin-top: 16px;
+  position: fixed;
+  left: 10mm;
+  right: 42mm;
+  bottom: 10mm;
   color: var(--qt-muted);
+  padding-top: 4mm;
+  border-top: 1px solid var(--qt-line);
   text-align: center;
+  z-index: 2;
   page-break-inside: avoid;
   break-inside: avoid;
 }
 
-.qt-footer-line{
-  height: 1px;
-  background: var(--qt-line);
-  margin-bottom: 8px;
-}
-
 .qt-footer-text{
   font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
 }
 
-h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox,.qt-footer{
+.qt-page-qr{
+  position: fixed;
+  right: 10mm;
+  bottom: 10mm;
+  width: 25mm;
+  height: 25mm;
+  object-fit: contain;
+  display: block;
+  z-index: 3;
+  pointer-events: none;
+}
+
+h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
   page-break-inside: avoid;
   break-inside: avoid;
 }
@@ -332,9 +511,6 @@ func NewPDFService() (*PDFService, error) {
 
 // SaveHtmlAndMakePDF는 Step3의 최종 HTML 조각(fragment)을 입력으로 받아
 // temp.md, temp.html, temp.pdf를 생성한다.
-// - temp.md   : 보관/검토용 텍스트 스냅샷
-// - temp.html : HTML용 스타일 적용
-// - temp.pdf  : PDF용 스타일 적용 후 Edge로 변환
 func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
 	html = strings.TrimSpace(html)
 	if html == "" {
@@ -351,13 +527,13 @@ func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
 
 	fragment := stripStyleBlock(html)
 
-	// 1) temp.md 저장 (간단한 텍스트 스냅샷)
+	// 1) temp.md 저장
 	mdContent := buildMarkdownSnapshot(fragment)
 	if err := os.WriteFile(s.Paths.TempMd, []byte(mdContent), 0644); err != nil {
 		return nil, fmt.Errorf("temp.md 저장 실패: %w", err)
 	}
 
-	// 2) temp.html 저장 (HTML용 style 적용)
+	// 2) temp.html 저장
 	htmlContent, err := s.wrapHTMLForHTML(fragment)
 	if err != nil {
 		return nil, err
@@ -366,7 +542,7 @@ func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
 		return nil, fmt.Errorf("temp.html 저장 실패: %w", err)
 	}
 
-	// 3) temp.pdf 생성 (PDF용 style 적용한 별도 임시 html 사용)
+	// 3) temp.pdf 생성
 	pdfHTMLContent, err := s.wrapHTMLForPDF(fragment)
 	if err != nil {
 		return nil, err
@@ -438,25 +614,33 @@ func loadQTHTMLStyle() string {
 func loadQTPDFStyle() string {
 	cfg, err := loadAppConfig()
 	if err != nil {
-		return defaultQTPDFStyle
+		return mergeQTPDFStyle(defaultQTPDFStyle)
 	}
 
 	stylePath := strings.TrimSpace(cfg.StyleQTPDFFile)
 	if stylePath == "" {
-		return defaultQTPDFStyle
+		return mergeQTPDFStyle(defaultQTPDFStyle)
 	}
 
 	b, err := os.ReadFile(stylePath)
 	if err != nil {
-		return defaultQTPDFStyle
+		return mergeQTPDFStyle(defaultQTPDFStyle)
 	}
 
 	text := strings.TrimSpace(string(b))
 	if text == "" {
-		return defaultQTPDFStyle
+		return mergeQTPDFStyle(defaultQTPDFStyle)
 	}
 
-	return text
+	return mergeQTPDFStyle(text)
+}
+
+func mergeQTPDFStyle(base string) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		base = defaultQTPDFStyle
+	}
+	return base + "\n\n" + qtPDFLayoutStyle
 }
 
 func (s *PDFService) wrapHTMLForHTML(content string) (string, error) {
@@ -470,7 +654,10 @@ func (s *PDFService) wrapHTMLForPDF(content string) (string, error) {
 	pdfStyle := loadQTPDFStyle()
 	cleaned := normalizeHTMLFragment(content)
 
-	return wrapHTMLDocumentForPDF("S2QT PDF", pdfStyle, cleaned), nil
+	bodyWithFooter := appendQTBottomFooter(cleaned)
+	bodyWithQR := appendQTCornerQR(bodyWithFooter, s.Paths.TempHtml)
+
+	return wrapHTMLDocumentForPDF("S2QT PDF", pdfStyle, bodyWithQR), nil
 }
 
 func wrapHTMLDocumentForHTML(title, css, body string) string {
@@ -503,8 +690,82 @@ func wrapHTMLDocumentForPDF(title, css, body string) string {
 </head>
 <body>
 ` + body + `
+<script>
+` + qtPDFScript + `
+</script>
 </body>
 </html>`
+}
+
+func appendQTBottomFooter(bodyHTML string) string {
+	bodyHTML = strings.TrimSpace(bodyHTML)
+
+	return `
+<div class="qt-page-shell">
+  <div class="qt-page-body">
+    <div class="qt-page-content">
+      <div class="qt-page-content-scaled">
+` + bodyHTML + `
+      </div>
+    </div>
+  </div>
+  ` + buildQTBottomFooterHTML() + `
+</div>`
+}
+
+func buildQTBottomFooterHTML() string {
+	return `
+<div class="qt-footer">
+  <div class="qt-footer-text">` + qtFooterMessage + `</div>
+</div>`
+}
+
+func appendQTCornerQR(bodyHTML, tempHTMLPath string) string {
+	dataURI := buildQTCornerQRDataURI(tempHTMLPath)
+	if dataURI == "" {
+		return bodyHTML
+	}
+
+	return bodyHTML + `
+<img class="qt-page-qr" src="` + dataURI + `" alt="S2QT Link QR" />`
+}
+
+func buildQTCornerQRDataURI(tempHTMLPath string) string {
+	qrPath := resolveQTCornerQRPath(tempHTMLPath)
+	if qrPath == "" {
+		return ""
+	}
+
+	b, err := os.ReadFile(qrPath)
+	if err != nil || len(b) == 0 {
+		return ""
+	}
+
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
+}
+
+func resolveQTCornerQRPath(tempHTMLPath string) string {
+	candidates := make([]string, 0)
+
+	if strings.TrimSpace(tempHTMLPath) != "" {
+		tempDir := filepath.Dir(tempHTMLPath) // var/temp
+		varDir := filepath.Dir(tempDir)       // var
+		candidates = append(candidates,
+			filepath.Join(varDir, "image", "s2qt_link.png"),
+		)
+	}
+
+	candidates = append(candidates,
+		filepath.Join("var", "image", "s2qt_link.png"),
+	)
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	return ""
 }
 
 func stripStyleBlock(content string) string {
@@ -516,7 +777,6 @@ func stripStyleBlock(content string) string {
 func buildMarkdownSnapshot(content string) string {
 	text := content
 
-	// 줄바꿈이 자연스럽게 보이도록 일부 블록 태그를 개행으로 치환
 	replacer := strings.NewReplacer(
 		"<br>", "\n",
 		"<br/>", "\n",
@@ -531,11 +791,9 @@ func buildMarkdownSnapshot(content string) string {
 	)
 	text = replacer.Replace(text)
 
-	// 태그 제거
 	tagRe := regexp.MustCompile(`(?is)<[^>]+>`)
 	text = tagRe.ReplaceAllString(text, "")
 
-	// HTML 엔티티 일부 복원
 	text = strings.ReplaceAll(text, "&nbsp;", " ")
 	text = strings.ReplaceAll(text, "&amp;", "&")
 	text = strings.ReplaceAll(text, "&lt;", "<")
@@ -543,7 +801,6 @@ func buildMarkdownSnapshot(content string) string {
 	text = strings.ReplaceAll(text, "&quot;", `"`)
 	text = strings.ReplaceAll(text, "&#39;", `'`)
 
-	// 과도한 공백 정리
 	lines := strings.Split(text, "\n")
 	var cleaned []string
 	blankCount := 0
@@ -589,6 +846,7 @@ func (s *PDFService) makePDFWithEdge(htmlPath, pdfPath string) error {
 		"--headless",
 		"--disable-gpu",
 		"--no-pdf-header-footer",
+		"--virtual-time-budget=1500",
 		"--print-to-pdf="+filepath.ToSlash(absPDF),
 		fileURL,
 	)
@@ -922,6 +1180,7 @@ func removeKnownTopLevelBlocks(html string) string {
 		`(?is)<[^>]*class="[^"]*qt-title[^"]*"[^>]*>.*?</[^>]+>`,
 		`(?is)<[^>]*class="[^"]*qt-subbox[^"]*"[^>]*>.*?</[^>]+>`,
 		`(?is)<[^>]*class="[^"]*qt-footer[^"]*"[^>]*>.*?</div>`,
+		`(?is)<img[^>]*class="[^"]*qt-page-qr[^"]*"[^>]*>`,
 	}
 	result := html
 	for _, p := range patterns {
@@ -1067,16 +1326,13 @@ func normalizeHTMLFragment(content string) string {
 		return ""
 	}
 
-	// 먼저 style 제거
 	content = stripStyleBlock(content)
 
-	// body 태그가 있으면 body 내부만 추출
 	bodyRe := regexp.MustCompile(`(?is)<body[^>]*>(.*)</body>`)
 	if m := bodyRe.FindStringSubmatch(content); len(m) >= 2 {
 		content = strings.TrimSpace(m[1])
 	}
 
-	// html/head 태그가 남아 있으면 제거
 	htmlReplacer := regexp.MustCompile(`(?is)</?(html|head|body)[^>]*>`)
 	content = htmlReplacer.ReplaceAllString(content, "")
 
