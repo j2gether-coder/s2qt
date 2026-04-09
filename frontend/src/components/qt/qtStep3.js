@@ -56,7 +56,7 @@ function renderOutputItem(title, filePath, statusText, fileId, statusId, formatK
         파일: <span id="${fileId}">${renderFileLink(filePath)}</span>
       </div>
 
-      <div class="topgap-sm">
+      <div class="topgap-sm" id="${escapeHtml(formatKey)}SaveBtnWrap">
         ${renderSaveButton(filePath, formatKey)}
       </div>
     </div>
@@ -123,8 +123,8 @@ export function renderQTStep3(audienceId, appState) {
         DOCX / PPTX는 현재 Step3에서 임시 제외.
         추후 품질 검토 후 다시 노출할 때 아래 결과 카드도 함께 복구한다.
 
-        //${renderOutputItem('DOCX', output.docxFile || '', output.docxFile ? '완료' : '대기', 'docxFilePath', 'docxFileStatus', 'docx')}
-        //${renderOutputItem('PPTX', output.pptxFile || '', output.pptxFile ? '완료' : '대기', 'pptxFilePath', 'pptxFileStatus', 'pptx')}
+        ${renderOutputItem('DOCX', output.docxFile || '', output.docxFile ? '완료' : '대기', 'docxFilePath', 'docxFileStatus', 'docx')}
+        ${renderOutputItem('PPTX', output.pptxFile || '', output.pptxFile ? '완료' : '대기', 'pptxFilePath', 'pptxFileStatus', 'pptx')}
         -->
 
         ${renderOutputItem('PNG', output.pngFile || '', output.pngFile ? '완료' : '대기', 'pngFilePath', 'pngFileStatus', 'png')}
@@ -132,7 +132,7 @@ export function renderQTStep3(audienceId, appState) {
 
       <section class="step-status-grid step-status-grid-3col">
         <div class="step-status-item">
-          <div class="step-status-label">Step1. AI(LLM) 이용</div>
+          <div class="step-status-label">Step1. LLM 이용</div>
           <div class="step-status-value" id="qtStep1DoneState">대기</div>
         </div>
 

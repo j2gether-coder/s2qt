@@ -27,6 +27,34 @@ function setFileLink(containerId, filePath) {
   `;
 }
 
+function setSaveButton(containerId, filePath, formatKey) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  const value = String(filePath || '').trim();
+  const format = String(formatKey || '').trim();
+
+  if (!value) {
+    el.innerHTML = `
+      <button class="button-ghost output-save-btn" type="button" disabled>
+        파일 저장
+      </button>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <button
+      class="button-ghost output-save-btn"
+      type="button"
+      data-format="${format}"
+      data-file="${value}"
+    >
+      파일 저장
+    </button>
+  `;
+}
+
 function applyOne(resultKey, item) {
   const statusMap = {
     html: 'htmlFileStatus',
@@ -56,8 +84,23 @@ function applyOne(resultKey, item) {
     */
   };
 
+  const saveBtnMap = {
+    html: 'htmlSaveBtnWrap',
+    pdf: 'pdfSaveBtnWrap',
+    png: 'pngSaveBtnWrap',
+
+    /*
+    TODO(step3-docx-pptx):
+    DOCX / PPTX 재개 시 저장 버튼 wrapper 복구
+
+    docx: 'docxSaveBtnWrap',
+    pptx: 'pptxSaveBtnWrap',
+    */
+  };
+
   setText(statusMap[resultKey], item?.status || '대기');
   setFileLink(fileMap[resultKey], item?.filePath || '');
+  setSaveButton(saveBtnMap[resultKey], item?.filePath || '', resultKey);
 }
 
 function buildStep3Payload() {
@@ -82,7 +125,7 @@ function bindFileOpenLinks() {
   const links = document.querySelectorAll('.output-file-link[data-file]');
 
   links.forEach((link) => {
-    link.addEventListener('click', async (event) => {
+    link.onclick = async (event) => {
       event.preventDefault();
 
       const filePath = link.dataset.file || '';
@@ -97,7 +140,7 @@ function bindFileOpenLinks() {
         console.error(error);
         window.alert(error?.message || '파일 열기 중 오류가 발생했습니다.');
       }
-    });
+    };
   });
 }
 
@@ -105,7 +148,7 @@ function bindSaveAsButtons(audienceId) {
   const buttons = document.querySelectorAll('.output-save-btn[data-file]');
 
   buttons.forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.onclick = async () => {
       const filePath = btn.dataset.file || '';
       const formatKey = btn.dataset.format || '';
 
@@ -123,7 +166,7 @@ function bindSaveAsButtons(audienceId) {
         console.error(error);
         window.alert(error?.message || '파일 저장 중 오류가 발생했습니다.');
       }
-    });
+    };
   });
 }
 
