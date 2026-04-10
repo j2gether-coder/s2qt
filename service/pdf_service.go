@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -50,17 +49,17 @@ const qtFooterMessage = "말씀을 묵상으로, 묵상을 삶으로"
 const qtPDFScript = `
 (function() {
   function fitQTPage() {
-    var body = document.querySelector('.qt-page-body');
+    var frame = document.querySelector('.qt-page-frame');
     var scaled = document.querySelector('.qt-page-content-scaled');
-    if (!body || !scaled) {
+    if (!frame || !scaled) {
       return;
     }
 
     scaled.style.transform = 'scale(1)';
-    scaled.style.width = '';
+    scaled.style.width = '100%';
     scaled.style.maxWidth = '';
 
-    var availableHeight = body.clientHeight;
+    var availableHeight = frame.clientHeight;
     var contentHeight = scaled.scrollHeight;
     if (!availableHeight || !contentHeight) {
       return;
@@ -85,6 +84,11 @@ const qtPDFScript = `
 `
 
 const qtPDFLayoutStyle = `
+@page{
+  size: A4;
+  margin: 0;
+}
+
 html, body{
   margin: 0 !important;
   padding: 0 !important;
@@ -95,27 +99,15 @@ html, body{
 }
 
 body{
+  position: relative !important;
+  box-sizing: border-box !important;
+  padding: 10mm 12mm var(--qt-safe-area, 36mm) 12mm !important;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
-  box-sizing: border-box;
 }
 
-.qt-page-shell{
+.qt-page-frame{
   position: relative;
-  width: 190mm;
-  height: 277mm;
-  margin: 0 auto;
-  overflow: hidden;
-}
-
-.qt-page-body{
-  position: relative;
-  width: 100%;
-  height: 247mm;
-  overflow: hidden;
-}
-
-.qt-page-content{
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -134,25 +126,56 @@ body{
 }
 
 .qt-footer{
-  position: absolute !important;
-  left: 0 !important;
-  right: 36mm !important;
-  bottom: 0 !important;
-  margin: 0 !important;
-  padding: 4mm 0 0 0 !important;
-  border-top: 1px solid #d1d5db !important;
+  position: fixed !important;
+  left: 12mm !important;
+  right: 12mm !important;
+  bottom: var(--qt-footer-bottom, 8mm) !important;
+  height: 14mm !important;
   color: #4b5563 !important;
-  text-align: center !important;
-  z-index: 2 !important;
-  page-break-inside: avoid;
-  break-inside: avoid;
+  z-index: 20 !important;
+  pointer-events: none;
 }
 
 .qt-footer-line{
-  display: none !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: calc(var(--qt-qr-reserved, 34mm) + 4mm) !important;
+  top: 0 !important;
+  height: 0 !important;
+  border-top: 1px solid #d1d5db !important;
+}
+
+.qt-footer-brand{
+  position: absolute !important;
+  left: 0 !important;
+  top: 3.5mm !important;
+  max-width: 58mm !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 2.5mm !important;
+}
+
+.qt-footer-logo{
+  width: 8mm !important;
+  height: 8mm !important;
+  object-fit: contain !important;
+  flex: 0 0 auto !important;
+}
+
+.qt-footer-church{
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .qt-footer-text{
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 4mm !important;
   font-size: 11px !important;
   font-weight: 700 !important;
   line-height: 1.2 !important;
@@ -160,17 +183,24 @@ body{
 }
 
 .qt-page-qr{
-  position: absolute !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  width: 25mm !important;
-  height: 25mm !important;
-  max-width: 25mm !important;
-  max-height: 25mm !important;
+  position: fixed !important;
+  bottom: var(--qt-qr-bottom, 9mm) !important;
+  width: var(--qt-qr-size, 27mm) !important;
+  height: var(--qt-qr-size, 27mm) !important;
+  max-width: var(--qt-qr-size, 27mm) !important;
+  max-height: var(--qt-qr-size, 27mm) !important;
   object-fit: contain !important;
   display: block !important;
-  z-index: 3 !important;
+  z-index: 30 !important;
   pointer-events: none;
+}
+
+.qt-page-qr.right-bottom{
+  right: 12mm !important;
+}
+
+.qt-page-qr.left-bottom{
+  left: 12mm !important;
 }
 
 h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
@@ -303,52 +333,6 @@ h1,h2,h3,blockquote,ul{
 `
 
 const defaultQTPDFStyle = `
-@page{
-  size:A4;
-  margin:10mm 10mm 10mm 10mm;
-}
-
-html, body{
-  margin: 0;
-  padding: 0;
-  background: #ffffff;
-  width: 210mm;
-  height: 297mm;
-  overflow: hidden;
-}
-
-body{
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-  box-sizing: border-box;
-}
-
-.qt-page-shell{
-  position: relative;
-  width: 100%;
-  height: 277mm;
-  overflow: hidden;
-}
-
-.qt-page-body{
-  position: relative;
-  width: 100%;
-  height: 100%;
-  padding: 0 0 26mm 0;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.qt-page-content{
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.qt-page-content-scaled{
-  transform-origin: top center;
-}
-
 .qt-wrap{
   --qt-bg: #ffffff;
   --qt-text: #1f2937;
@@ -460,36 +444,13 @@ body{
 }
 
 .qt-footer{
-  position: fixed;
-  left: 10mm;
-  right: 42mm;
-  bottom: 10mm;
   color: var(--qt-muted);
-  padding-top: 4mm;
-  border-top: 1px solid var(--qt-line);
-  text-align: center;
-  z-index: 2;
-  page-break-inside: avoid;
-  break-inside: avoid;
 }
 
 .qt-footer-text{
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
-  text-align: center;
-}
-
-.qt-page-qr{
-  position: fixed;
-  right: 10mm;
-  bottom: 10mm;
-  width: 25mm;
-  height: 25mm;
-  object-fit: contain;
-  display: block;
-  z-index: 3;
-  pointer-events: none;
 }
 
 h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
@@ -512,6 +473,10 @@ func NewPDFService() (*PDFService, error) {
 // SaveHtmlAndMakePDF는 Step3의 최종 HTML 조각(fragment)을 입력으로 받아
 // temp.md, temp.html, temp.pdf를 생성한다.
 func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
+	return s.SaveHtmlAndMakePDFWithFooter(html, nil)
+}
+
+func (s *PDFService) SaveHtmlAndMakePDFWithFooter(html string, footerOverride *QTFooterConfig) (*PDFResult, error) {
 	html = strings.TrimSpace(html)
 	if html == "" {
 		return nil, fmt.Errorf("html 내용이 비어 있습니다")
@@ -527,13 +492,11 @@ func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
 
 	fragment := stripStyleBlock(html)
 
-	// 1) temp.md 저장
 	mdContent := buildMarkdownSnapshot(fragment)
 	if err := os.WriteFile(s.Paths.TempMd, []byte(mdContent), 0644); err != nil {
 		return nil, fmt.Errorf("temp.md 저장 실패: %w", err)
 	}
 
-	// 2) temp.html 저장
 	htmlContent, err := s.wrapHTMLForHTML(fragment)
 	if err != nil {
 		return nil, err
@@ -542,8 +505,7 @@ func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
 		return nil, fmt.Errorf("temp.html 저장 실패: %w", err)
 	}
 
-	// 3) temp.pdf 생성
-	pdfHTMLContent, err := s.wrapHTMLForPDF(fragment)
+	pdfHTMLContent, err := s.wrapHTMLForPDF(fragment, footerOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -650,14 +612,21 @@ func (s *PDFService) wrapHTMLForHTML(content string) (string, error) {
 	return wrapHTMLDocumentForHTML("S2QT HTML", htmlStyle, cleaned), nil
 }
 
-func (s *PDFService) wrapHTMLForPDF(content string) (string, error) {
+func (s *PDFService) wrapHTMLForPDF(content string, footerOverride *QTFooterConfig) (string, error) {
 	pdfStyle := loadQTPDFStyle()
 	cleaned := normalizeHTMLFragment(content)
+	qrSvc, err := NewQRService()
+	if err != nil {
+		return "", err
+	}
+	resolvedFooter, err := qrSvc.PrepareFooterAssets(QTFooterModeDefault, footerOverride)
+	if err != nil {
+		return "", err
+	}
+	layoutBody := buildQTFixedPageLayout(cleaned, resolvedFooter)
+	pdfStyle = mergeQTFooterRuntimeStyle(pdfStyle, resolvedFooter)
 
-	bodyWithFooter := appendQTBottomFooter(cleaned)
-	bodyWithQR := appendQTCornerQR(bodyWithFooter, s.Paths.TempHtml)
-
-	return wrapHTMLDocumentForPDF("S2QT PDF", pdfStyle, bodyWithQR), nil
+	return wrapHTMLDocumentForPDF("S2QT PDF", pdfStyle, layoutBody), nil
 }
 
 func wrapHTMLDocumentForHTML(title, css, body string) string {
@@ -697,75 +666,102 @@ func wrapHTMLDocumentForPDF(title, css, body string) string {
 </html>`
 }
 
-func appendQTBottomFooter(bodyHTML string) string {
+func buildQTFixedPageLayout(bodyHTML string, footerCfg *QTFooterConfig) string {
 	bodyHTML = strings.TrimSpace(bodyHTML)
 
 	return `
-<div class="qt-page-shell">
-  <div class="qt-page-body">
-    <div class="qt-page-content">
-      <div class="qt-page-content-scaled">
+<div class="qt-page-frame">
+  <div class="qt-page-content-scaled">
 ` + bodyHTML + `
-      </div>
-    </div>
   </div>
-  ` + buildQTBottomFooterHTML() + `
-</div>`
+</div>
+` + buildQTFooterHTML(footerCfg) + buildQTFooterQRHTML(footerCfg)
 }
 
-func buildQTBottomFooterHTML() string {
-	return `
-<div class="qt-footer">
-  <div class="qt-footer-text">` + qtFooterMessage + `</div>
-</div>`
+func mergeQTFooterRuntimeStyle(base string, footerCfg *QTFooterConfig) string {
+	if footerCfg == nil {
+		return base
+	}
+
+	qrReserved := 0.0
+	if footerCfg.ShowQR && footerCfg.QRSizeMM > 0 {
+		qrReserved = footerCfg.QRSizeMM
+	}
+
+	runtime := fmt.Sprintf(`
+:root{
+  --qt-safe-area: %.2fmm;
+  --qt-qr-size: %.2fmm;
+  --qt-qr-reserved: %.2fmm;
+  --qt-footer-bottom: 8mm;
+  --qt-qr-bottom: 9mm;
+}
+`, footerCfg.SafeAreaMM, footerCfg.QRSizeMM, qrReserved)
+
+	return base + "\n\n" + runtime
 }
 
-func appendQTCornerQR(bodyHTML, tempHTMLPath string) string {
-	dataURI := buildQTCornerQRDataURI(tempHTMLPath)
+func buildQTFooterHTML(cfg *QTFooterConfig) string {
+	if cfg == nil || !cfg.ShowFooter {
+		return ""
+	}
+
+	var parts []string
+	parts = append(parts, `<div class="qt-footer" aria-hidden="true">`)
+	if cfg.ShowDivider {
+		parts = append(parts, `<div class="qt-footer-line"></div>`)
+	}
+
+	brandHTML := buildQTFooterBrandHTML(cfg)
+	if brandHTML != "" {
+		parts = append(parts, brandHTML)
+	}
+
+	if strings.TrimSpace(cfg.FooterText) != "" {
+		parts = append(parts, `<div class="qt-footer-text">`+cfg.FooterText+`</div>`)
+	}
+	parts = append(parts, `</div>`)
+
+	return "\n" + strings.Join(parts, "\n")
+}
+
+func buildQTFooterBrandHTML(cfg *QTFooterConfig) string {
+	logoData := encodeImageAsDataURI(cfg.LogoPath)
+	churchName := strings.TrimSpace(cfg.ChurchName)
+
+	if logoData == "" && churchName == "" {
+		return ""
+	}
+
+	var parts []string
+	parts = append(parts, `<div class="qt-footer-brand">`)
+	if logoData != "" {
+		parts = append(parts, `<img class="qt-footer-logo" src="`+logoData+`" alt="church logo" />`)
+	}
+	if churchName != "" {
+		parts = append(parts, `<div class="qt-footer-church">`+churchName+`</div>`)
+	}
+	parts = append(parts, `</div>`)
+	return strings.Join(parts, "")
+}
+
+func buildQTFooterQRHTML(cfg *QTFooterConfig) string {
+	if cfg == nil || !cfg.ShowQR {
+		return ""
+	}
+
+	dataURI := encodeImageAsDataURI(cfg.QRImagePath)
 	if dataURI == "" {
-		return bodyHTML
-	}
-
-	return bodyHTML + `
-<img class="qt-page-qr" src="` + dataURI + `" alt="S2QT Link QR" />`
-}
-
-func buildQTCornerQRDataURI(tempHTMLPath string) string {
-	qrPath := resolveQTCornerQRPath(tempHTMLPath)
-	if qrPath == "" {
 		return ""
 	}
 
-	b, err := os.ReadFile(qrPath)
-	if err != nil || len(b) == 0 {
-		return ""
+	posClass := "right-bottom"
+	if strings.EqualFold(strings.TrimSpace(cfg.QRPosition), "left-bottom") {
+		posClass = "left-bottom"
 	}
 
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(b)
-}
-
-func resolveQTCornerQRPath(tempHTMLPath string) string {
-	candidates := make([]string, 0)
-
-	if strings.TrimSpace(tempHTMLPath) != "" {
-		tempDir := filepath.Dir(tempHTMLPath) // var/temp
-		varDir := filepath.Dir(tempDir)       // var
-		candidates = append(candidates,
-			filepath.Join(varDir, "image", "s2qt_link.png"),
-		)
-	}
-
-	candidates = append(candidates,
-		filepath.Join("var", "image", "s2qt_link.png"),
-	)
-
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-
-	return ""
+	return `
+<img class="qt-page-qr ` + posClass + `" src="` + dataURI + `" alt="footer qr" />`
 }
 
 func stripStyleBlock(content string) string {

@@ -30,6 +30,13 @@ export const appState = {
     child: 'step1',
   },
 
+  audienceStepStatus: {
+    adult: { step1: 'idle', step2: 'idle', step3: 'idle' },
+    young_adult: { step1: 'idle', step2: 'idle', step3: 'idle' },
+    teen: { step1: 'idle', step2: 'idle', step3: 'idle' },
+    child: { step1: 'idle', step2: 'idle', step3: 'idle' },
+  },
+
   output: {
     htmlFile: '',
     pdfFile: '',
@@ -79,6 +86,33 @@ export function setAudienceStep(audienceId, stepId) {
   }
 }
 
+export function ensureAudienceStepStatus(audienceId) {
+  if (!appState.audienceStepStatus) {
+    appState.audienceStepStatus = {};
+  }
+
+  if (!appState.audienceStepStatus[audienceId]) {
+    appState.audienceStepStatus[audienceId] = {
+      step1: 'idle',
+      step2: 'idle',
+      step3: 'idle',
+    };
+  }
+
+  return appState.audienceStepStatus[audienceId];
+}
+
+export function getAudienceStepStatus(audienceId) {
+  return ensureAudienceStepStatus(audienceId);
+}
+
+export function setAudienceStepStatus(audienceId, stepId, status) {
+  const target = ensureAudienceStepStatus(audienceId);
+  if (Object.prototype.hasOwnProperty.call(target, stepId)) {
+    target[stepId] = status;
+  }
+}
+
 export function getMenuLabel(menu) {
   switch (menu) {
     case 'qt_prepare':
@@ -108,5 +142,18 @@ export function getSourceStatusLabel(status) {
       return '완료';
     default:
       return status || '';
+  }
+}
+
+export function getStepStatusLabel(status) {
+  switch (status) {
+    case 'running':
+      return '진행중';
+    case 'done':
+      return '완료';
+    case 'error':
+      return '오류';
+    default:
+      return '대기';
   }
 }

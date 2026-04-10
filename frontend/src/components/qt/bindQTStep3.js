@@ -1,6 +1,16 @@
 import { RunQTStep3, OpenGeneratedFile, SaveGeneratedFile } from '../../../wailsjs/go/main/App';
-import { setAudienceStep } from '../../state/appState';
+import { Quit } from '../../../wailsjs/runtime/runtime';
+import {
+  appState,
+  setAudienceStep,
+  getAudienceStepStatus,
+  setAudienceStepStatus,
+  getStepStatusLabel,
+} from '../../state/appState';
 import { mountAppShell } from '../appShell';
+import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
+
+let isStep3Running = false;
 
 function getChecked(id) {
   return !!document.getElementById(id)?.checked;
@@ -60,42 +70,18 @@ function applyOne(resultKey, item) {
     html: 'htmlFileStatus',
     pdf: 'pdfFileStatus',
     png: 'pngFileStatus',
-
-    /*
-    TODO(step3-docx-pptx):
-    DOCX / PPTX 재개 시 상태 표시 복구
-
-    docx: 'docxFileStatus',
-    pptx: 'pptxFileStatus',
-    */
   };
 
   const fileMap = {
     html: 'htmlFilePath',
     pdf: 'pdfFilePath',
     png: 'pngFilePath',
-
-    /*
-    TODO(step3-docx-pptx):
-    DOCX / PPTX 재개 시 파일 경로 표시 복구
-
-    docx: 'docxFilePath',
-    pptx: 'pptxFilePath',
-    */
   };
 
   const saveBtnMap = {
     html: 'htmlSaveBtnWrap',
     pdf: 'pdfSaveBtnWrap',
     png: 'pngSaveBtnWrap',
-
-    /*
-    TODO(step3-docx-pptx):
-    DOCX / PPTX 재개 시 저장 버튼 wrapper 복구
-
-    docx: 'docxSaveBtnWrap',
-    pptx: 'pptxSaveBtnWrap',
-    */
   };
 
   setText(statusMap[resultKey], item?.status || '대기');
@@ -108,17 +94,74 @@ function buildStep3Payload() {
     makeHtml: getChecked('makeHtmlChk'),
     makePdf: getChecked('makePdfChk'),
     makePng: getChecked('makePngChk'),
-
-    /*
-    TODO(step3-docx-pptx):
-    DOCX / PPTX 재개 시 체크박스 payload 복구
-
-    makeDocx: getChecked('makeDocxChk'),
-    makePptx: getChecked('makePptxChk'),
-    */
-
     dpi: 300,
   };
+}
+
+function renderStepStatusFromState(audienceId) {
+  const status = getAudienceStepStatus(audienceId);
+
+  setText('qtStep1DoneState', getStepStatusLabel(status.step1));
+  setText('qtStep2DoneState', getStepStatusLabel(status.step2));
+  setText('qtStep3DoneState', getStepStatusLabel(status.step3));
+}
+
+function markSelectedOutputsRunning() {
+  if (getChecked('makeHtmlChk')) {
+    setText('htmlFileStatus', '생성중...');
+  } else {
+    setText('htmlFileStatus', '선택안함');
+  }
+
+  if (getChecked('makePdfChk')) {
+    setText('pdfFileStatus', '생성중...');
+  } else {
+    setText('pdfFileStatus', '선택안함');
+  }
+
+  if (getChecked('makePngChk')) {
+    setText('pngFileStatus', '생성중...');
+  } else {
+    setText('pngFileStatus', '선택안함');
+  }
+}
+
+function updateOutputState(result) {
+  if (!appState.output) {
+    appState.output = {};
+  }
+
+  appState.output.htmlFile = result?.html?.filePath || '';
+  appState.output.pdfFile = result?.pdf?.filePath || '';
+  appState.output.pngFile = result?.png?.filePath || '';
+}
+
+function updateStep3ButtonState() {
+  const runBtn = document.getElementById('runQtOutputBtn');
+  const backBtn = document.getElementById('backToStep2Btn');
+  const finishBtn = document.getElementById('finishQtFlowBtn');
+  const progressText = document.getElementById('qtStep3ProgressText');
+
+  if (runBtn) {
+    runBtn.disabled = isStep3Running;
+    runBtn.textContent = isStep3Running ? '실행중...' : '실행';
+    runBtn.classList.toggle('button-running', isStep3Running);
+  }
+
+  if (backBtn) {
+    backBtn.disabled = isStep3Running;
+  }
+
+  if (finishBtn) {
+    finishBtn.disabled = isStep3Running;
+  }
+
+  if (progressText) {
+    progressText.textContent = isStep3Running
+      ? '산출물을 생성하고 있습니다. 잠시만 기다려 주세요.'
+      : '';
+    progressText.classList.toggle('is-running', isStep3Running);
+  }
 }
 
 function bindFileOpenLinks() {
@@ -128,17 +171,20 @@ function bindFileOpenLinks() {
     link.onclick = async (event) => {
       event.preventDefault();
 
+      clearInlineMessage("qt-step3-message");
+
       const filePath = link.dataset.file || '';
       if (!filePath.trim()) {
-        window.alert('열 파일이 없습니다.');
+        setInlineMessage("qt-step3-message", '열 파일이 없습니다.', "warning");
         return;
       }
 
       try {
         await OpenGeneratedFile(filePath);
+        showToast('파일을 열었습니다.', 'success');
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || '파일 열기 중 오류가 발생했습니다.');
+        setInlineMessage("qt-step3-message", error?.message || '파일 열기 중 오류가 발생했습니다.', "error");
       }
     };
   });
@@ -149,25 +195,79 @@ function bindSaveAsButtons(audienceId) {
 
   buttons.forEach((btn) => {
     btn.onclick = async () => {
+      clearInlineMessage("qt-step3-message");
+
       const filePath = btn.dataset.file || '';
       const formatKey = btn.dataset.format || '';
 
       if (!filePath.trim()) {
-        window.alert('저장할 파일이 없습니다.');
+        setInlineMessage("qt-step3-message", '저장할 파일이 없습니다.', "warning");
         return;
       }
 
       try {
         const savedPath = await SaveGeneratedFile(filePath, audienceId, formatKey);
         if (savedPath) {
-          window.alert('파일 저장이 완료되었습니다.');
+          showToast('파일 저장이 완료되었습니다.', 'success');
         }
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || '파일 저장 중 오류가 발생했습니다.');
+        setInlineMessage("qt-step3-message", error?.message || '파일 저장 중 오류가 발생했습니다.', "error");
       }
     };
   });
+}
+
+async function runStep3(audienceId) {
+  if (isStep3Running) return;
+
+  clearInlineMessage("qt-step3-message");
+
+  try {
+    isStep3Running = true;
+    updateStep3ButtonState();
+
+    setAudienceStepStatus(audienceId, 'step3', 'running');
+    renderStepStatusFromState(audienceId);
+    markSelectedOutputsRunning();
+
+    const req = buildStep3Payload();
+    const result = await RunQTStep3(req);
+
+    updateOutputState(result);
+
+    applyOne('html', result?.html);
+    applyOne('pdf', result?.pdf);
+    applyOne('png', result?.png);
+
+    bindFileOpenLinks();
+    bindSaveAsButtons(audienceId);
+
+    setAudienceStepStatus(audienceId, 'step3', 'done');
+    renderStepStatusFromState(audienceId);
+    showToast('Step3 산출물 생성을 완료했습니다.', 'success');
+  } catch (error) {
+    console.error(error);
+    setAudienceStepStatus(audienceId, 'step3', 'error');
+    renderStepStatusFromState(audienceId);
+    setInlineMessage("qt-step3-message", error?.message || 'Step3 실행 중 오류가 발생했습니다.', "error");
+  } finally {
+    isStep3Running = false;
+    updateStep3ButtonState();
+  }
+}
+
+async function finishStep3Flow() {
+  if (isStep3Running) return;
+
+  clearInlineMessage("qt-step3-message");
+
+  try {
+    await Quit();
+  } catch (error) {
+    console.error(error);
+    setInlineMessage("qt-step3-message", error?.message || '종료 중 오류가 발생했습니다.', "error");
+  }
 }
 
 export function bindQTStep3Events(audienceId) {
@@ -175,50 +275,29 @@ export function bindQTStep3Events(audienceId) {
   const backBtn = document.getElementById('backToStep2Btn');
   const finishBtn = document.getElementById('finishQtFlowBtn');
 
+  renderStepStatusFromState(audienceId);
+
   bindFileOpenLinks();
   bindSaveAsButtons(audienceId);
+  updateStep3ButtonState();
 
   if (runBtn) {
-    runBtn.addEventListener('click', async () => {
-      try {
-        const req = buildStep3Payload();
-        const result = await RunQTStep3(req);
-
-        applyOne('html', result?.html);
-        applyOne('pdf', result?.pdf);
-        applyOne('png', result?.png);
-
-        /*
-        TODO(step3-docx-pptx):
-        DOCX / PPTX 재개 시 결과 반영 복구
-
-        applyOne('docx', result?.docx);
-        applyOne('pptx', result?.pptx);
-        */
-
-        bindFileOpenLinks();
-        bindSaveAsButtons(audienceId);
-
-        setText('qtStep1DoneState', '완료');
-        setText('qtStep2DoneState', '완료');
-        setText('qtStep3DoneState', '완료');
-      } catch (error) {
-        console.error(error);
-        window.alert(error?.message || 'Step3 실행 중 오류가 발생했습니다.');
-      }
-    });
+    runBtn.onclick = async () => {
+      await runStep3(audienceId);
+    };
   }
 
   if (backBtn) {
-    backBtn.addEventListener('click', () => {
+    backBtn.onclick = () => {
+      if (isStep3Running) return;
       setAudienceStep(audienceId, 'step2');
       mountAppShell('app');
-    });
+    };
   }
 
   if (finishBtn) {
-    finishBtn.addEventListener('click', () => {
-      window.alert('QT 문서 생성 작업이 완료되었습니다.');
-    });
+    finishBtn.onclick = async () => {
+      await finishStep3Flow();
+    };
   }
 }

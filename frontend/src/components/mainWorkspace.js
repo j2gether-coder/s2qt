@@ -10,9 +10,8 @@ import {
   setSourceStatus,
   setAudienceStep,
 } from '../state/appState';
-
 import { mountAppShell } from './appShell';
-
+import { showToast, setInlineMessage, clearInlineMessage } from "../common/uiMessage";
 import {
   SelectAudioFile,
   SelectTextFile,
@@ -20,7 +19,6 @@ import {
   RunSourcePrepare,
   GetVideoMeta,
 } from '../../wailsjs/go/main/App';
-
 import { renderQTStep1 } from './qt/qtStep1';
 import { renderQTStep2 } from './qt/qtStep2';
 import { renderQTStep3 } from './qt/qtStep3';
@@ -50,7 +48,7 @@ function getAudienceStatusText(audienceId) {
 
   if (step === 'step3') return '문서 생성 단계';
   if (step === 'step2') return '검토 및 편집 단계';
-  return 'LLM 이용 단계';
+  return 'AI(LLM) 이용 단계';
 }
 
 function updateQtPrepareStatus() {
@@ -75,6 +73,14 @@ function updateQtPrepareStatus() {
   }
 
   setSourceStatus(hasTitle && hasBibleText && hasSourceInput ? 'READY' : 'NOT_READY');
+}
+
+function clearBasicInfoSavedState() {
+  appState.source.basicInfoSavedAt = '';
+}
+
+function saveBasicInfoDraft() {
+  appState.source.basicInfoSavedAt = new Date().toLocaleString();
 }
 
 function buildSourcePreparePayload() {
@@ -117,20 +123,25 @@ async function enrichVideoBasicInfoFromMeta() {
   if (!meta) return null;
 
   const basicInfo = appState?.source?.basicInfo || {};
+  let changed = false;
 
-  // 제목이 비어 있을 때만 자동 채움
   if (!(basicInfo.title || '').trim() && (meta.title || '').trim()) {
     setBasicInfoField('title', meta.title);
+    changed = true;
   }
 
-  // 설교일이 비어 있을 때만 업로드일 반영
   if (!(basicInfo.sermonDate || '').trim() && (meta.uploadDateText || '').trim()) {
     setBasicInfoField('sermonDate', meta.uploadDateText);
+    changed = true;
   }
 
-  // 교회명 비어 있으면 채널명 fallback
   if (!(basicInfo.churchName || '').trim() && (meta.channel || '').trim()) {
     setBasicInfoField('churchName', meta.channel);
+    changed = true;
+  }
+
+  if (changed) {
+    clearBasicInfoSavedState();
   }
 
   return meta;
@@ -141,12 +152,15 @@ async function runQtPrepare() {
     return;
   }
 
+  clearInlineMessage("workspace-message");
+
   try {
     const sourceType = appState?.source?.sourceType || '';
 
     if (sourceType === 'video') {
       await enrichVideoBasicInfoFromMeta();
       updateQtPrepareStatus();
+      mountAppShell('app');
     }
 
     setSourceStatus('RUNNING');
@@ -163,13 +177,14 @@ async function runQtPrepare() {
 
     if (result?.success) {
       appState.source.lastSavedAt = new Date().toLocaleString();
+      showToast("자료 준비가 완료되었습니다.", "success");
     }
 
     mountAppShell('app');
   } catch (error) {
     console.error(error);
     updateQtPrepareStatus();
-    window.alert(error?.message || '자료 처리 중 오류가 발생했습니다.');
+    setInlineMessage("workspace-message", error?.message || '자료 처리 중 오류가 발생했습니다.', "error");
     mountAppShell('app');
   }
 }
@@ -293,18 +308,31 @@ function renderSourceInputArea() {
   `;
 }
 
+function renderBasicInfoSaveGuide() {
+  const savedAt = appState?.source?.basicInfoSavedAt || '';
+  if (!savedAt) return '';
+
+  return `
+    <div class="completion-guide topgap-sm">
+      기본정보 저장 완료: ${escapeHtml(savedAt)}
+    </div>
+  `;
+}
+
 function renderCompletionGuide() {
   if (appState.source.sourceStatus !== 'COMPLETED') return '';
 
   return `
     <div class="completion-guide">
-      자료 준비가 완료되었습니다. 좌측 메뉴에서 원하는 QT를 선택하여 QT 만들기를 진행해 주세요.
+      자료 준비가 완료되었습니다. 기본정보를 확인하고 저장한 뒤, 좌측 메뉴에서 원하는 QT를 선택하여 QT 만들기를 진행해 주세요.
     </div>
   `;
 }
 
 function renderQtPrepareLayout() {
   const { basicInfo, sourceStatus } = appState.source;
+  const isRunning = sourceStatus === 'RUNNING';
+  const isBasicInfoSavable = sourceStatus === 'COMPLETED';
 
   return `
     <section class="workspace-panel">
@@ -314,8 +342,11 @@ function renderQtPrepareLayout() {
       </div>
 
       <div class="workspace-meta-note">
-        QT 준비에서는 원문 확보만 수행합니다. LLM 호출은 각 QT 화면의 Step1에서 진행됩니다.
+        QT 준비에서는 원문 확보만 수행합니다. AI(LLM) 이용은 각 QT 화면의 Step1에서 진행됩니다.<br>
+        자료에 따라 소요시간은 약 5~10분정도입니다. 
       </div>
+
+      <div id="workspace-message" class="ui-inline-message hidden"></div>
 
       <div class="workspace-content">
         <div class="section-block">
@@ -338,35 +369,48 @@ function renderQtPrepareLayout() {
             <div class="form-grid two-column-grid">
               <div class="form-field">
                 <label class="form-label">제목 <span class="required-mark">*</span></label>
-                <input type="text" id="title-input" value="${escapeHtml(basicInfo.title || '')}" placeholder="제목을 입력해 주세요." />
+                <input type="text" id="title-input" value="${escapeHtml(basicInfo.title || '')}" placeholder="제목을 입력해 주세요." ${isRunning ? 'disabled' : ''} />
               </div>
 
               <div class="form-field">
                 <label class="form-label">본문 성구 <span class="required-mark">*</span></label>
-                <input type="text" id="bible-text-input" value="${escapeHtml(basicInfo.bibleText || '')}" placeholder="예: 시 1:1" />
+                <input type="text" id="bible-text-input" value="${escapeHtml(basicInfo.bibleText || '')}" placeholder="예: 시 1:1" ${isRunning ? 'disabled' : ''} />
               </div>
 
               <div class="form-field">
                 <label class="form-label">찬송</label>
-                <input type="text" id="hymn-input" value="${escapeHtml(basicInfo.hymn || '')}" placeholder="찬송을 입력해 주세요." />
+                <input type="text" id="hymn-input" value="${escapeHtml(basicInfo.hymn || '')}" placeholder="찬송을 입력해 주세요." ${isRunning ? 'disabled' : ''} />
               </div>
 
               <div class="form-field">
                 <label class="form-label">설교자</label>
-                <input type="text" id="preacher-input" value="${escapeHtml(basicInfo.preacher || '')}" placeholder="설교자를 입력해 주세요." />
+                <input type="text" id="preacher-input" value="${escapeHtml(basicInfo.preacher || '')}" placeholder="설교자를 입력해 주세요." ${isRunning ? 'disabled' : ''} />
               </div>
 
               <div class="form-field">
                 <label class="form-label">교회명</label>
-                <input type="text" id="church-name-input" value="${escapeHtml(basicInfo.churchName || '')}" placeholder="교회명을 입력해 주세요." />
+                <input type="text" id="church-name-input" value="${escapeHtml(basicInfo.churchName || '')}" placeholder="교회명을 입력해 주세요." ${isRunning ? 'disabled' : ''} />
               </div>
 
               <div class="form-field">
                 <label class="form-label">설교일</label>
-                <input type="date" id="sermon-date-input" value="${escapeHtml(basicInfo.sermonDate || '')}" />
+                <input type="date" id="sermon-date-input" value="${escapeHtml(basicInfo.sermonDate || '')}" ${isRunning ? 'disabled' : ''} />
               </div>
             </div>
 
+            <div class="form-actions topgap-sm full-width-actions">
+              <button
+                class="secondary-button full-width-button 
+                ${!isBasicInfoSavable ? 'is-disabled' : ''}"
+                type="button"
+                id="save-basic-info-btn"
+                ${!isBasicInfoSavable ? 'disabled' : ''}
+              >
+                기본정보 저장
+              </button>
+            </div>
+
+            ${renderBasicInfoSaveGuide()}
             ${renderCompletionGuide()}
           </div>
         </div>
@@ -445,7 +489,9 @@ function bindQtPrepareEvents() {
   radios.forEach((radio) => {
     radio.addEventListener('change', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setSourceType(e.target.value);
+      clearBasicInfoSavedState();
       updateQtPrepareStatus();
       mountAppShell('app');
     });
@@ -455,6 +501,7 @@ function bindQtPrepareEvents() {
   if (sourceUrlInput) {
     sourceUrlInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setSourceUrl(e.target.value);
       updateQtPrepareStatus();
     });
@@ -476,6 +523,7 @@ function bindQtPrepareEvents() {
   if (rawTextDirectInput) {
     rawTextDirectInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setRawText(e.target.value);
       updateQtPrepareStatus();
     });
@@ -485,8 +533,11 @@ function bindQtPrepareEvents() {
   if (titleInput) {
     titleInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setBasicInfoField('title', e.target.value);
+      clearBasicInfoSavedState();
       updateQtPrepareStatus();
+      mountAppShell('app');
     });
   }
 
@@ -494,8 +545,11 @@ function bindQtPrepareEvents() {
   if (bibleTextInput) {
     bibleTextInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setBasicInfoField('bibleText', e.target.value);
+      clearBasicInfoSavedState();
       updateQtPrepareStatus();
+      mountAppShell('app');
     });
   }
 
@@ -503,7 +557,10 @@ function bindQtPrepareEvents() {
   if (hymnInput) {
     hymnInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setBasicInfoField('hymn', e.target.value);
+      clearBasicInfoSavedState();
+      mountAppShell('app');
     });
   }
 
@@ -511,7 +568,10 @@ function bindQtPrepareEvents() {
   if (preacherInput) {
     preacherInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setBasicInfoField('preacher', e.target.value);
+      clearBasicInfoSavedState();
+      mountAppShell('app');
     });
   }
 
@@ -519,7 +579,10 @@ function bindQtPrepareEvents() {
   if (churchNameInput) {
     churchNameInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setBasicInfoField('churchName', e.target.value);
+      clearBasicInfoSavedState();
+      mountAppShell('app');
     });
   }
 
@@ -527,14 +590,31 @@ function bindQtPrepareEvents() {
   if (sermonDateInput) {
     sermonDateInput.addEventListener('input', (e) => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
       setBasicInfoField('sermonDate', e.target.value);
+      clearBasicInfoSavedState();
+      mountAppShell('app');
     });
   }
 
+  const saveBasicInfoBtn = document.getElementById('save-basic-info-btn');
+  if (saveBasicInfoBtn) {
+    saveBasicInfoBtn.addEventListener('click', () => {
+      if (appState?.source?.sourceStatus !== 'COMPLETED') return;
+
+      clearInlineMessage("workspace-message");
+      saveBasicInfoDraft();
+      mountAppShell('app');
+      showToast('기본 정보가 저장되었습니다.', 'success');
+    });
+  }
+  
   const audioFileSelectBtn = document.getElementById('audio-file-select-btn');
   if (audioFileSelectBtn) {
     audioFileSelectBtn.addEventListener('click', async () => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+
+      clearInlineMessage("workspace-message");
 
       try {
         const filePath = await SelectAudioFile();
@@ -545,7 +625,7 @@ function bindQtPrepareEvents() {
         mountAppShell('app');
       } catch (error) {
         console.error(error);
-        window.alert('오디오 파일 선택 중 오류가 발생했습니다.');
+        setInlineMessage("workspace-message", '오디오 파일 선택 중 오류가 발생했습니다.', "error");
       }
     });
   }
@@ -554,6 +634,8 @@ function bindQtPrepareEvents() {
   if (textFileSelectBtn) {
     textFileSelectBtn.addEventListener('click', async () => {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
+
+      clearInlineMessage("workspace-message");
 
       try {
         const filePath = await SelectTextFile();
@@ -570,7 +652,7 @@ function bindQtPrepareEvents() {
         mountAppShell('app');
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || '텍스트 파일 선택 중 오류가 발생했습니다.');
+        setInlineMessage("workspace-message", error?.message || '텍스트 파일 선택 중 오류가 발생했습니다.', "error");
       }
     });
   }

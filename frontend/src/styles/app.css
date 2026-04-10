@@ -1023,9 +1023,14 @@ textarea {
 }
 
 .progress-line {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
   line-height: 1.4;
+}
+
+.progress-line.is-running {
+  color: #4b5563;
 }
 
 .output-result-grid {
@@ -1180,6 +1185,120 @@ textarea {
 .step-bottom-bar.double .button-ghost,
 .step-bottom-bar.double .button-success {
   width: 100%;
+}
+
+/* =========================
+   Step3 실행중 버튼 상태
+========================= */
+
+.button.button-running,
+.button.button-running:hover {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  color: #ffffff;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+/* =========================
+   Toast
+========================= */
+.ui-toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ui-toast {
+  min-width: 220px;
+  max-width: 380px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: auto;
+}
+
+.ui-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ui-toast.hide {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.ui-toast.success {
+  background: #ecfdf3;
+  color: #11643c;
+  border: 1px solid #b7ebc6;
+}
+
+.ui-toast.info {
+  background: #eff6ff;
+  color: #1d4f91;
+  border: 1px solid #bfd7ff;
+}
+
+.ui-toast.warning {
+  background: #fff8e6;
+  color: #8a6116;
+  border: 1px solid #f1d48a;
+}
+
+.ui-toast.error {
+  background: #fef2f2;
+  color: #a61b1b;
+  border: 1px solid #f3b3b3;
+}
+
+/* =========================
+   Inline Message
+========================= */
+.ui-inline-message {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ui-inline-message.hidden {
+  display: none;
+}
+
+.ui-inline-message.info {
+  background: #eff6ff;
+  color: #1d4f91;
+  border: 1px solid #bfd7ff;
+}
+
+.ui-inline-message.warning {
+  background: #fff8e6;
+  color: #8a6116;
+  border: 1px solid #f1d48a;
+}
+
+.ui-inline-message.error {
+  background: #fef2f2;
+  color: #a61b1b;
+  border: 1px solid #f3b3b3;
+}
+
+.ui-inline-message.success {
+  background: #ecfdf3;
+  color: #11643c;
+  border: 1px solid #b7ebc6;
 }
 
 /* =========================

@@ -71,6 +71,7 @@ export function renderQTStep3(audienceId, appState) {
       <section class="card card-plain">
         <div class="step-badge">Step3. QT 문서 생성</div>
         <p class="body-note topgap-sm">QT 결과물에 대해 선택한 후 저장해 주세요.</p>
+        <div id="qt-step3-message" class="ui-inline-message hidden"></div>
       </section>
 
       <section class="card">
@@ -132,7 +133,7 @@ export function renderQTStep3(audienceId, appState) {
 
       <section class="step-status-grid step-status-grid-3col">
         <div class="step-status-item">
-          <div class="step-status-label">Step1. LLM 이용</div>
+          <div class="step-status-label">Step1. AI(LLM) 이용</div>
           <div class="step-status-value" id="qtStep1DoneState">대기</div>
         </div>
 
@@ -152,7 +153,7 @@ export function renderQTStep3(audienceId, appState) {
           <button id="backToStep2Btn" class="button-ghost" type="button">이전</button>
         </div>
         <div class="step-bottom-right">
-          <button id="finishQtFlowBtn" class="button" type="button" disabled>종료</button>
+          <button id="finishQtFlowBtn" class="button" type="button">종료</button>
         </div>
       </section>
     </section>

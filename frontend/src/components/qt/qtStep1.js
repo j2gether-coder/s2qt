@@ -16,6 +16,7 @@ export function renderQTStep1(audienceId, appState) {
       <section class="card card-plain">
         <div class="step-badge">Step1. AI(LLM) 이용</div>
         <p class="body-note topgap-sm">AI(LLM)를 이용하여 초안 작업을 합니다.</p>
+        <div id="qt-step1-message" class="ui-inline-message hidden"></div>
       </section>
 
       <section class="card">

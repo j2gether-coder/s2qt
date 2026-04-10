@@ -2,13 +2,13 @@ import {
   BuildQTPrompt,
   SaveManualLLMResult,
 } from '../../../wailsjs/go/main/App';
-
 import {
   appState,
   setAudienceStep,
+  setAudienceStepStatus,
 } from '../../state/appState';
-
 import { mountAppShell } from '../appShell';
+import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 
 function buildLLMRequest(audienceId) {
   const info = appState?.source?.basicInfo || {};
@@ -36,55 +36,73 @@ export function bindQTStep1Events(audienceId) {
 
   if (buildPromptBtn) {
     buildPromptBtn.addEventListener('click', async () => {
+      clearInlineMessage("qt-step1-message");
+
       try {
+        setAudienceStepStatus(audienceId, 'step1', 'running');
+
         const req = buildLLMRequest(audienceId);
         const prompt = await BuildQTPrompt(req);
 
         if (promptBox) {
           promptBox.value = prompt || '';
         }
+
+        setAudienceStepStatus(audienceId, 'step1', 'idle');
+        showToast('프롬프트를 생성했습니다.', 'success');
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || '프롬프트 생성 중 오류가 발생했습니다.');
+        setAudienceStepStatus(audienceId, 'step1', 'error');
+        setInlineMessage("qt-step1-message", error?.message || '프롬프트 생성 중 오류가 발생했습니다.', "error");
       }
     });
   }
 
   if (copyPromptBtn) {
     copyPromptBtn.addEventListener('click', async () => {
+      clearInlineMessage("qt-step1-message");
+
       try {
         const text = promptBox?.value || '';
         if (!text.trim()) {
-          window.alert('복사할 프롬프트가 없습니다.');
+          setInlineMessage("qt-step1-message", '복사할 프롬프트가 없습니다.', "warning");
           return;
         }
 
         await navigator.clipboard.writeText(text);
+        showToast('프롬프트를 복사했습니다.', 'success');
       } catch (error) {
         console.error(error);
-        window.alert('프롬프트 복사 중 오류가 발생했습니다.');
+        setInlineMessage("qt-step1-message", '프롬프트 복사 중 오류가 발생했습니다.', "error");
       }
     });
   }
 
   if (saveResultBtn) {
     saveResultBtn.addEventListener('click', async () => {
+      clearInlineMessage("qt-step1-message");
+
       try {
         const jsonText = resultBox?.value || '';
 
         if (!jsonText.trim()) {
-          window.alert('저장할 결과가 없습니다.');
+          setInlineMessage("qt-step1-message", '저장할 결과가 없습니다.', "warning");
           return;
         }
 
+        setAudienceStepStatus(audienceId, 'step1', 'running');
         await SaveManualLLMResult(jsonText);
+        setAudienceStepStatus(audienceId, 'step1', 'done');
 
         if (goStep2Btn) {
           goStep2Btn.disabled = false;
         }
+
+        showToast('결과를 저장했습니다.', 'success');
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || '결과 저장 중 오류가 발생했습니다.');
+        setAudienceStepStatus(audienceId, 'step1', 'error');
+        setInlineMessage("qt-step1-message", error?.message || '결과 저장 중 오류가 발생했습니다.', "error");
       }
     });
   }

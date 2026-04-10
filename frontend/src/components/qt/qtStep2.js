@@ -26,6 +26,7 @@ export function renderQTStep2(audienceId, appState) {
       <section class="card card-plain">
         <div class="step-badge">Step2. 검토 및 편집</div>
         <p class="body-note topgap-sm">초안을 검토하고 수정합니다.</p>
+        <div id="qt-step2-message" class="ui-inline-message hidden"></div>
       </section>
 
       <section class="card card-soft-meta">

@@ -38,7 +38,11 @@ type PNGGenerateResult struct {
 }
 
 func (s *PNGService) GenerateFromTempHTML(dpi int) (*PNGGenerateResult, error) {
-	sourcePath, err := s.buildPNGSourceFromHTMLFile(s.Paths.TempHtml)
+	return s.GenerateFromTempHTMLWithFooter(dpi, nil)
+}
+
+func (s *PNGService) GenerateFromTempHTMLWithFooter(dpi int, footerOverride *QTFooterConfig) (*PNGGenerateResult, error) {
+	sourcePath, err := s.buildPNGSourceFromHTMLFile(s.Paths.TempHtml, footerOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -117,14 +121,14 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 	}, nil
 }
 
-func (s *PNGService) buildPNGSourceFromHTMLFile(htmlPath string) (string, error) {
+func (s *PNGService) buildPNGSourceFromHTMLFile(htmlPath string, footerOverride *QTFooterConfig) (string, error) {
 	b, err := os.ReadFile(htmlPath)
 	if err != nil {
 		return "", fmt.Errorf("html 읽기 실패: %w", err)
 	}
 
 	sourcePath := buildPNGSourcePath(htmlPath)
-	sourceHTML, err := s.wrapHTMLForPNG(string(b))
+	sourceHTML, err := s.wrapHTMLForPNG(string(b), footerOverride)
 	if err != nil {
 		return "", err
 	}
@@ -141,14 +145,21 @@ func buildPNGSourcePath(tempHTMLPath string) string {
 	return filepath.Join(dir, "temp_png_source.html")
 }
 
-func (s *PNGService) wrapHTMLForPNG(content string) (string, error) {
+func (s *PNGService) wrapHTMLForPNG(content string, footerOverride *QTFooterConfig) (string, error) {
 	pngStyle := loadQTPNGStyle()
 	cleaned := normalizeHTMLFragment(content)
+	qrSvc, err := NewQRService()
+	if err != nil {
+		return "", err
+	}
+	resolvedFooter, err := qrSvc.PrepareFooterAssets(QTFooterModeDefault, footerOverride)
+	if err != nil {
+		return "", err
+	}
+	layoutBody := buildQTFixedPageLayout(cleaned, resolvedFooter)
+	pngStyle = mergeQTFooterRuntimeStyle(pngStyle, resolvedFooter)
 
-	bodyWithFooter := appendQTBottomFooter(cleaned)
-	bodyWithQR := appendQTCornerQR(bodyWithFooter, s.Paths.TempHtml)
-
-	return wrapHTMLDocument("S2QT PNG", pngStyle, bodyWithQR), nil
+	return wrapHTMLDocument("S2QT PNG", pngStyle, layoutBody), nil
 }
 
 func wrapHTMLDocument(title, css, body string) string {
@@ -182,12 +193,16 @@ html{
 
 body{
   width: 210mm;
-  min-height: 297mm;
-  margin: 0;
-  padding: 10mm;
+  height: 297mm;
+  margin: 0 !important;
+  padding: 0 !important;
   box-sizing: border-box;
   background: #ffffff;
   overflow: hidden;
+}
+
+.qt-page-frame{
+  height: calc(297mm - var(--qt-safe-area, 36mm) - 10mm) !important;
 }
 
 .qt-wrap{

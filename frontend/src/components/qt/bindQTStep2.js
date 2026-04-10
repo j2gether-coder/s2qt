@@ -4,13 +4,13 @@ import {
   PreviewQTStep2HTML,
   OpenTempHTMLPreview,
 } from '../../../wailsjs/go/main/App';
-
 import {
   appState,
   setAudienceStep,
+  setAudienceStepStatus,
 } from '../../state/appState';
-
 import { mountAppShell } from '../appShell';
+import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 
 function setValue(id, value) {
   const el = document.getElementById(id);
@@ -59,7 +59,6 @@ function buildStep2Payload(audienceId) {
   return {
     audience: audienceId,
 
-    // audience 규칙에 따라 최종 제목 결정
     title: resolvedTitle,
     bibleText: basicInfo.bibleText || '',
     hymn: basicInfo.hymn || '',
@@ -68,7 +67,6 @@ function buildStep2Payload(audienceId) {
     sermonDate: basicInfo.sermonDate || '',
     sourceURL: appState?.source?.sourceRef?.url || '',
 
-    // Step2 편집값
     summaryTitle: getValue('summaryTitle'),
     summaryBody: getValue('summaryBody'),
 
@@ -138,11 +136,13 @@ async function loadStep2Data(audienceId) {
 }
 
 export async function bindQTStep2Events(audienceId) {
+  clearInlineMessage("qt-step2-message");
+
   try {
     await loadStep2Data(audienceId);
   } catch (error) {
     console.error(error);
-    window.alert(error?.message || 'Step2 데이터 불러오기 중 오류가 발생했습니다.');
+    setInlineMessage("qt-step2-message", error?.message || 'Step2 데이터 불러오기 중 오류가 발생했습니다.', "error");
   }
 
   const saveBtn = document.getElementById('saveQtJsonBtn');
@@ -152,22 +152,33 @@ export async function bindQTStep2Events(audienceId) {
 
   if (saveBtn) {
     saveBtn.addEventListener('click', async () => {
+      clearInlineMessage("qt-step2-message");
+
       try {
+        setAudienceStepStatus(audienceId, 'step2', 'running');
+
         const req = buildStep2Payload(audienceId);
         await SaveQTStep2Data(req);
+
+        setAudienceStepStatus(audienceId, 'step2', 'done');
 
         if (nextBtn) {
           nextBtn.disabled = false;
         }
+
+        showToast('Step2 내용을 저장했습니다.', 'success');
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || 'Step2 저장 중 오류가 발생했습니다.');
+        setAudienceStepStatus(audienceId, 'step2', 'error');
+        setInlineMessage("qt-step2-message", error?.message || 'Step2 저장 중 오류가 발생했습니다.', "error");
       }
     });
   }
 
   if (previewBtn) {
     previewBtn.addEventListener('click', async () => {
+      clearInlineMessage("qt-step2-message");
+
       try {
         const req = buildStep2Payload(audienceId);
         await PreviewQTStep2HTML(req);
@@ -176,9 +187,12 @@ export async function bindQTStep2Events(audienceId) {
         if (nextBtn) {
           nextBtn.disabled = false;
         }
+
+        showToast('미리보기를 생성했습니다.', 'success');
       } catch (error) {
         console.error(error);
-        window.alert(error?.message || '미리보기 생성 중 오류가 발생했습니다.');
+        setAudienceStepStatus(audienceId, 'step2', 'error');
+        setInlineMessage("qt-step2-message", error?.message || '미리보기 생성 중 오류가 발생했습니다.', "error");
       }
     });
   }
