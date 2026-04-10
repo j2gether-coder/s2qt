@@ -1,0 +1,7 @@
+Python 3.14.3
+pip 26.0.1 from C:\Python314\Lib\site-packages\pip (python 3.14)
+C:\Python314\python.exe
+C:\Python\python.exe
+C:\Users\TGKIM\AppData\Local\Microsoft\WindowsApps\python.exe
+C:\Python314\Scripts\pip.exe
+C:\Python\Scripts\pip.exe

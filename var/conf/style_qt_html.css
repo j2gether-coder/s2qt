@@ -1,0 +1,218 @@
+.qt-wrap{
+  --qt-bg: #ffffff;
+  --qt-text: #1f2937;
+  --qt-muted: #4b5563;
+  --qt-title: #1f3b2f;
+  --qt-green: #1f8f55;
+  --qt-blue: #1d4ed8;
+  --qt-blue-bg: #eaf4ff;
+  --qt-blue-border: #3b82f6;
+  --qt-yellow-bg: #fff8d9;
+  --qt-yellow-border: #f4c542;
+  --qt-purple-bg: #f4efff;
+  --qt-purple-border: #b39ddb;
+  --qt-line: #d1d5db;
+
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0;
+  font-family: 'Nanum Gothic','Apple SD Gothic Neo',sans-serif;
+  line-height: 1.6;
+  color: var(--qt-text);
+  background: var(--qt-bg);
+  font-size: 14px;
+  word-break: keep-all;
+}
+
+.qt-main{
+  color: var(--qt-text);
+}
+
+.qt-title{
+  text-align: center;
+  color: var(--qt-title);
+  font-size: 24px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--qt-green);
+  padding-bottom: 8px;
+  margin: 0 0 10px 0;
+}
+
+.qt-subbox{
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: var(--qt-blue-bg);
+  border-left: 4px solid var(--qt-blue-border);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--qt-text);
+}
+
+.qt-section-title{
+  color: var(--qt-green);
+  border-left: 4px solid var(--qt-green);
+  padding-left: 8px;
+  margin: 18px 0 10px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.qt-message-title{
+  color: var(--qt-blue);
+  margin: 14px 0 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.qt-box{
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  color: var(--qt-text);
+}
+
+.qt-reflection{
+  background: var(--qt-yellow-bg);
+  border-left: 4px solid var(--qt-yellow-border);
+  color: var(--qt-text);
+}
+
+.qt-prayer{
+  background: var(--qt-purple-bg);
+  border-left: 4px solid var(--qt-purple-border);
+  color: var(--qt-text);
+}
+
+.qt-list{
+  margin: 0;
+  padding-left: 18px;
+  color: var(--qt-text);
+}
+
+.qt-list li{
+  margin: 5px 0;
+  color: var(--qt-text);
+}
+
+.qt-body{
+  color: var(--qt-text);
+}
+
+.qt-body p{
+  margin: 0 0 8px 0;
+  color: var(--qt-text);
+}
+
+.qt-prayer-title{
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--qt-text);
+}
+
+.qt-footer{
+  margin-top: 28px;
+  color: var(--qt-muted);
+  text-align: center;
+}
+
+.qt-footer-line{
+  height: 1px;
+  background: var(--qt-line);
+  margin-bottom: 10px;
+}
+
+.qt-footer-text{
+  color: var(--qt-muted);
+}
+
+h1,h2,h3,blockquote,ul{
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* 기본 상태에서도 내부 텍스트를 명확히 상속 */
+.qt-reflection,
+.qt-reflection *{
+  color: var(--qt-text);
+}
+
+.qt-prayer,
+.qt-prayer *{
+  color: var(--qt-text);
+}
+
+@media (prefers-color-scheme: dark){
+  .qt-wrap{
+    --qt-bg: #111827;
+    --qt-text: #f3f4f6;
+    --qt-muted: #cbd5e1;
+    --qt-title: #e5f7ec;
+    --qt-green: #4ade80;
+    --qt-blue: #93c5fd;
+    --qt-blue-bg: #1e3a5f;
+    --qt-blue-border: #60a5fa;
+    --qt-yellow-bg: #4b3b12;
+    --qt-yellow-border: #facc15;
+    --qt-purple-bg: #31224a;
+    --qt-purple-border: #c4b5fd;
+    --qt-line: #475569;
+  }
+
+  .qt-wrap{
+    background: var(--qt-bg);
+    color: var(--qt-text);
+  }
+
+  .qt-main,
+  .qt-body,
+  .qt-body p,
+  .qt-list,
+  .qt-list li,
+  .qt-subbox,
+  .qt-footer,
+  .qt-footer-text{
+    color: var(--qt-text) !important;
+  }
+
+  .qt-reflection{
+    background: var(--qt-yellow-bg) !important;
+    border-left-color: var(--qt-yellow-border) !important;
+    color: var(--qt-text) !important;
+  }
+
+  .qt-reflection,
+  .qt-reflection *,
+  .qt-reflection .qt-list,
+  .qt-reflection .qt-list li,
+  .qt-reflection p,
+  .qt-reflection div,
+  .qt-reflection span{
+    color: #f3f4f6 !important;
+  }
+
+  .qt-prayer{
+    background: var(--qt-purple-bg) !important;
+    border-left-color: var(--qt-purple-border) !important;
+    color: var(--qt-text) !important;
+  }
+
+  .qt-prayer,
+  .qt-prayer *,
+  .qt-prayer .qt-body,
+  .qt-prayer .qt-body p,
+  .qt-prayer .qt-prayer-title,
+  .qt-prayer div,
+  .qt-prayer span{
+    color: #f3f4f6 !important;
+  }
+
+  .qt-subbox{
+    background: var(--qt-blue-bg) !important;
+    border-left-color: var(--qt-blue-border) !important;
+  }
+
+  .qt-footer-line{
+    background: var(--qt-line) !important;
+  }
+}

@@ -1,0 +1,39 @@
+Collecting python-docx==1.1.2 (from -r requirements.txt (line 1))
+  Using cached python_docx-1.1.2-py3-none-any.whl.metadata (2.0 kB)
+Collecting python-pptx==0.6.23 (from -r requirements.txt (line 2))
+  Using cached python_pptx-0.6.23-py3-none-any.whl.metadata (18 kB)
+Collecting lxml==5.3.0 (from -r requirements.txt (line 3))
+  Downloading lxml-5.3.0-cp310-cp310-win_amd64.whl.metadata (3.9 kB)
+Collecting Pillow==11.0.0 (from -r requirements.txt (line 4))
+  Downloading pillow-11.0.0-cp310-cp310-win_amd64.whl.metadata (9.3 kB)
+Collecting XlsxWriter==3.2.0 (from -r requirements.txt (line 5))
+  Using cached XlsxWriter-3.2.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting typing-extensions>=4.9.0 (from python-docx==1.1.2->-r requirements.txt (line 1))
+  Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+Using cached python_docx-1.1.2-py3-none-any.whl (244 kB)
+Using cached python_pptx-0.6.23-py3-none-any.whl (471 kB)
+Downloading lxml-5.3.0-cp310-cp310-win_amd64.whl (3.8 MB)
+   ---------------------------------------- 3.8/3.8 MB 10.3 MB/s  0:00:00
+Downloading pillow-11.0.0-cp310-cp310-win_amd64.whl (2.6 MB)
+   ---------------------------------------- 2.6/2.6 MB 8.7 MB/s  0:00:00
+Using cached XlsxWriter-3.2.0-py3-none-any.whl (159 kB)
+Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Installing collected packages: XlsxWriter, typing-extensions, Pillow, lxml, python-pptx, python-docx
+  Attempting uninstall: typing-extensions
+    Found existing installation: typing_extensions 4.6.3
+    Uninstalling typing_extensions-4.6.3:
+      Successfully uninstalled typing_extensions-4.6.3
+  Attempting uninstall: Pillow
+    Found existing installation: Pillow 9.5.0
+    Uninstalling Pillow-9.5.0:
+      Successfully uninstalled Pillow-9.5.0
+  Attempting uninstall: lxml
+    Found existing installation: lxml 6.0.0
+    Uninstalling lxml-6.0.0:
+      Successfully uninstalled lxml-6.0.0
+  Attempting uninstall: python-docx
+    Found existing installation: python-docx 1.1.0
+    Uninstalling python-docx-1.1.0:
+      Successfully uninstalled python-docx-1.1.0
+
+Successfully installed Pillow-11.0.0 XlsxWriter-3.2.0 lxml-5.3.0 python-docx-1.1.2 python-pptx-0.6.23 typing-extensions-4.15.0

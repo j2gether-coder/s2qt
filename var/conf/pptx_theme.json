@@ -1,0 +1,16 @@
+{
+  "font_family": "맑은 고딕",
+  "font_size": {
+    "cover_title": 28,
+    "cover_meta": 18,
+    "section_title": 24,
+    "body": 18
+  },
+  "message_slide": {
+    "section_title": "오늘의 메시지",
+    "show_message_index_in_body": true
+  },
+  "body": {
+    "use_bullets": false
+  }
+}

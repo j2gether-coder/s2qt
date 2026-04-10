@@ -1,0 +1,151 @@
+-- SQLite용, Standalone 단독형 DB
+
+CREATE TABLE qt_documents (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    title               TEXT NOT NULL,               -- 설교 제목
+    preacher            TEXT NOT NULL,               -- 설교자
+    tradition           TEXT NOT NULL DEFAULT 'bible',
+    source_type         TEXT NOT NULL,               -- youtube / audio / text
+    generation_mode     TEXT NOT NULL,               -- byo_api / local_only
+
+    primary_ref_text    TEXT,                        -- 예: 요한복음 3:16-18
+    qt_markdown         TEXT NOT NULL,               -- 최종 QT 정본
+    qt_summary          TEXT,                        -- 목록 미리보기용 짧은 요약
+    has_hymn_recommend  INTEGER NOT NULL DEFAULT 0,  -- 0/1
+
+    is_deleted          INTEGER NOT NULL DEFAULT 0,  -- soft delete
+    created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE qt_scripture_refs (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    qt_document_id    INTEGER NOT NULL,
+    ref_role          TEXT NOT NULL,      -- primary / mentioned
+    tradition         TEXT NOT NULL,      -- bible / buddhist / quran ...
+    work_id           TEXT NOT NULL,      -- john / romans / quran / dhammapada ...
+
+    ref_start_1       INTEGER,
+    ref_start_2       INTEGER,
+    ref_start_3       INTEGER,
+    ref_end_1         INTEGER,
+    ref_end_2         INTEGER,
+    ref_end_3         INTEGER,
+
+    display_text      TEXT NOT NULL,      -- 예: 요한복음 3:16-18
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+
+    FOREIGN KEY (qt_document_id) REFERENCES qt_documents(id) ON DELETE CASCADE
+);
+
+CREATE TABLE templates (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_code     TEXT NOT NULL UNIQUE,
+    template_name     TEXT NOT NULL,
+    template_type     TEXT NOT NULL,      -- free_pdf / paid_pdf / booklet / annual_ebook
+    tradition_scope   TEXT,               -- bible / all / buddhist / quran ...
+    is_active         INTEGER NOT NULL DEFAULT 1,
+    is_paid           INTEGER NOT NULL DEFAULT 0,
+    price_krw         INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE template_purchases (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_code     TEXT NOT NULL,
+    product_type      TEXT NOT NULL,      -- single_pdf / booklet / annual_ebook
+    price_krw         INTEGER NOT NULL,
+    purchased_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at        TEXT
+);
+
+CREATE TABLE app_settings (
+    setting_key       TEXT PRIMARY KEY,
+    setting_value     TEXT,
+    updated_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_qt_documents_title
+    ON qt_documents(title);
+
+CREATE INDEX idx_qt_documents_preacher
+    ON qt_documents(preacher);
+
+CREATE INDEX idx_qt_documents_created_at
+    ON qt_documents(created_at);
+
+CREATE INDEX idx_qt_documents_tradition
+    ON qt_documents(tradition);
+
+CREATE INDEX idx_qt_scripture_refs_doc_id
+    ON qt_scripture_refs(qt_document_id);
+
+CREATE INDEX idx_qt_scripture_refs_lookup
+    ON qt_scripture_refs(tradition, work_id, ref_start_1, ref_start_2, ref_start_3);
+
+CREATE INDEX idx_qt_scripture_refs_role
+    ON qt_scripture_refs(ref_role);
+
+CREATE INDEX idx_template_purchases_template_code
+    ON template_purchases(template_code);
+
+CREATE TABLE qt_exports (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    qt_document_id    INTEGER NOT NULL,
+    template_code     TEXT NOT NULL,
+    export_type       TEXT NOT NULL,   -- pdf / view / ebook
+    exported_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (qt_document_id) REFERENCES qt_documents(id) ON DELETE CASCADE
+);
+
+CREATE TABLE local_account (
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    email_full                  TEXT NOT NULL,                -- 전체 이메일 주소
+    login_id                    TEXT NOT NULL UNIQUE,         -- 이메일 id 부분
+    display_name                TEXT,
+
+    password_hash               TEXT NOT NULL,
+    password_algo               TEXT NOT NULL DEFAULT 'argon2id',
+
+    email_verified              INTEGER NOT NULL DEFAULT 0,   -- 0/1
+    failed_login_count          INTEGER NOT NULL DEFAULT 0,
+    locked_until                TEXT,
+
+    created_at                  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login_at               TEXT
+);
+
+CREATE TABLE security_metadata (
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    kdf_algo                    TEXT NOT NULL DEFAULT 'argon2id',
+    kdf_salt                    BLOB NOT NULL,
+    kdf_params_json             TEXT NOT NULL,                -- iterations, memory, parallelism 등
+
+    wrapped_dek                 BLOB NOT NULL,                -- 비밀번호 기반 키로 감싼 DEK
+    dek_wrap_algo               TEXT NOT NULL DEFAULT 'aes-256-gcm',
+
+    api_key_storage_mode        TEXT NOT NULL DEFAULT 'encrypted_file', 
+    -- encrypted_file / none
+
+    auto_lock_minutes           INTEGER NOT NULL DEFAULT 10,
+    remember_login_id           INTEGER NOT NULL DEFAULT 1,   -- 0/1
+
+    created_at                  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE local_session_state (
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    last_login_id               TEXT,
+    is_locked                   INTEGER NOT NULL DEFAULT 1,
+    last_unlock_at              TEXT,
+    last_activity_at            TEXT,
+
+    created_at                  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

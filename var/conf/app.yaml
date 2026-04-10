@@ -1,0 +1,3 @@
+prompt_qt_json_file: var/conf/prompt_qt_json.md
+style_qt_html_file: var/conf/style_qt_html.css
+style_qt_pdf_file: var/conf/style_qt_pdf.css

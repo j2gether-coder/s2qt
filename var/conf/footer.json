@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "footer_policy": {
+    "always_regenerate_qr": true,
+    "overwrite_existing_qr": true
+  },
+  "default_footer": {
+    "mode": "default",
+    "show_footer": true,
+    "show_divider": true,
+    "show_qr": true,
+    "footer_text": "말씀을 묵상으로, 묵상을 삶으로",
+    "church_name": "",
+    "logo_path": "",
+    "homepage_url": "https://s2gt.blogspot.com/",
+    "qr_image_path": "var/image/s2qt_link.png",
+    "qr_position": "right-bottom",
+    "qr_size_mm": 27.0,
+    "safe_area_mm": 36.0
+  },
+  "qr_defaults": {
+    "style": "dot",
+    "size_px": 768,
+    "margin_modules": 4,
+    "dot_scale": 0.82,
+    "keep_finder_box": true,
+    "background_rgba": [255, 255, 255, 255],
+    "foreground_rgba": [0, 0, 0, 255]
+  },
+  "subscriber_footer": {
+    "mode": "subscriber",
+    "show_footer": true,
+    "show_divider": true,
+    "show_qr": true,
+    "footer_text": "",
+    "church_name": "",
+    "logo_path": "",
+    "homepage_url": "",
+    "qr_image_path": "var/image/church_qr.png",
+    "qr_position": "right-bottom",
+    "qr_size_mm": 27.0,
+    "safe_area_mm": 38.0
+  }
+}

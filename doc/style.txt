@@ -1,0 +1,149 @@
+<style>
+
+    /* 마크다운 요소 전용 스타일링 */
+
+    @media print {
+
+        @page { size: A4; margin: 15mm; }
+
+        body { -webkit-print-color-adjust: exact; }
+
+    }
+
+    body {
+
+        font-family: 'Nanum Gothic', sans-serif;
+
+        line-height: 1.6;
+
+        color: #333;
+
+        font-size: 10pt;
+
+    }
+
+    h1 { 
+
+        text-align: center; 
+
+        color: #2c3e50; 
+
+        font-size: 18pt; 
+
+        border-bottom: 2px solid #27ae60;
+
+        padding-bottom: 8px;
+
+        margin-bottom: 5px;
+
+    }
+
+    h2 { font-size: 11pt; text-align: center; color: #7f8c8d; margin-top: 0; }
+
+    h3 { 
+
+        color: #27ae60; 
+
+        border-left: 4px solid #27ae60; 
+
+        padding-left: 10px; 
+
+        margin: 20px 0 10px 0; 
+
+        font-size: 12pt;
+
+    }
+
+    h4 { color: #2980b9; margin: 15px 0 5px 0; font-size: 11pt; }
+
+    
+
+    /* 마크다운 인용문(>)을 박스로 변환 */
+
+    blockquote {
+
+        margin: 10px 0;
+
+        padding: 10px 15px;
+
+        background-color: #f0fff4; /* 말씀의 창 배경 */
+
+        border-left: 5px solid #d1e7dd;
+
+        border-radius: 5px;
+
+        color: #444;
+
+    }
+
+    /* 특정 박스 색상 구분 (옵션) */
+
+    .hymn { background-color: #e3f2fd; border-left-color: #2196f3; font-weight: bold; }
+
+    .reflection { background-color: #fff9db; border-left-color: #ffe066; }
+
+    .prayer { background-color: #f3f0ff; border-left-color: #d1c4e9;  font-style: italic; }
+
+</style>
+
+
+
+# 하나님의 뜻을 따라 사는 삶
+
+<blockquote class="hymn">
+
+본문: 데살로니가전서 4:1~8 <br>
+
+찬송: 420장 "너 성결키 위해", 446장 "주 음성 외에는"
+
+</blockquote>
+
+
+
+### 🌿 말씀의 창: 본문 요약
+
+사도 바울은 하나님을 기쁘시게 하는 삶을 더욱 힘쓰라고 권면합니다. **하나님의 뜻은 성도들의 거룩함**에 있으며, 음란을 버리고 각자 존귀함으로 자신을 지켜 부르심의 목적인 거룩함을 이루는 것입니다.
+
+
+
+### ✨ 오늘의 메시지
+
+
+
+#### 1. 신앙의 페달을 멈추지 마십시오
+
+신앙은 자전거와 같아 멈추면 쓰러집니다. "이 정도면 됐다"는 안주를 버리고 영적 성장을 위해 오늘도 힘차게 전진하십시오.
+
+
+
+#### 2. 내 뜻으로 하나님의 뜻을 포장하지 마십시오
+
+이기심과 유익을 '하나님의 뜻'으로 포장하지 마십시오. 진정한 하나님의 뜻은 내 욕심을 내려놓고 세상의 빛과 소금이 되는 삶에 있습니다.
+
+
+
+#### 3. 거룩함은 성도의 정체성입니다
+
+우리 몸은 성령의 전입니다. 유혹 속에서 방어에 그치지 않고, 하나님의 자녀라는 정체성을 확인하며 구별된 삶을 사는 것이 하나님의 뜻입니다.
+
+
+
+### 🔍 깊은 묵상과 적용
+
+<blockquote class="reflection">
+
+• <b>나의 신앙은 어디를 향합니까?</b> 오늘 내가 밟아야 할 '신앙의 페달'은 무엇입니까? <br>
+
+• <b>나의 유익을 구하고 있지는 않습니까?</b> 결정의 순간에 정직하게 나를 성찰해 봅시다. <br>
+
+• <b>거룩함을 위해 무엇을 멀리해야 합니까?</b> 오늘 구체적으로 버릴 습관을 적어봅시다. 
+
+</blockquote>
+
+
+
+<blockquote class="prayer">
+
+<strong>🙏 오늘의 기도</strong><br>
+
+내 뜻을 하나님의 뜻으로 포장했던 어리석음을 용서하소서. 멈춰 서는 신앙이 아니라 날마다 주님을 닮아가는 진보를 이루게 하시고, 거룩한 성전으로서 주님의 향기를 드러내게 하옵소서. 아멘.
