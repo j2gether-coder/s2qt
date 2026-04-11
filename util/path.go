@@ -14,6 +14,7 @@ type AppPaths struct {
 	Temp  string
 	Conf  string
 	Data  string
+	DB    string
 	Model string
 
 	// executables in bin
@@ -21,6 +22,10 @@ type AppPaths struct {
 	FfmpegExe  string
 	FfprobeExe string
 	WhisperExe string
+
+	// fixed db file
+	DBFile       string
+	SecurityFile string
 
 	// fixed model file
 	WhisperModel string
@@ -48,6 +53,8 @@ func GetAppPaths() (*AppPaths, error) {
 	varDir := filepath.Join(root, "var")
 	tempDir := filepath.Join(varDir, "temp")
 	modelDir := filepath.Join(varDir, "model")
+	confDir := filepath.Join(varDir, "conf")
+	dbDir := filepath.Join(varDir, "db")
 
 	p := &AppPaths{
 		Root:  root,
@@ -56,6 +63,7 @@ func GetAppPaths() (*AppPaths, error) {
 		Temp:  tempDir,
 		Conf:  filepath.Join(varDir, "conf"),
 		Data:  filepath.Join(varDir, "data"),
+		DB:    filepath.Join(varDir, "db"),
 		Model: modelDir,
 
 		YtDlpExe:   filepath.Join(binDir, "yt-dlp.exe"),
@@ -64,6 +72,8 @@ func GetAppPaths() (*AppPaths, error) {
 		WhisperExe: filepath.Join(binDir, "whisper-cli.exe"),
 
 		WhisperModel: filepath.Join(modelDir, "ggml-tiny.bin"),
+		DBFile:       filepath.Join(dbDir, "s2qt.db"),
+		SecurityFile: filepath.Join(confDir, "security.json"),
 
 		TempVideo: filepath.Join(tempDir, "video.mp4"),
 		TempWav:   filepath.Join(tempDir, "audio.wav"),
@@ -122,6 +132,7 @@ func EnsureDirs(p *AppPaths) error {
 		p.Temp,
 		p.Conf,
 		p.Data,
+		p.DB,
 		p.Model,
 	}
 

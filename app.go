@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,8 +18,14 @@ import (
 )
 
 type App struct {
-	ctx               context.Context
+	ctx context.Context
+
+	db *sql.DB
+
 	outputFileService *service.OutputFileService
+	cryptoSvc         *service.CryptoService
+	settingsSvc       *service.SettingsService
+	historySvc        *service.HistoryService
 }
 
 func NewApp() *App {
@@ -30,6 +37,59 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.outputFileService.SetContext(ctx)
+
+	if err := a.initLocalServices(); err != nil {
+		panic(err)
+	}
+}
+
+func (a *App) shutdown(ctx context.Context) {
+	if a.db != nil {
+		_ = a.db.Close()
+	}
+}
+
+func (a *App) initLocalServices() error {
+	paths, err := util.GetAppPaths()
+	if err != nil {
+		return fmt.Errorf("failed to get app paths: %w", err)
+	}
+
+	db, err := service.OpenSQLite(paths.DBFile)
+	if err != nil {
+		return fmt.Errorf("failed to open sqlite: %w", err)
+	}
+
+	if err := service.InitSQLite(db); err != nil {
+		return fmt.Errorf("failed to init sqlite: %w", err)
+	}
+
+	cryptoSvc, err := service.NewCryptoService(paths.SecurityFile)
+	if err != nil {
+		return fmt.Errorf("failed to init crypto service: %w", err)
+	}
+
+	a.db = db
+	a.cryptoSvc = cryptoSvc
+	a.settingsSvc = service.NewSettingsService(db, cryptoSvc)
+	a.historySvc = service.NewHistoryService(db)
+
+	return nil
+}
+
+func (a *App) resolveDBPath() (string, error) {
+	// util.GetAppPaths() 구조를 따르는 편이 기존 프로젝트와 더 잘 맞음
+	paths, err := util.GetAppPaths()
+	if err != nil {
+		return "", err
+	}
+
+	dbDir := filepath.Dir(paths.DBFile)
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		return "", err
+	}
+
+	return paths.DBFile, nil
 }
 
 func (a *App) SelectTextFile() (string, error) {
@@ -242,37 +302,120 @@ func (a *App) GeneratePNG(dpi int) (*service.PNGGenerateResult, error) {
 	return pngSvc.GenerateFromTempHTML(dpi)
 }
 
-// TODO(step3-legacy-output):
-// 기존 출력 열기/다른 저장 방식은 현재 Step3에서 사용하지 않음.
-// 필요 시 이후 구조 정리 후 재사용 검토.
-// func (a *App) OpenOutputFile(path string) error {
-// 	path = strings.TrimSpace(path)
-// 	if path == "" {
-// 		return errors.New("파일 경로가 비어 있습니다")
-// 	}
-//
-// 	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", path)
-// 	if err := cmd.Start(); err != nil {
-// 		return fmt.Errorf("파일 열기 실패: %w", err)
-// 	}
-// 	return nil
-// }
-//
-// func (a *App) SaveQTOutputAs(req service.SaveOutputAsRequest) (*service.SaveOutputAsResult, error) {
-// 	svc, err := service.NewFileSaveService()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	return svc.SaveOutputAs(&req, func(defaultFilename string, filters []service.DialogFileFilter) (string, error) {
-// 		return "", nil
-// 	})
-// }
-
 func (a *App) OpenGeneratedFile(filePath string) error {
 	return a.outputFileService.OpenGeneratedFile(filePath)
 }
 
 func (a *App) SaveGeneratedFile(filePath, audienceID, formatKey string) (string, error) {
 	return a.outputFileService.SaveGeneratedFile(filePath, audienceID, formatKey)
+}
+
+//
+// Settings bindings
+//
+
+func (a *App) LoadAppSettingsByGroup(group string) ([]service.SettingItem, error) {
+	if a.settingsSvc == nil {
+		return nil, fmt.Errorf("settings service is not initialized")
+	}
+	return a.settingsSvc.GetSettingsByGroup(group)
+}
+
+func (a *App) SaveAppSettings(items []service.SettingItem) error {
+	if a.settingsSvc == nil {
+		return fmt.Errorf("settings service is not initialized")
+	}
+	return a.settingsSvc.SaveSettings(items)
+}
+
+func (a *App) SaveSecretSettingWithPin(key string, plainValue string, valueType string, group string, pin string) error {
+	if a.settingsSvc == nil {
+		return fmt.Errorf("settings service is not initialized")
+	}
+	return a.settingsSvc.SaveSecretSettingWithPin(key, plainValue, valueType, group, pin)
+}
+
+func (a *App) HasSecretValue(key string) (bool, error) {
+	if a.settingsSvc == nil {
+		return false, fmt.Errorf("settings service is not initialized")
+	}
+	return a.settingsSvc.HasSecretSetting(key)
+}
+
+//
+// Security / PIN bindings
+//
+
+func (a *App) IsPinEnabled() (bool, error) {
+	if a.cryptoSvc == nil {
+		return false, fmt.Errorf("crypto service is not initialized")
+	}
+	return a.cryptoSvc.IsPinEnabled(), nil
+}
+
+func (a *App) SetupPin(pin string) error {
+	if a.cryptoSvc == nil {
+		return fmt.Errorf("crypto service is not initialized")
+	}
+	return a.cryptoSvc.SetupPin(pin)
+}
+
+func (a *App) ChangePin(oldPin string, newPin string) error {
+	if a.cryptoSvc == nil {
+		return fmt.Errorf("crypto service is not initialized")
+	}
+	return a.cryptoSvc.ChangePin(oldPin, newPin)
+}
+
+func (a *App) VerifyPin(pin string) (bool, error) {
+	if a.cryptoSvc == nil {
+		return false, fmt.Errorf("crypto service is not initialized")
+	}
+	return a.cryptoSvc.VerifyPin(pin)
+}
+
+func (a *App) GetPinLength() (int, error) {
+	if a.cryptoSvc == nil {
+		return 6, fmt.Errorf("crypto service is not initialized")
+	}
+	return a.cryptoSvc.GetPinLength(), nil
+}
+
+//
+// History bindings
+//
+
+func (a *App) SaveHistory(req service.SaveHistoryRequest) (int64, error) {
+	if a.historySvc == nil {
+		return 0, fmt.Errorf("history service is not initialized")
+	}
+	return a.historySvc.SaveHistory(req)
+}
+
+func (a *App) ListHistory() ([]service.HistoryMaster, error) {
+	if a.historySvc == nil {
+		return nil, fmt.Errorf("history service is not initialized")
+	}
+	return a.historySvc.ListHistory()
+}
+
+func (a *App) GetHistory(historyID int64) (service.HistoryMaster, error) {
+	if a.historySvc == nil {
+		return service.HistoryMaster{}, fmt.Errorf("history service is not initialized")
+	}
+	return a.historySvc.GetHistory(historyID)
+}
+
+func (a *App) GetHistoryStep1(historyID int64, audience string) (service.HistoryStep1, error) {
+	if a.historySvc == nil {
+		return service.HistoryStep1{}, fmt.Errorf("history service is not initialized")
+	}
+	return a.historySvc.GetHistoryStep1(historyID, audience)
+}
+
+func (a *App) DeleteHistory(historyID int64) error {
+	if a.historySvc == nil {
+		return fmt.Errorf("history service is not initialized")
+	}
+	return a.historySvc.DeleteHistory(historyID)
 }

@@ -1,5 +1,6 @@
 export const appState = {
-  selectedMenu: 'qt_prepare', // qt_prepare | adult | young_adult | teen | child
+  selectedMenu: 'qt_prepare', // qt_prepare | adult | young_adult | teen | child | history | settings
+
   source: {
     sourceType: 'video', // video | audio | text
     basicInfo: {
@@ -21,6 +22,7 @@ export const appState = {
     sourceStatus: 'NOT_READY',
     sourceId: '',
     lastSavedAt: '',
+    basicInfoSavedAt: '',
   },
 
   audienceSteps: {
@@ -35,6 +37,12 @@ export const appState = {
     young_adult: { step1: 'idle', step2: 'idle', step3: 'idle' },
     teen: { step1: 'idle', step2: 'idle', step3: 'idle' },
     child: { step1: 'idle', step2: 'idle', step3: 'idle' },
+  },
+
+  historySelected: {
+    historyId: null,
+    audienceId: '',
+    step1ResultJson: '',
   },
 
   output: {
@@ -125,6 +133,10 @@ export function getMenuLabel(menu) {
       return '중고등부 QT';
     case 'child':
       return '어린이 QT';
+    case 'history':
+      return '작업 내역';
+    case 'settings':
+      return '환경설정';
     default:
       return '';
   }

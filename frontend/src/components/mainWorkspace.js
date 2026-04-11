@@ -25,6 +25,16 @@ import { renderQTStep3 } from './qt/qtStep3';
 import { bindQTStep1Events } from './qt/bindQTStep1';
 import { bindQTStep2Events } from './qt/bindQTStep2';
 import { bindQTStep3Events } from './qt/bindQTStep3';
+import { renderAppSettings, bindAppSettingsEvents } from './settings/appSettings';
+import { renderHistoryWorkspace, bindHistoryWorkspaceEvents } from './history/historyWorkspace';
+
+function isSettingsMenu(menu) {
+  return menu === 'settings';
+}
+
+function isHistoryMenu(menu) {
+  return menu === 'history';
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -726,6 +736,16 @@ export function bindMainWorkspaceEvents() {
     return;
   }
 
+  if (isHistoryMenu(appState.selectedMenu)) {
+    bindHistoryWorkspaceEvents();
+    return;
+  }
+
+  if (isSettingsMenu(appState.selectedMenu)) {
+    bindAppSettingsEvents();
+    return;
+  }
+
   if (isAudienceMenu(appState.selectedMenu)) {
     bindAudienceWorkspaceEvents();
   }
@@ -734,9 +754,23 @@ export function bindMainWorkspaceEvents() {
 export function renderMainWorkspace() {
   const menu = appState.selectedMenu;
 
+  let content = '';
+
+  if (menu === 'qt_prepare') {
+    content = renderQtPrepareLayout();
+  } else if (isHistoryMenu(menu)) {
+    content = renderHistoryWorkspace();
+  } else if (isSettingsMenu(menu)) {
+    content = renderAppSettings();
+  } else if (isAudienceMenu(menu)) {
+    content = renderAudienceLayout(menu);
+  } else {
+    content = renderQtPrepareLayout();
+  }
+
   return `
     <main class="main-workspace">
-      ${menu === 'qt_prepare' ? renderQtPrepareLayout() : renderAudienceLayout(menu)}
+      ${content}
     </main>
   `;
 }

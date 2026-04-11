@@ -6,6 +6,8 @@ const MENUS = [
   { id: 'young_adult', label: '청년 QT' },
   { id: 'teen', label: '중고등부 QT' },
   { id: 'child', label: '어린이 QT' },
+  { id: 'history', label: '작업 내역' },
+  { id: 'settings', label: '환경 설정' },
 ];
 
 export function renderSideNav() {
