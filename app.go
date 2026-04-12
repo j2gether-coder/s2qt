@@ -78,7 +78,6 @@ func (a *App) initLocalServices() error {
 }
 
 func (a *App) resolveDBPath() (string, error) {
-	// util.GetAppPaths() 구조를 따르는 편이 기존 프로젝트와 더 잘 맞음
 	paths, err := util.GetAppPaths()
 	if err != nil {
 		return "", err
@@ -137,7 +136,6 @@ func (a *App) LoadTextFile(path string) (string, error) {
 	return svc.LoadTextFile(path)
 }
 
-// video URL 메타 조회 (yt-dlp --dump-json)
 func (a *App) GetVideoMeta(url string) (*service.VideoMeta, error) {
 	url = strings.TrimSpace(url)
 	if url == "" {
@@ -226,7 +224,7 @@ func (a *App) SaveManualLLMResult(jsonText string) error {
 		return errors.New("유효한 JSON 형식이 아닙니다")
 	}
 
-	return os.WriteFile(paths.TempJson, []byte(jsonText), 0644)
+	return os.WriteFile(paths.TempJson, []byte(jsonText), 0o644)
 }
 
 func (a *App) LoadQTStep2Data() (*service.QTStep2Data, error) {
@@ -406,11 +404,11 @@ func (a *App) GetHistory(historyID int64) (service.HistoryMaster, error) {
 	return a.historySvc.GetHistory(historyID)
 }
 
-func (a *App) GetHistoryStep1(historyID int64, audience string) (service.HistoryStep1, error) {
+func (a *App) GetHistoryQTJSON(historyID int64, audience string) (service.HistoryQTJSON, error) {
 	if a.historySvc == nil {
-		return service.HistoryStep1{}, fmt.Errorf("history service is not initialized")
+		return service.HistoryQTJSON{}, fmt.Errorf("history service is not initialized")
 	}
-	return a.historySvc.GetHistoryStep1(historyID, audience)
+	return a.historySvc.GetHistoryQTJSON(historyID, audience)
 }
 
 func (a *App) DeleteHistory(historyID int64) error {
@@ -418,4 +416,8 @@ func (a *App) DeleteHistory(historyID int64) error {
 		return fmt.Errorf("history service is not initialized")
 	}
 	return a.historySvc.DeleteHistory(historyID)
+}
+
+func (a *App) LoadGuideDocument(sectionId string) (string, error) {
+	return service.LoadGuideDocument(sectionId)
 }

@@ -51,6 +51,22 @@ function ensureArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function parseEmailParts(email) {
+  const text = safeValue(email).trim();
+  if (!text || !text.includes("@")) {
+    return {
+      localPart: "",
+      domain: "",
+    };
+  }
+
+  const [localPartRaw, domainRaw] = text.split("@");
+  return {
+    localPart: safeValue(localPartRaw).trim(),
+    domain: safeValue(domainRaw).trim(),
+  };
+}
+
 async function loadExtraSettings() {
   const userItems = ensureArray(await LoadAppSettingsByGroup("user").catch(() => []));
   const llmItems = ensureArray(await LoadAppSettingsByGroup("llm").catch(() => []));
@@ -125,6 +141,18 @@ function getSmtpSecurityOptionsHtml(selectedValue) {
     .join("");
 }
 
+function renderCardInlineHead(title, description, rightText = "") {
+  return `
+    <div class="card-inline-head">
+      <div class="card-inline-head-left">
+        <span class="mini-title">${title}</span>
+        <span class="card-inline-head-desc">${description}</span>
+      </div>
+      ${rightText ? `<div class="card-inline-head-right">${rightText}</div>` : ""}
+    </div>
+  `;
+}
+
 function renderRemoteApiKeyArea() {
   if (extraSettingsState.isEditingApiKey) {
     return `
@@ -138,7 +166,7 @@ function renderRemoteApiKeyArea() {
         />
       </div>
 
-      <div class="row topgap-sm">
+      <div class="half-action-row topgap-sm">
         <button type="button" class="button-ghost" id="cancel-remote-api-key-edit-btn">취소</button>
         <button type="button" class="button" id="save-remote-api-key-btn">API KEY 저장</button>
       </div>
@@ -189,13 +217,11 @@ function renderAiModeDetail() {
 function renderAiCard() {
   return `
     <section class="card">
-      <h3 class="mini-title">AI 기능</h3>
-      <p class="body-note topgap-sm">AI 사용 방식을 설정합니다.</p>
-
-      <div class="mode-strip topgap-sm">
-        <span class="mode-label">현재 모드</span>
-        <span class="mode-value">${getAiModeLabel(extraSettingsState.aiMode)}</span>
-      </div>
+      ${renderCardInlineHead(
+        "AI 기능",
+        "AI 사용 방식을 설정합니다.",
+        `현재 모드: ${getAiModeLabel(extraSettingsState.aiMode)}`
+      )}
 
       <div class="form-field topgap-sm">
         <label class="form-label">AI 사용 방식</label>
@@ -257,7 +283,7 @@ function renderSmtpPasswordArea() {
         </div>
       </div>
 
-      <div class="row topgap-sm">
+      <div class="half-action-row topgap-sm">
         <button type="button" class="button-ghost" id="cancel-smtp-password-edit-btn">취소</button>
         <button type="button" class="button" id="save-smtp-password-btn">비밀번호 저장</button>
       </div>
@@ -279,13 +305,38 @@ function renderSmtpPasswordArea() {
   `;
 }
 
-function renderSmtpCard() {
+function renderDisplayEmailRow() {
   const hasUserEmail = !!extraSettingsState.userEmail.trim();
+  if (!hasUserEmail) {
+    return `
+      <div class="inline-label-value-row topgap-sm">
+        <span class="form-label">발신 이메일</span>
+        <span class="field-help-text">기본 정보에서 이메일 주소를 입력해 주세요.</span>
+      </div>
+    `;
+  }
+
+  const emailParts = parseEmailParts(extraSettingsState.userEmail);
 
   return `
+    <div class="inline-label-value-row topgap-sm">
+      <span class="form-label">발신 이메일</span>
+      <div class="email-display-row email-display-row--readonly" title="${escapeHtml(extraSettingsState.userEmail)}">
+        <span class="email-display-local">${escapeHtml(emailParts.localPart)}</span>
+        <span class="email-display-sep">@</span>
+        <span class="email-display-domain">${escapeHtml(emailParts.domain)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderSmtpCard() {
+  return `
     <section class="card">
-      <h3 class="mini-title">SMTP</h3>
-      <p class="body-note topgap-sm">Step3에서 산출물을 이메일로 보낼 수 있습니다.</p>
+      ${renderCardInlineHead(
+        "SMTP",
+        "Step3에서 선택한 산출물을 이메일로 보낼 수 있습니다."
+      )}
 
       <div class="form-field topgap-sm">
         <label class="checkbox-row">
@@ -301,22 +352,7 @@ function renderSmtpCard() {
         </div>
       </div>
 
-      <div class="form-field topgap-sm">
-        <label class="form-label">발신 이메일</label>
-        ${
-          hasUserEmail
-            ? `
-              <div class="mode-strip">
-                <span class="mode-value">${escapeHtml(extraSettingsState.userEmail)}</span>
-              </div>
-            `
-            : `
-              <div class="hint">
-                기본 정보에서 이메일 주소를 입력해 주세요.
-              </div>
-            `
-        }
-      </div>
+      ${renderDisplayEmailRow()}
 
       <div class="form-grid two-column-grid topgap-sm">
         <div class="form-field">

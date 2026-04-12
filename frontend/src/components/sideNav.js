@@ -1,42 +1,60 @@
-import { appState, setSelectedMenu } from '../state/appState';
+import {
+  appState,
+  setSelectedMenu,
+  getMenuLabel,
+  isMenuVisible,
+} from "../state/appState";
 
-const MENUS = [
-  { id: 'qt_prepare', label: 'QT 준비' },
-  { id: 'adult', label: '장년 QT' },
-  { id: 'young_adult', label: '청년 QT' },
-  { id: 'teen', label: '중고등부 QT' },
-  { id: 'child', label: '어린이 QT' },
-  { id: 'history', label: '작업 내역' },
-  { id: 'settings', label: '환경 설정' },
+const MENU_ORDER = [
+  { id: "qt_prepare" },
+  { id: "adult" },
+  { id: "young_adult" },
+  { id: "teen" },
+  { id: "child" },
+  { id: "history" },
+  { id: "settings" },
 ];
 
+function getVisibleMenus() {
+  return MENU_ORDER.filter((menu) => isMenuVisible(menu.id)).map((menu) => ({
+    id: menu.id,
+    label: getMenuLabel(menu.id),
+  }));
+}
+
 export function renderSideNav() {
+  const visibleMenus = getVisibleMenus();
+
   return `
     <aside class="side-nav">
       <nav class="side-nav-menu">
-        ${MENUS.map(
-          (menu) => `
-            <button
-              class="side-nav-item ${appState.selectedMenu === menu.id ? 'active' : ''}"
-              type="button"
-              data-menu-id="${menu.id}"
-            >
-              ${menu.label}
-            </button>
-          `
-        ).join('')}
+        ${visibleMenus
+          .map(
+            (menu) => `
+              <button
+                class="side-nav-item ${appState.selectedMenu === menu.id ? "active" : ""}"
+                type="button"
+                data-menu-id="${menu.id}"
+              >
+                ${menu.label}
+              </button>
+            `
+          )
+          .join("")}
       </nav>
     </aside>
   `;
 }
 
 export function bindSideNavEvents(onMenuChange) {
-  const buttons = document.querySelectorAll('[data-menu-id]');
+  const buttons = document.querySelectorAll("[data-menu-id]");
+
   buttons.forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener("click", () => {
       const menuId = button.dataset.menuId;
       setSelectedMenu(menuId);
-      if (typeof onMenuChange === 'function') {
+
+      if (typeof onMenuChange === "function") {
         onMenuChange(menuId);
       }
     });

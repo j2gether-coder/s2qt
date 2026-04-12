@@ -80,18 +80,18 @@ CREATE TABLE IF NOT EXISTS history_master (
     updated_at   TEXT NOT NULL
 );`,
 		`
-CREATE TABLE IF NOT EXISTS history_step1 (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    history_id        INTEGER NOT NULL,
-    audience          TEXT NOT NULL,
-    step1_result_json TEXT NOT NULL,
-    created_at        TEXT NOT NULL,
-    updated_at        TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS history_qt_json (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    history_id     INTEGER NOT NULL,
+    audience       TEXT NOT NULL,
+    qt_result_json TEXT NOT NULL,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
     FOREIGN KEY (history_id) REFERENCES history_master(id)
 );`,
 		`CREATE INDEX IF NOT EXISTS idx_history_master_created_at ON history_master(created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_history_master_title ON history_master(title);`,
-		`CREATE INDEX IF NOT EXISTS idx_history_step1_history_audience ON history_step1(history_id, audience);`,
+		`CREATE INDEX IF NOT EXISTS idx_history_qt_json_history_audience ON history_qt_json(history_id, audience);`,
 	}
 
 	for _, stmt := range stmts {

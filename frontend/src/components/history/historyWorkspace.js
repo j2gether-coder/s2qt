@@ -1,34 +1,32 @@
 import {
   ListHistory,
   GetHistory,
-  GetHistoryStep1,
+  GetHistoryQTJSON,
   DeleteHistory,
 } from "../../../wailsjs/go/main/App";
-import { appState, setSelectedMenu, setAudienceStep } from "../../state/appState";
+import { appState, setAudienceStep, setBasicInfoField, setSelectedMenu } from "../../state/appState";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 import { mountAppShell } from "../appShell";
 
 const HISTORY_MESSAGE_ID = "history-workspace-message";
 
-const AUDIENCE_OPTIONS = [
-  { id: "adult", label: "장년" },
-  { id: "young_adult", label: "청년" },
-  { id: "teen", label: "중고등" },
-  { id: "child", label: "어린이" },
-];
-
 let historyState = {
   loaded: false,
+  loading: false,
   items: [],
-  availabilityMap: {},
   selectedIds: [],
+  audienceMap: {},
   filters: {
     keyword: "",
-    audience: "",
-    sortBy: "createdAt",
+    audience: "all",
+    sortKey: "createdAt",
     sortDir: "desc",
   },
 };
+
+function safeValue(value) {
+  return value == null ? "" : String(value);
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -40,182 +38,119 @@ function escapeHtml(value) {
 }
 
 function formatDisplay(value, fallback = "-") {
-  const text = String(value ?? "").trim();
-  return text ? text : fallback;
+  const text = safeValue(value).trim();
+  return text || fallback;
 }
 
-function formatDateTime(value) {
-  return formatDisplay(value, "-");
+function formatDateOnly(value) {
+  const text = formatDisplay(value, "-");
+  if (text === "-") return text;
+  return String(text).slice(0, 10);
 }
 
-function normalizeText(value) {
-  return String(value ?? "").trim().toLowerCase();
+function audienceLabel(audienceId) {
+  switch (audienceId) {
+    case "adult":
+      return "장년";
+    case "young_adult":
+      return "청년";
+    case "teen":
+      return "중고등부";
+    case "child":
+      return "어린이";
+    default:
+      return audienceId || "-";
+  }
 }
 
 function isSelected(historyId) {
-  return historyState.selectedIds.includes(Number(historyId));
+  return historyState.selectedIds.includes(historyId);
 }
 
-function getSelectedCount() {
-  return historyState.selectedIds.length;
+function getAllAudienceIds() {
+  return ["adult", "young_adult", "teen", "child"];
 }
 
-function getSortByOptionsHtml(selectedValue) {
-  const options = [
-    { value: "createdAt", label: "저장일" },
-    { value: "title", label: "제목" },
-    { value: "bibleText", label: "본문 성구" },
-  ];
+async function loadAudienceAvailability(historyId) {
+  const audienceIds = getAllAudienceIds();
+  const available = [];
 
-  return options
-    .map(
-      (option) => `
-        <option value="${option.value}" ${selectedValue === option.value ? "selected" : ""}>
-          ${option.label}
-        </option>
-      `
-    )
-    .join("");
+  for (const audienceId of audienceIds) {
+    try {
+      const row = await GetHistoryQTJSON(historyId, audienceId);
+      if (row && safeValue(row.qtResultJson).trim()) {
+        available.push(audienceId);
+      }
+    } catch (error) {
+      // 없는 경우는 무시
+    }
+  }
+
+  return available;
 }
 
-function getSortDirOptionsHtml(selectedValue) {
-  const options = [
-    { value: "desc", label: "내림차순" },
-    { value: "asc", label: "오름차순" },
-  ];
+async function loadHistoryData() {
+  historyState.loading = true;
 
-  return options
-    .map(
-      (option) => `
-        <option value="${option.value}" ${selectedValue === option.value ? "selected" : ""}>
-          ${option.label}
-        </option>
-      `
-    )
-    .join("");
-}
+  const list = await ListHistory();
+  historyState.items = Array.isArray(list) ? list : [];
+  historyState.audienceMap = {};
 
-function getAudienceFilterOptionsHtml(selectedValue) {
-  return `
-    <option value="">전체</option>
-    ${AUDIENCE_OPTIONS.map(
-      (audience) => `
-        <option value="${audience.id}" ${selectedValue === audience.id ? "selected" : ""}>
-          ${audience.label}
-        </option>
-      `
-    ).join("")}
-  `;
-}
+  for (const item of historyState.items) {
+    historyState.audienceMap[item.id] = await loadAudienceAvailability(item.id);
+  }
 
-async function loadHistoryList() {
-  const items = await ListHistory();
-  historyState.items = Array.isArray(items) ? items : [];
   historyState.loaded = true;
+  historyState.loading = false;
 }
 
-async function loadHistoryAvailability() {
-  const availabilityMap = {};
-
-  await Promise.all(
-    historyState.items.map(async (item) => {
-      const availability = {
-        adult: false,
-        young_adult: false,
-        teen: false,
-        child: false,
-      };
-
-      await Promise.all(
-        AUDIENCE_OPTIONS.map(async (audience) => {
-          try {
-            const step1 = await GetHistoryStep1(item.id, audience.id);
-            availability[audience.id] = !!(step1 && step1.step1ResultJson);
-          } catch (error) {
-            availability[audience.id] = false;
-          }
-        })
-      );
-
-      availabilityMap[item.id] = availability;
-    })
-  );
-
-  historyState.availabilityMap = availabilityMap;
+function getAvailableAudienceLabels(historyId) {
+  const audienceIds = historyState.audienceMap[historyId] || [];
+  return audienceIds.map(audienceLabel);
 }
 
-async function reloadHistoryWorkspace() {
-  await loadHistoryList();
-  await loadHistoryAvailability();
-
-  const validIds = new Set(historyState.items.map((item) => Number(item.id)));
-  historyState.selectedIds = historyState.selectedIds.filter((id) => validIds.has(id));
-}
-
-function getAvailableAudienceLabels(itemId) {
-  const availability = historyState.availabilityMap[itemId] || {};
-
-  return AUDIENCE_OPTIONS
-    .filter((audience) => !!availability[audience.id])
-    .map((audience) => audience.label);
-}
-
-function getFilteredHistoryItems() {
-  const keyword = normalizeText(historyState.filters.keyword);
+function getFilteredItems() {
+  const keyword = safeValue(historyState.filters.keyword).trim().toLowerCase();
   const audienceFilter = historyState.filters.audience;
-  const sortBy = historyState.filters.sortBy;
+  const sortKey = historyState.filters.sortKey;
   const sortDir = historyState.filters.sortDir;
 
-  const filtered = historyState.items.filter((item) => {
-    const haystack = [
-      item.title,
-      item.bibleText,
-      item.preacher,
-      item.churchName,
-      item.hymn,
-      item.sermonDate,
-    ]
-      .map((v) => normalizeText(v))
-      .join(" ");
+  let items = [...historyState.items];
 
-    const keywordMatched = !keyword || haystack.includes(keyword);
+  if (keyword) {
+    items = items.filter((item) => {
+      const title = safeValue(item.title).toLowerCase();
+      const bibleText = safeValue(item.bibleText).toLowerCase();
+      return title.includes(keyword) || bibleText.includes(keyword);
+    });
+  }
 
-    const availability = historyState.availabilityMap[item.id] || {};
-    const audienceMatched = !audienceFilter || !!availability[audienceFilter];
+  if (audienceFilter !== "all") {
+    items = items.filter((item) => {
+      const audienceIds = historyState.audienceMap[item.id] || [];
+      return audienceIds.includes(audienceFilter);
+    });
+  }
 
-    return keywordMatched && audienceMatched;
-  });
+  items.sort((a, b) => {
+    const aValue = safeValue(a?.[sortKey]);
+    const bValue = safeValue(b?.[sortKey]);
 
-  filtered.sort((a, b) => {
-    let av = a?.[sortBy] ?? "";
-    let bv = b?.[sortBy] ?? "";
+    const compared =
+      sortKey === "createdAt"
+        ? aValue.localeCompare(bValue)
+        : aValue.localeCompare(bValue, "ko");
 
-    av = String(av ?? "");
-    bv = String(bv ?? "");
-
-    const compared = av.localeCompare(bv, "ko", { numeric: true, sensitivity: "base" });
     return sortDir === "asc" ? compared : -compared;
   });
 
-  return filtered;
+  return items;
 }
 
-function renderHistoryHeaderCard() {
-  return `
-    <section class="card card-plain">
-      <div class="step-badge">작업 내역</div>
-      <p class="body-note topgap-sm">
-        저장된 기본정보와 Step1 결과를 조회하고 재작업하거나 삭제할 수 있습니다.
-      </p>
-    </section>
-  `;
-}
-
-function renderSearchConditionCard() {
+function renderSearchCard() {
   return `
     <section class="card">
       <h3 class="mini-title">검색 조건</h3>
-      <p class="body-note topgap-sm">검색어와 정렬 조건을 선택해 작업 내역을 조회합니다.</p>
 
       <div class="form-grid two-column-grid topgap-sm">
         <div class="form-field">
@@ -225,56 +160,50 @@ function renderSearchConditionCard() {
             id="history-keyword-input"
             class="input"
             value="${escapeHtml(historyState.filters.keyword)}"
-            placeholder="제목 / 본문 성구"
+            placeholder="제목 또는 본문 성구"
           />
         </div>
 
         <div class="form-field">
           <label class="form-label">연령대</label>
           <select id="history-audience-filter" class="input">
-            ${getAudienceFilterOptionsHtml(historyState.filters.audience)}
+            <option value="all" ${historyState.filters.audience === "all" ? "selected" : ""}>전체</option>
+            <option value="adult" ${historyState.filters.audience === "adult" ? "selected" : ""}>장년</option>
+            <option value="young_adult" ${historyState.filters.audience === "young_adult" ? "selected" : ""}>청년</option>
+            <option value="teen" ${historyState.filters.audience === "teen" ? "selected" : ""}>중고등부</option>
+            <option value="child" ${historyState.filters.audience === "child" ? "selected" : ""}>어린이</option>
           </select>
         </div>
 
         <div class="form-field">
           <label class="form-label">정렬 기준</label>
-          <select id="history-sort-by" class="input">
-            ${getSortByOptionsHtml(historyState.filters.sortBy)}
+          <select id="history-sort-key" class="input">
+            <option value="createdAt" ${historyState.filters.sortKey === "createdAt" ? "selected" : ""}>저장일</option>
+            <option value="title" ${historyState.filters.sortKey === "title" ? "selected" : ""}>제목</option>
+            <option value="bibleText" ${historyState.filters.sortKey === "bibleText" ? "selected" : ""}>본문 성구</option>
           </select>
         </div>
 
         <div class="form-field">
           <label class="form-label">정렬 방향</label>
           <select id="history-sort-dir" class="input">
-            ${getSortDirOptionsHtml(historyState.filters.sortDir)}
+            <option value="desc" ${historyState.filters.sortDir === "desc" ? "selected" : ""}>내림차순</option>
+            <option value="asc" ${historyState.filters.sortDir === "asc" ? "selected" : ""}>오름차순</option>
           </select>
         </div>
-      </div>
-
-      <div class="half-action-row topgap-sm">
-        <button type="button" class="button" id="history-search-btn">검색</button>
-        <button type="button" class="button-ghost" id="history-reset-btn">초기화</button>
       </div>
     </section>
   `;
 }
 
 function renderActionCard() {
-  const selectedCount = getSelectedCount();
+  const selectedCount = historyState.selectedIds.length;
   const canRework = selectedCount === 1;
   const canDelete = selectedCount >= 1;
 
   return `
     <section class="card">
-      <h3 class="mini-title">작업</h3>
-      <p class="body-note topgap-sm">선택한 작업에 대해 재작업 또는 삭제를 수행합니다.</p>
-
-      <div class="mode-strip topgap-sm">
-        <span class="mode-label">선택 건수</span>
-        <span class="mode-value">${selectedCount}건</span>
-      </div>
-
-      <div class="half-action-row topgap-sm">
+      <div class="half-action-row">
         <button
           type="button"
           class="button"
@@ -286,7 +215,7 @@ function renderActionCard() {
 
         <button
           type="button"
-          class="danger-button"
+          class="button-ghost"
           id="history-delete-btn"
           ${canDelete ? "" : "disabled"}
         >
@@ -297,14 +226,12 @@ function renderActionCard() {
   `;
 }
 
-function renderHistoryTableRows() {
-  const items = getFilteredHistoryItems();
-
+function renderTableRows(items) {
   if (!items.length) {
     return `
       <tr>
         <td colspan="5">
-          <div class="history-empty-box">검색 결과가 없습니다.</div>
+          <div class="history-empty-box">저장된 작업이 없습니다.</div>
         </td>
       </tr>
     `;
@@ -323,39 +250,49 @@ function renderHistoryTableRows() {
               ${isSelected(item.id) ? "checked" : ""}
             />
           </td>
-          <td title="${escapeHtml(formatDisplay(item.title))}">
+
+          <td class="history-col-title" title="${escapeHtml(formatDisplay(item.title))}">
             ${escapeHtml(formatDisplay(item.title))}
           </td>
-          <td title="${escapeHtml(formatDisplay(item.bibleText))}">
+
+          <td class="history-col-bible" title="${escapeHtml(formatDisplay(item.bibleText))}">
             ${escapeHtml(formatDisplay(item.bibleText))}
           </td>
-          <td>${escapeHtml(formatDateTime(item.createdAt))}</td>
-          <td>${escapeHtml(availableAudienceLabels.join(", ") || "-")}</td>
+
+          <td class="history-col-audience" title="${escapeHtml(availableAudienceLabels.join(", ") || "-")}">
+            ${escapeHtml(availableAudienceLabels.join(", ") || "-")}
+          </td>
+
+          <td class="history-col-date">
+            ${escapeHtml(formatDateOnly(item.createdAt))}
+          </td>
         </tr>
       `;
     })
     .join("");
 }
 
-function renderHistoryTableCard() {
-  const count = getFilteredHistoryItems().length;
-  const allFilteredIds = getFilteredHistoryItems().map((item) => Number(item.id));
-  const allChecked =
-    allFilteredIds.length > 0 &&
-    allFilteredIds.every((id) => historyState.selectedIds.includes(id));
+function renderTableCard() {
+  const items = getFilteredItems();
+  const totalCount = historyState.items.length;
+  const visibleCount = items.length;
+  const allChecked = items.length > 0 && items.every((item) => isSelected(item.id));
 
   return `
     <section class="card">
-      <h3 class="mini-title">작업 내역</h3>
-      <p class="body-note topgap-sm">검색 조건에 맞는 작업 내역을 표로 확인합니다.</p>
-
-      <div class="mode-strip topgap-sm">
-        <span class="mode-label">조회 건수</span>
-        <span class="mode-value">${count}건</span>
-      </div>
+      <h3 class="mini-title">작업 목록 
+          <span class="history-count-text">(${visibleCount}/${totalCount})</span>
+      </h3>
 
       <div class="history-table-wrap topgap-sm">
         <table class="history-table">
+          <colgroup>
+            <col style="width: 44px;" />
+            <col />
+            <col style="width: 100px;" />
+            <col style="width: 80px;" />
+            <col style="width: 100px;" />
+          </colgroup>
           <thead>
             <tr>
               <th class="history-table-check">
@@ -367,12 +304,12 @@ function renderHistoryTableCard() {
               </th>
               <th>제목</th>
               <th>본문 성구</th>
-              <th>저장일</th>
               <th>연령대</th>
+              <th>저장일</th>
             </tr>
           </thead>
           <tbody>
-            ${renderHistoryTableRows()}
+            ${renderTableRows(items)}
           </tbody>
         </table>
       </div>
@@ -380,264 +317,161 @@ function renderHistoryTableCard() {
   `;
 }
 
-function renderHistoryLoadingState() {
+export function renderHistoryWorkspace() {
   return `
-    <section class="card card-plain">
-      <div class="mini-title">작업 내역</div>
-      <p class="body-note topgap-sm">작업 내역을 불러오는 중입니다.</p>
+    <section class="workspace-step-panel">
+      <section class="card card-plain">
+        <div class="step-badge">작업 내역</div>
+        <p class="body-note topgap-sm">저장된 작업을 검색하고 다시 이어서 작업할 수 있습니다.</p>
+        <div id="${HISTORY_MESSAGE_ID}" class="ui-inline-message hidden"></div>
+      </section>
+
+      ${renderSearchCard()}
+      ${renderActionCard()}
+      ${renderTableCard()}
     </section>
   `;
 }
 
-export function renderHistoryWorkspace() {
-  if (!historyState.loaded) {
-    return `
-      <section class="workspace-step-panel">
-        ${renderHistoryHeaderCard()}
-        <div id="${HISTORY_MESSAGE_ID}" class="ui-inline-message hidden"></div>
-        ${renderHistoryLoadingState()}
-      </section>
-    `;
-  }
-
-  return `
-    <section class="workspace-step-panel">
-      ${renderHistoryHeaderCard()}
-      <div id="${HISTORY_MESSAGE_ID}" class="ui-inline-message hidden"></div>
-      ${renderSearchConditionCard()}
-      ${renderActionCard()}
-      ${renderHistoryTableCard()}
-    </section>
-  `;
+function applySearchFiltersFromDom() {
+  historyState.filters.keyword = document.getElementById("history-keyword-input")?.value || "";
+  historyState.filters.audience = document.getElementById("history-audience-filter")?.value || "all";
+  historyState.filters.sortKey = document.getElementById("history-sort-key")?.value || "createdAt";
+  historyState.filters.sortDir = document.getElementById("history-sort-dir")?.value || "desc";
 }
 
 async function rerenderHistoryWorkspace() {
-  const root = document.querySelector(".main-workspace");
-  if (!root) return;
+  const workspaceRoot = document.querySelector(".main-workspace");
+  if (!workspaceRoot) return;
 
-  try {
-    await reloadHistoryWorkspace();
-    root.innerHTML = renderHistoryWorkspace();
-    bindHistoryWorkspaceEvents();
-  } catch (error) {
-    console.error(error);
-    root.innerHTML = renderHistoryWorkspace();
-    setInlineMessage(
-      HISTORY_MESSAGE_ID,
-      error?.message || "작업 내역을 불러오는 중 오류가 발생했습니다.",
-      "error"
-    );
-  }
-}
-
-function updateSelection(historyId, checked) {
-  const id = Number(historyId);
-
-  if (checked) {
-    if (!historyState.selectedIds.includes(id)) {
-      historyState.selectedIds.push(id);
-    }
-  } else {
-    historyState.selectedIds = historyState.selectedIds.filter((itemId) => itemId !== id);
-  }
-}
-
-function handleSelectAll(checked) {
-  const filteredIds = getFilteredHistoryItems().map((item) => Number(item.id));
-
-  if (checked) {
-    const merged = new Set([...historyState.selectedIds, ...filteredIds]);
-    historyState.selectedIds = Array.from(merged);
-  } else {
-    historyState.selectedIds = historyState.selectedIds.filter((id) => !filteredIds.includes(id));
-  }
-
-  const root = document.querySelector(".main-workspace");
-  if (!root) return;
-
-  root.innerHTML = renderHistoryWorkspace();
-  bindHistoryWorkspaceEvents();
-}
-
-function handleSearch() {
-  clearInlineMessage(HISTORY_MESSAGE_ID);
-
-  historyState.filters.keyword =
-    document.getElementById("history-keyword-input")?.value || "";
-  historyState.filters.audience =
-    document.getElementById("history-audience-filter")?.value || "";
-  historyState.filters.sortBy =
-    document.getElementById("history-sort-by")?.value || "createdAt";
-  historyState.filters.sortDir =
-    document.getElementById("history-sort-dir")?.value || "desc";
-
-  const root = document.querySelector(".main-workspace");
-  if (!root) return;
-
-  root.innerHTML = renderHistoryWorkspace();
-  bindHistoryWorkspaceEvents();
-}
-
-function handleReset() {
-  clearInlineMessage(HISTORY_MESSAGE_ID);
-
-  historyState.filters.keyword = "";
-  historyState.filters.audience = "";
-  historyState.filters.sortBy = "createdAt";
-  historyState.filters.sortDir = "desc";
-  historyState.selectedIds = [];
-
-  const root = document.querySelector(".main-workspace");
-  if (!root) return;
-
-  root.innerHTML = renderHistoryWorkspace();
-  bindHistoryWorkspaceEvents();
-}
-
-async function handleDeleteSelected() {
-  clearInlineMessage(HISTORY_MESSAGE_ID);
-
-  if (historyState.selectedIds.length === 0) {
-    setInlineMessage(HISTORY_MESSAGE_ID, "삭제할 작업을 선택해 주세요.", "warning");
-    return;
-  }
-
-  try {
-    for (const id of historyState.selectedIds) {
-      await DeleteHistory(Number(id));
-    }
-
-    historyState.selectedIds = [];
-    showToast("선택한 작업 내역이 삭제되었습니다.", "success");
-    await rerenderHistoryWorkspace();
-  } catch (error) {
-    console.error(error);
-    setInlineMessage(
-      HISTORY_MESSAGE_ID,
-      error?.message || "작업 내역 삭제 중 오류가 발생했습니다.",
-      "error"
-    );
-  }
+  const { renderMainWorkspace, bindMainWorkspaceEvents } = await import("../mainWorkspace");
+  workspaceRoot.innerHTML = renderMainWorkspace();
+  bindMainWorkspaceEvents();
 }
 
 async function handleReworkSelected() {
   clearInlineMessage(HISTORY_MESSAGE_ID);
 
   if (historyState.selectedIds.length !== 1) {
-    setInlineMessage(HISTORY_MESSAGE_ID, "재작업은 1건만 선택해 주세요.", "warning");
+    setInlineMessage(HISTORY_MESSAGE_ID, "재작업은 1건만 선택할 수 있습니다.", "warning");
     return;
   }
 
-  const historyId = Number(historyState.selectedIds[0]);
-  const availability = historyState.availabilityMap[historyId] || {};
-  const selectedAudience = AUDIENCE_OPTIONS.find((audience) => availability[audience.id]);
-
-  if (!selectedAudience) {
-    setInlineMessage(HISTORY_MESSAGE_ID, "재작업 가능한 연령대가 없습니다.", "warning");
-    return;
-  }
+  const historyId = historyState.selectedIds[0];
 
   try {
-    const history = await GetHistory(historyId);
-    const step1 = await GetHistoryStep1(historyId, selectedAudience.id);
+    const master = await GetHistory(historyId);
+    const audienceIds = historyState.audienceMap[historyId] || [];
+    const audienceId = audienceIds[0];
 
-    if (!history || !step1 || !step1.step1ResultJson) {
-      setInlineMessage(
-        HISTORY_MESSAGE_ID,
-        "선택한 작업의 Step1 결과를 찾을 수 없습니다.",
-        "warning"
-      );
+    if (!audienceId) {
+      setInlineMessage(HISTORY_MESSAGE_ID, "재작업할 연령대 정보를 찾을 수 없습니다.", "warning");
       return;
     }
 
-    if (appState.source?.basicInfo) {
-      appState.source.basicInfo.title = history.title || "";
-      appState.source.basicInfo.bibleText = history.bibleText || "";
-      appState.source.basicInfo.hymn = history.hymn || "";
-      appState.source.basicInfo.preacher = history.preacher || "";
-      appState.source.basicInfo.churchName = history.churchName || "";
-      appState.source.basicInfo.sermonDate = history.sermonDate || "";
-    }
+    const qtRow = await GetHistoryQTJSON(historyId, audienceId);
+
+    setBasicInfoField("title", master.title || "");
+    setBasicInfoField("bibleText", master.bibleText || "");
+    setBasicInfoField("hymn", master.hymn || "");
+    setBasicInfoField("preacher", master.preacher || "");
+    setBasicInfoField("churchName", master.churchName || "");
+    setBasicInfoField("sermonDate", master.sermonDate || "");
 
     appState.historySelected = {
       historyId,
-      audienceId: selectedAudience.id,
-      step1ResultJson: step1.step1ResultJson,
+      audienceId,
+      step1ResultJson: qtRow.qtResultJson || "",
     };
 
-    setSelectedMenu(selectedAudience.id);
-    setAudienceStep(selectedAudience.id, "step2");
+    setSelectedMenu(audienceId);
+    setAudienceStep(audienceId, "step2");
+    showToast("작업을 불러왔습니다.", "success");
     mountAppShell("app");
   } catch (error) {
     console.error(error);
-    setInlineMessage(
-      HISTORY_MESSAGE_ID,
-      error?.message || "재작업 준비 중 오류가 발생했습니다.",
-      "error"
-    );
+    setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "재작업 준비 중 오류가 발생했습니다.", "error");
   }
 }
 
-export async function bindHistoryWorkspaceEvents() {
-  try {
-    if (!historyState.loaded) {
-      await rerenderHistoryWorkspace();
-      return;
-    }
-  } catch (error) {
-    console.error(error);
-    setInlineMessage(
-      HISTORY_MESSAGE_ID,
-      error?.message || "작업 내역 초기화 중 오류가 발생했습니다.",
-      "error"
-    );
+async function handleDeleteSelected() {
+  clearInlineMessage(HISTORY_MESSAGE_ID);
+
+  if (!historyState.selectedIds.length) {
+    setInlineMessage(HISTORY_MESSAGE_ID, "삭제할 작업을 선택해 주세요.", "warning");
     return;
   }
 
-  const searchBtn = document.getElementById("history-search-btn");
-  if (searchBtn) {
-    searchBtn.addEventListener("click", () => {
-      handleSearch();
-    });
-  }
+  try {
+    for (const historyId of historyState.selectedIds) {
+      await DeleteHistory(historyId);
+    }
 
-  const resetBtn = document.getElementById("history-reset-btn");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
-      handleReset();
-    });
+    historyState.selectedIds = [];
+    await loadHistoryData();
+    showToast("선택한 작업을 삭제했습니다.", "success");
+    await rerenderHistoryWorkspace();
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "작업 삭제 중 오류가 발생했습니다.", "error");
   }
+}
 
+function bindFilterEvents() {
   const keywordInput = document.getElementById("history-keyword-input");
-  if (keywordInput) {
-    keywordInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        handleSearch();
-      }
+  const audienceFilter = document.getElementById("history-audience-filter");
+  const sortKey = document.getElementById("history-sort-key");
+  const sortDir = document.getElementById("history-sort-dir");
+
+  [keywordInput, audienceFilter, sortKey, sortDir].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("input", async () => {
+      applySearchFiltersFromDom();
+      await rerenderHistoryWorkspace();
     });
-  }
-
-  const selectAll = document.getElementById("history-select-all");
-  if (selectAll) {
-    selectAll.addEventListener("change", () => {
-      handleSelectAll(selectAll.checked);
-    });
-  }
-
-  const rowCheckboxes = document.querySelectorAll("[data-history-select-id]");
-  rowCheckboxes.forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      updateSelection(checkbox.dataset.historySelectId, checkbox.checked);
-
-      const root = document.querySelector(".main-workspace");
-      if (!root) return;
-
-      root.innerHTML = renderHistoryWorkspace();
-      bindHistoryWorkspaceEvents();
+    el.addEventListener("change", async () => {
+      applySearchFiltersFromDom();
+      await rerenderHistoryWorkspace();
     });
   });
+}
 
+function bindSelectionEvents() {
+  const selectAll = document.getElementById("history-select-all");
+  if (selectAll) {
+    selectAll.addEventListener("change", async () => {
+      const items = getFilteredItems();
+
+      if (selectAll.checked) {
+        historyState.selectedIds = items.map((item) => item.id);
+      } else {
+        historyState.selectedIds = [];
+      }
+
+      await rerenderHistoryWorkspace();
+    });
+  }
+
+  const rowChecks = document.querySelectorAll("[data-history-select-id]");
+  rowChecks.forEach((checkbox) => {
+    checkbox.addEventListener("change", async () => {
+      const id = Number(checkbox.dataset.historySelectId);
+      if (!id) return;
+
+      if (checkbox.checked) {
+        if (!historyState.selectedIds.includes(id)) {
+          historyState.selectedIds.push(id);
+        }
+      } else {
+        historyState.selectedIds = historyState.selectedIds.filter((item) => item !== id);
+      }
+
+      await rerenderHistoryWorkspace();
+    });
+  });
+}
+
+function bindActionEvents() {
   const reworkBtn = document.getElementById("history-rework-btn");
   if (reworkBtn) {
     reworkBtn.addEventListener("click", async () => {
@@ -651,4 +485,22 @@ export async function bindHistoryWorkspaceEvents() {
       await handleDeleteSelected();
     });
   }
+}
+
+export async function bindHistoryWorkspaceEvents() {
+  try {
+    if (!historyState.loaded && !historyState.loading) {
+      await loadHistoryData();
+      await rerenderHistoryWorkspace();
+      return;
+    }
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "작업 내역을 불러오는 중 오류가 발생했습니다.", "error");
+    return;
+  }
+
+  bindFilterEvents();
+  bindSelectionEvents();
+  bindActionEvents();
 }

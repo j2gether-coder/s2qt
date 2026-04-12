@@ -10,6 +10,16 @@ import { showToast, setInlineMessage, clearInlineMessage } from "../../common/ui
 
 const BASIC_MESSAGE_ID = "settings-basic-message";
 
+const EMAIL_DOMAIN_OPTIONS = [
+  { value: "gmail.com", label: "gmail.com" },
+  { value: "naver.com", label: "naver.com" },
+  { value: "daum.net", label: "daum.net" },
+  { value: "hanmail.net", label: "hanmail.net" },
+  { value: "kakao.com", label: "kakao.com" },
+  { value: "outlook.com", label: "outlook.com" },
+  { value: "__custom__", label: "직접 입력" },
+];
+
 let basicSettingsState = {
   loaded: false,
 
@@ -20,6 +30,12 @@ let basicSettingsState = {
   pinEnabled: false,
   pinLength: 6,
   pinMode: "idle", // idle | setup | change
+  pinDraft: {
+    currentPin: "",
+    newPin: "",
+    confirmPin: "",
+    step: "new", // setup: new|confirm / change: current|new|confirm
+  },
 
   // church/brand
   churchName: "",
@@ -43,6 +59,94 @@ function escapeHtml(value) {
 
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function resetPinDraft(step = "new") {
+  basicSettingsState.pinDraft = {
+    currentPin: "",
+    newPin: "",
+    confirmPin: "",
+    step,
+  };
+}
+
+function parseEmailParts(email) {
+  const text = safeValue(email).trim();
+  if (!text || !text.includes("@")) {
+    return {
+      localPart: "",
+      domainType: "gmail.com",
+      customDomain: "",
+    };
+  }
+
+  const [localPartRaw, domainRaw] = text.split("@");
+  const localPart = safeValue(localPartRaw).trim();
+  const domain = safeValue(domainRaw).trim().toLowerCase();
+
+  const known = EMAIL_DOMAIN_OPTIONS.find(
+    (option) => option.value !== "__custom__" && option.value === domain
+  );
+
+  if (known) {
+    return {
+      localPart,
+      domainType: known.value,
+      customDomain: "",
+    };
+  }
+
+  return {
+    localPart,
+    domainType: "__custom__",
+    customDomain: domain,
+  };
+}
+
+function getEmailDomainOptionsHtml(selectedValue) {
+  return EMAIL_DOMAIN_OPTIONS.map(
+    (option) => `
+      <option value="${option.value}" ${selectedValue === option.value ? "selected" : ""}>
+        ${option.label}
+      </option>
+    `
+  ).join("");
+}
+
+function buildEmailFromInputs() {
+  const localPart = safeValue(document.getElementById("user-email-id-input")?.value).trim();
+  const domainType = safeValue(document.getElementById("user-email-domain-select")?.value).trim();
+  const customDomain = safeValue(document.getElementById("user-email-domain-input")?.value).trim();
+
+  if (!localPart) return "";
+
+  const domain = domainType === "__custom__" ? customDomain : domainType;
+  if (!domain) return "";
+
+  return `${localPart}@${domain}`;
+}
+
+function syncEmailDomainInputState() {
+  const domainSelect = document.getElementById("user-email-domain-select");
+  const customInput = document.getElementById("user-email-domain-input");
+  if (!domainSelect || !customInput) return;
+
+  const isCustom = domainSelect.value === "__custom__";
+  customInput.disabled = !isCustom;
+
+  if (!isCustom) {
+    customInput.value = "";
+  }
+}
+
+function isProbablyEmail(value) {
+  if (!value.trim()) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isProbablyUrl(value) {
+  if (!value.trim()) return true;
+  return /^https?:\/\/.+/i.test(value.trim());
 }
 
 async function loadBasicSettings() {
@@ -78,6 +182,12 @@ async function loadBasicSettings() {
     pinEnabled,
     pinLength,
     pinMode: "idle",
+    pinDraft: {
+      currentPin: "",
+      newPin: "",
+      confirmPin: "",
+      step: "new",
+    },
 
     churchName: safeValue(churchMap.get("church.name")?.value || ""),
     logoPath: safeValue(churchMap.get("church.logo_path")?.value || ""),
@@ -96,16 +206,6 @@ function rerenderBasicTab() {
   });
 }
 
-function isProbablyEmail(value) {
-  if (!value.trim()) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function isProbablyUrl(value) {
-  if (!value.trim()) return true;
-  return /^https?:\/\/.+/i.test(value.trim());
-}
-
 function renderBasicSecurityNoticeCard() {
   return `
     <section class="card card-plain">
@@ -118,22 +218,47 @@ function renderBasicSecurityNoticeCard() {
 }
 
 function renderEmailCard() {
+  const emailParts = parseEmailParts(basicSettingsState.userEmail);
+
   return `
     <section class="card">
       <h3 class="mini-title">기본 이메일</h3>
       <p class="body-note topgap-sm">보안 기준 이메일을 설정합니다.</p>
 
-      <div class="topgap-sm" id="${BASIC_MESSAGE_ID}" class="ui-inline-message hidden"></div>
-
       <div class="form-field topgap-sm">
         <label class="form-label">기본 이메일</label>
-        <input
-          type="text"
-          id="user-email-input"
-          class="input"
-          value="${escapeHtml(basicSettingsState.userEmail)}"
-          placeholder="예: user@example.com"
-        />
+
+        <div class="email-inline-row">
+          <input
+            type="text"
+            id="user-email-id-input"
+            class="input"
+            value="${escapeHtml(emailParts.localPart)}"
+            placeholder="아이디"
+          />
+
+          <div class="email-at-mark">@</div>
+
+          <select
+            id="user-email-domain-select"
+            class="input"
+          >
+            ${getEmailDomainOptionsHtml(emailParts.domainType)}
+          </select>
+
+          <input
+            type="text"
+            id="user-email-domain-input"
+            class="input"
+            value="${escapeHtml(emailParts.customDomain)}"
+            placeholder="직접 입력"
+            ${emailParts.domainType === "__custom__" ? "" : "disabled"}
+          />
+        </div>
+
+        <div class="field-help-text">
+          주소는 선택하거나 직접 입력할 수 있습니다.
+        </div>
       </div>
 
       <div class="row single-action-row topgap-sm">
@@ -147,86 +272,109 @@ function renderPinStatusText() {
   return basicSettingsState.pinEnabled ? "PIN 설정됨" : "PIN 미설정";
 }
 
-function renderPinActionArea() {
-  if (basicSettingsState.pinMode === "setup") {
+function renderPinSlots(value, length) {
+  const filled = safeValue(value);
+  return Array.from({ length }, (_, index) => {
+    const isFilled = index < filled.length;
     return `
-      <div class="form-grid two-column-grid topgap-sm">
-        <div class="form-field">
-          <label class="form-label">새 PIN</label>
-          <input
-            type="password"
-            id="pin-new-input"
-            class="input"
-            placeholder="${basicSettingsState.pinLength}자리 숫자"
-          />
-        </div>
-
-        <div class="form-field">
-          <label class="form-label">PIN 확인</label>
-          <input
-            type="password"
-            id="pin-confirm-input"
-            class="input"
-            placeholder="한 번 더 입력"
-          />
-        </div>
-      </div>
-
-      <div class="row topgap-sm">
-        <button type="button" class="button-ghost" id="cancel-pin-edit-btn">취소</button>
-        <button type="button" class="button" id="save-pin-setup-btn">PIN 등록</button>
-      </div>
+      <span class="${isFilled ? "pin-slot-filled" : "pin-slot-empty"}">
+        ${isFilled ? "●" : "○"}
+      </span>
     `;
+  }).join("");
+}
+
+function getPinGuideText() {
+  if (basicSettingsState.pinMode === "setup") {
+    if (basicSettingsState.pinDraft.step === "new") {
+      return `새 PIN ${basicSettingsState.pinLength}자리를 입력해 주세요.`;
+    }
+    return "PIN을 한 번 더 입력해 주세요.";
   }
 
   if (basicSettingsState.pinMode === "change") {
+    if (basicSettingsState.pinDraft.step === "current") {
+      return "현재 PIN을 입력해 주세요.";
+    }
+    if (basicSettingsState.pinDraft.step === "new") {
+      return `새 PIN ${basicSettingsState.pinLength}자리를 입력해 주세요.`;
+    }
+    return "새 PIN을 한 번 더 입력해 주세요.";
+  }
+
+  return "";
+}
+
+function getCurrentPinValue() {
+  const draft = basicSettingsState.pinDraft;
+
+  if (basicSettingsState.pinMode === "setup") {
+    return draft.step === "new" ? draft.newPin : draft.confirmPin;
+  }
+
+  if (basicSettingsState.pinMode === "change") {
+    if (draft.step === "current") return draft.currentPin;
+    if (draft.step === "new") return draft.newPin;
+    return draft.confirmPin;
+  }
+
+  return "";
+}
+
+function renderPinKeypad() {
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+  return `
+    <div class="pin-keypad-grid topgap-sm">
+      ${keys
+        .map(
+          (key) => `
+            <button
+              type="button"
+              class="pin-key"
+              data-basic-pin-key="${key}"
+            >
+              ${key}
+            </button>
+          `
+        )
+        .join("")}
+      <button type="button" class="pin-key" data-basic-pin-clear="true">지움</button>
+      <button type="button" class="pin-key" data-basic-pin-key="0">0</button>
+      <button type="button" class="pin-key" data-basic-pin-backspace="true">←</button>
+    </div>
+  `;
+}
+
+function renderPinActionArea() {
+  if (basicSettingsState.pinMode === "idle") {
     return `
-      <div class="form-grid two-column-grid topgap-sm">
-        <div class="form-field">
-          <label class="form-label">현재 PIN</label>
-          <input
-            type="password"
-            id="pin-current-input"
-            class="input"
-            placeholder="현재 PIN 입력"
-          />
-        </div>
-
-        <div class="form-field">
-          <label class="form-label">새 PIN</label>
-          <input
-            type="password"
-            id="pin-new-input"
-            class="input"
-            placeholder="${basicSettingsState.pinLength}자리 숫자"
-          />
-        </div>
-
-        <div class="form-field">
-          <label class="form-label">새 PIN 확인</label>
-          <input
-            type="password"
-            id="pin-confirm-input"
-            class="input"
-            placeholder="한 번 더 입력"
-          />
-        </div>
-      </div>
-
-      <div class="row topgap-sm">
-        <button type="button" class="button-ghost" id="cancel-pin-edit-btn">취소</button>
-        <button type="button" class="button" id="save-pin-change-btn">PIN 변경</button>
+      <div class="row single-action-row topgap-sm">
+        ${
+          basicSettingsState.pinEnabled
+            ? `<button type="button" class="button-ghost" id="open-pin-change-btn">PIN 변경</button>`
+            : `<button type="button" class="button" id="open-pin-setup-btn">PIN 등록</button>`
+        }
       </div>
     `;
   }
 
   return `
-    <div class="row single-action-row topgap-sm">
-      ${
-        basicSettingsState.pinEnabled
-          ? `<button type="button" class="button-ghost" id="open-pin-change-btn">PIN 변경</button>`
-          : `<button type="button" class="button" id="open-pin-setup-btn">PIN 등록</button>`
-      }
+    <div class="topgap-sm">
+      <div class="hint">${getPinGuideText()}</div>
+
+      <div class="pin-display topgap-sm">
+        ${renderPinSlots(getCurrentPinValue(), basicSettingsState.pinLength)}
+      </div>
+
+      ${renderPinKeypad()}
+
+      <div class="half-action-row topgap-sm">
+        <button type="button" class="button-ghost" id="cancel-pin-edit-btn">취소</button>
+        <button type="button" class="button" id="save-pin-progress-btn">
+          ${basicSettingsState.pinMode === "setup" ? "PIN 등록" : "PIN 변경"}
+        </button>
+      </div>
     </div>
   `;
 }
@@ -293,13 +441,16 @@ function renderChurchCard() {
       </div>
 
       <div class="form-field topgap-sm">
-        <label class="form-label">기본 footer 문구</label>
+        <label class="form-label">기본 하단 문구</label>
         <textarea
           id="church-footer-text-input"
           class="input"
           rows="5"
           placeholder="문서 하단 공통 문구를 입력해 주세요."
         >${escapeHtml(basicSettingsState.footerText)}</textarea>
+        <div class="field-help-text">
+          권장: 1~2줄, 60자 내외
+        </div>
       </div>
 
       <div class="row single-action-row topgap-sm">
@@ -342,7 +493,8 @@ export function renderSettingsBasicTab() {
 async function handleSaveUserEmail() {
   clearInlineMessage(BASIC_MESSAGE_ID);
 
-  const email = document.getElementById("user-email-input")?.value || "";
+  const email = buildEmailFromInputs();
+
   if (!isProbablyEmail(email)) {
     setInlineMessage(
       BASIC_MESSAGE_ID,
@@ -356,15 +508,16 @@ async function handleSaveUserEmail() {
     await SaveAppSettings([
       {
         key: "user.email",
-        value: email.trim(),
+        value: email,
         valueType: "text",
         isSecret: false,
         group: "user",
       },
     ]);
 
-    basicSettingsState.userEmail = email.trim();
+    basicSettingsState.userEmail = email;
     showToast("기본 이메일이 저장되었습니다.", "success");
+    rerenderBasicTab();
   } catch (error) {
     console.error(error);
     setInlineMessage(
@@ -378,113 +531,214 @@ async function handleSaveUserEmail() {
 function handleOpenPinSetup() {
   clearInlineMessage(BASIC_MESSAGE_ID);
   basicSettingsState.pinMode = "setup";
+  resetPinDraft("new");
   rerenderBasicTab();
 }
 
 function handleOpenPinChange() {
   clearInlineMessage(BASIC_MESSAGE_ID);
   basicSettingsState.pinMode = "change";
+  resetPinDraft("current");
   rerenderBasicTab();
 }
 
 function handleCancelPinEdit() {
   clearInlineMessage(BASIC_MESSAGE_ID);
   basicSettingsState.pinMode = "idle";
+  resetPinDraft("new");
   rerenderBasicTab();
 }
 
-async function handleSavePinSetup() {
-  clearInlineMessage(BASIC_MESSAGE_ID);
+function applyPinDigit(digit) {
+  const draft = basicSettingsState.pinDraft;
+  const maxLen = basicSettingsState.pinLength;
 
-  const email = document.getElementById("user-email-input")?.value || "";
-  const newPin = document.getElementById("pin-new-input")?.value || "";
-  const confirmPin = document.getElementById("pin-confirm-input")?.value || "";
+  function append(targetKey) {
+    if ((draft[targetKey] || "").length >= maxLen) return;
+    draft[targetKey] = `${draft[targetKey] || ""}${digit}`;
+  }
 
-  if (!isProbablyEmail(email)) {
-    setInlineMessage(
-      BASIC_MESSAGE_ID,
-      "PIN 등록 전에 기본 이메일을 먼저 올바르게 입력해 주세요.",
-      "warning"
-    );
+  if (basicSettingsState.pinMode === "setup") {
+    append(draft.step === "new" ? "newPin" : "confirmPin");
     return;
   }
 
-  if (!newPin.trim() || !confirmPin.trim()) {
-    setInlineMessage(BASIC_MESSAGE_ID, "PIN을 모두 입력해 주세요.", "warning");
-    return;
-  }
-
-  if (newPin !== confirmPin) {
-    setInlineMessage(BASIC_MESSAGE_ID, "PIN과 확인 PIN이 일치하지 않습니다.", "warning");
-    return;
-  }
-
-  try {
-    await SaveAppSettings([
-      {
-        key: "user.email",
-        value: email.trim(),
-        valueType: "text",
-        isSecret: false,
-        group: "user",
-      },
-    ]);
-
-    await SetupPin(newPin);
-
-    basicSettingsState.userEmail = email.trim();
-    basicSettingsState.pinEnabled = true;
-    basicSettingsState.pinMode = "idle";
-
-    try {
-      basicSettingsState.pinLength = await GetPinLength();
-    } catch (error) {
-      console.error(error);
-      basicSettingsState.pinLength = 6;
-    }
-
-    showToast("PIN이 등록되었습니다.", "success");
-    rerenderBasicTab();
-  } catch (error) {
-    console.error(error);
-    setInlineMessage(
-      BASIC_MESSAGE_ID,
-      error?.message || "PIN 등록 중 오류가 발생했습니다.",
-      "error"
-    );
+  if (basicSettingsState.pinMode === "change") {
+    if (draft.step === "current") append("currentPin");
+    else if (draft.step === "new") append("newPin");
+    else append("confirmPin");
   }
 }
 
-async function handleSavePinChange() {
+function backspacePinDigit() {
+  const draft = basicSettingsState.pinDraft;
+
+  function backspace(targetKey) {
+    draft[targetKey] = safeValue(draft[targetKey]).slice(0, -1);
+  }
+
+  if (basicSettingsState.pinMode === "setup") {
+    backspace(draft.step === "new" ? "newPin" : "confirmPin");
+    return;
+  }
+
+  if (basicSettingsState.pinMode === "change") {
+    if (draft.step === "current") backspace("currentPin");
+    else if (draft.step === "new") backspace("newPin");
+    else backspace("confirmPin");
+  }
+}
+
+function clearPinDigits() {
+  const draft = basicSettingsState.pinDraft;
+
+  if (basicSettingsState.pinMode === "setup") {
+    draft[draft.step === "new" ? "newPin" : "confirmPin"] = "";
+    return;
+  }
+
+  if (basicSettingsState.pinMode === "change") {
+    if (draft.step === "current") draft.currentPin = "";
+    else if (draft.step === "new") draft.newPin = "";
+    else draft.confirmPin = "";
+  }
+}
+
+async function handleSavePinProgress() {
   clearInlineMessage(BASIC_MESSAGE_ID);
 
-  const currentPin = document.getElementById("pin-current-input")?.value || "";
-  const newPin = document.getElementById("pin-new-input")?.value || "";
-  const confirmPin = document.getElementById("pin-confirm-input")?.value || "";
+  const draft = basicSettingsState.pinDraft;
 
-  if (!currentPin.trim() || !newPin.trim() || !confirmPin.trim()) {
-    setInlineMessage(BASIC_MESSAGE_ID, "PIN 항목을 모두 입력해 주세요.", "warning");
+  if (basicSettingsState.pinMode === "setup") {
+    const email = buildEmailFromInputs();
+
+    if (!isProbablyEmail(email)) {
+      setInlineMessage(
+        BASIC_MESSAGE_ID,
+        "PIN 등록 전에 기본 이메일을 먼저 올바르게 입력해 주세요.",
+        "warning"
+      );
+      return;
+    }
+
+    if (draft.step === "new") {
+      if (safeValue(draft.newPin).length !== basicSettingsState.pinLength) {
+        setInlineMessage(
+          BASIC_MESSAGE_ID,
+          `PIN은 ${basicSettingsState.pinLength}자리로 입력해 주세요.`,
+          "warning"
+        );
+        return;
+      }
+
+      draft.step = "confirm";
+      rerenderBasicTab();
+      return;
+    }
+
+    if (draft.step === "confirm") {
+      if (draft.newPin !== draft.confirmPin) {
+        setInlineMessage(BASIC_MESSAGE_ID, "PIN과 확인 PIN이 일치하지 않습니다.", "warning");
+        draft.confirmPin = "";
+        rerenderBasicTab();
+        return;
+      }
+
+      try {
+        await SaveAppSettings([
+          {
+            key: "user.email",
+            value: email,
+            valueType: "text",
+            isSecret: false,
+            group: "user",
+          },
+        ]);
+
+        await SetupPin(draft.newPin);
+
+        basicSettingsState.userEmail = email;
+        basicSettingsState.pinEnabled = true;
+        basicSettingsState.pinMode = "idle";
+        resetPinDraft("new");
+
+        try {
+          basicSettingsState.pinLength = await GetPinLength();
+        } catch (error) {
+          console.error(error);
+          basicSettingsState.pinLength = 6;
+        }
+
+        showToast("PIN이 등록되었습니다.", "success");
+        rerenderBasicTab();
+      } catch (error) {
+        console.error(error);
+        setInlineMessage(
+          BASIC_MESSAGE_ID,
+          error?.message || "PIN 등록 중 오류가 발생했습니다.",
+          "error"
+        );
+      }
+    }
+
     return;
   }
 
-  if (newPin !== confirmPin) {
-    setInlineMessage(BASIC_MESSAGE_ID, "새 PIN과 확인 PIN이 일치하지 않습니다.", "warning");
-    return;
-  }
+  if (basicSettingsState.pinMode === "change") {
+    if (draft.step === "current") {
+      if (safeValue(draft.currentPin).length !== basicSettingsState.pinLength) {
+        setInlineMessage(
+          BASIC_MESSAGE_ID,
+          `현재 PIN은 ${basicSettingsState.pinLength}자리로 입력해 주세요.`,
+          "warning"
+        );
+        return;
+      }
 
-  try {
-    await ChangePin(currentPin, newPin);
-    basicSettingsState.pinMode = "idle";
-    basicSettingsState.pinEnabled = true;
-    showToast("PIN이 변경되었습니다.", "success");
-    rerenderBasicTab();
-  } catch (error) {
-    console.error(error);
-    setInlineMessage(
-      BASIC_MESSAGE_ID,
-      error?.message || "PIN 변경 중 오류가 발생했습니다.",
-      "error"
-    );
+      draft.step = "new";
+      rerenderBasicTab();
+      return;
+    }
+
+    if (draft.step === "new") {
+      if (safeValue(draft.newPin).length !== basicSettingsState.pinLength) {
+        setInlineMessage(
+          BASIC_MESSAGE_ID,
+          `새 PIN은 ${basicSettingsState.pinLength}자리로 입력해 주세요.`,
+          "warning"
+        );
+        return;
+      }
+
+      draft.step = "confirm";
+      rerenderBasicTab();
+      return;
+    }
+
+    if (draft.step === "confirm") {
+      if (draft.newPin !== draft.confirmPin) {
+        setInlineMessage(BASIC_MESSAGE_ID, "새 PIN과 확인 PIN이 일치하지 않습니다.", "warning");
+        draft.confirmPin = "";
+        rerenderBasicTab();
+        return;
+      }
+
+      try {
+        await ChangePin(draft.currentPin, draft.newPin);
+        basicSettingsState.pinMode = "idle";
+        basicSettingsState.pinEnabled = true;
+        resetPinDraft("new");
+        showToast("PIN이 변경되었습니다.", "success");
+        rerenderBasicTab();
+      } catch (error) {
+        console.error(error);
+        setInlineMessage(
+          BASIC_MESSAGE_ID,
+          error?.message || "PIN 변경 중 오류가 발생했습니다.",
+          "error"
+        );
+      }
+    }
   }
 }
 
@@ -600,6 +854,13 @@ export async function bindSettingsBasicTabEvents() {
     });
   }
 
+  const emailDomainSelect = document.getElementById("user-email-domain-select");
+  if (emailDomainSelect) {
+    emailDomainSelect.addEventListener("change", () => {
+      syncEmailDomainInputState();
+    });
+  }
+
   const openPinSetupBtn = document.getElementById("open-pin-setup-btn");
   if (openPinSetupBtn) {
     openPinSetupBtn.addEventListener("click", () => {
@@ -621,17 +882,34 @@ export async function bindSettingsBasicTabEvents() {
     });
   }
 
-  const savePinSetupBtn = document.getElementById("save-pin-setup-btn");
-  if (savePinSetupBtn) {
-    savePinSetupBtn.addEventListener("click", async () => {
-      await handleSavePinSetup();
+  const savePinProgressBtn = document.getElementById("save-pin-progress-btn");
+  if (savePinProgressBtn) {
+    savePinProgressBtn.addEventListener("click", async () => {
+      await handleSavePinProgress();
     });
   }
 
-  const savePinChangeBtn = document.getElementById("save-pin-change-btn");
-  if (savePinChangeBtn) {
-    savePinChangeBtn.addEventListener("click", async () => {
-      await handleSavePinChange();
+  const pinKeyButtons = document.querySelectorAll("[data-basic-pin-key]");
+  pinKeyButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      applyPinDigit(button.dataset.basicPinKey || "");
+      rerenderBasicTab();
+    });
+  });
+
+  const pinBackspaceBtn = document.querySelector("[data-basic-pin-backspace]");
+  if (pinBackspaceBtn) {
+    pinBackspaceBtn.addEventListener("click", () => {
+      backspacePinDigit();
+      rerenderBasicTab();
+    });
+  }
+
+  const pinClearBtn = document.querySelector("[data-basic-pin-clear]");
+  if (pinClearBtn) {
+    pinClearBtn.addEventListener("click", () => {
+      clearPinDigits();
+      rerenderBasicTab();
     });
   }
 

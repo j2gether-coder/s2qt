@@ -272,6 +272,34 @@ textarea {
   padding: 14px 16px;
 }
 
+.card-inline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-inline-head-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.card-inline-head-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.card-inline-head-right {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .step-badge {
   display: inline-flex;
   align-items: center;
@@ -660,6 +688,48 @@ textarea.input {
   font-size: 12px;
   color: #6b7280;
   line-height: 1.5;
+}
+
+.email-inline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(140px, 180px) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.email-at-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.email-display-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  flex-wrap: wrap;
+}
+
+.email-display-row--readonly {
+  user-select: none;
+}
+
+.email-display-local,
+.email-display-domain {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.email-display-sep {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
 }
 
 /* =========================
@@ -1356,7 +1426,8 @@ textarea.input {
 
 .settings-basic-tab,
 .settings-extra-tab,
-.settings-guide-tab {
+.settings-guide-tab,
+.settings-menu-tab {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1376,11 +1447,26 @@ textarea.input {
   color: #222;
 }
 
+.guide-document-content h1,
+.guide-document-content h2,
 .guide-document-content h3 {
-  margin-top: 0;
-  margin-bottom: 12px;
-  font-size: 18px;
+  color: #111827;
   font-weight: 700;
+}
+
+.guide-document-content h1 {
+  margin: 0 0 14px;
+  font-size: 22px;
+}
+
+.guide-document-content h2 {
+  margin: 18px 0 10px;
+  font-size: 17px;
+}
+
+.guide-document-content h3 {
+  margin: 14px 0 8px;
+  font-size: 15px;
 }
 
 .guide-document-content p {
@@ -1401,22 +1487,16 @@ textarea.input {
    17. History
 ========================= */
 
-/* =========================
-   17. History
-========================= */
-
 .history-table-wrap {
   margin-top: 0;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
   overflow: hidden;
-  overflow-x: auto;
 }
 
 .history-table {
   width: 100%;
-  min-width: 720px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -1427,13 +1507,13 @@ textarea.input {
   font-size: 12px;
   font-weight: 700;
   text-align: left;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
 }
 
 .history-table tbody td {
-  padding: 12px 14px;
+  padding: 12px 12px;
   border-bottom: 1px solid #f3f4f6;
   font-size: 13px;
   color: #111827;
@@ -1449,22 +1529,6 @@ textarea.input {
   background: #fcfcfd;
 }
 
-.history-table th:nth-child(2),
-.history-table td:nth-child(2),
-.history-table th:nth-child(3),
-.history-table td:nth-child(3) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-table th:nth-child(4),
-.history-table td:nth-child(4),
-.history-table th:nth-child(5),
-.history-table td:nth-child(5) {
-  white-space: nowrap;
-}
-
 .history-table-check {
   width: 44px;
   text-align: center;
@@ -1474,6 +1538,31 @@ textarea.input {
   margin: 0;
 }
 
+.history-col-title,
+.history-col-bible,
+.history-col-audience {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-col-title {
+  width: auto;
+}
+
+.history-col-bible {
+  width: 96px;
+}
+
+.history-col-audience {
+  width: 80px;
+}
+
+.history-col-date {
+  width: 100px;
+  white-space: nowrap;
+}
+
 .history-empty-box {
   padding: 18px;
   color: #666;
@@ -1481,51 +1570,73 @@ textarea.input {
   text-align: center;
 }
 
-/* =========================
-   18. Settings / History small utility
-========================= */
-
-.settings-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+.history-count-text {
+  font-weight: 400;
+  color: #6b7280;
 }
 
-.settings-summary-card {
-  padding: 14px;
+/* =========================
+   18. Menu Settings
+========================= */
+
+.menu-settings-table-wrap {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
+  overflow: hidden;
+  overflow-x: auto;
 }
 
-.settings-summary-label {
-  font-size: 13px;
-  color: #666;
-  margin-bottom: 6px;
+.menu-settings-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.settings-summary-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111;
-}
-
-.split-pane {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.split-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.split-panel-title {
-  font-size: 13px;
+.menu-settings-table thead th {
+  background: #f9fafb;
+  color: #374151;
+  font-size: 12px;
   font-weight: 700;
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.menu-settings-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
   color: #111827;
+  line-height: 1.45;
+  vertical-align: middle;
+}
+
+.menu-settings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.menu-settings-check {
+  width: 72px;
+  text-align: center;
+}
+
+.menu-settings-check input[type="checkbox"] {
+  margin: 0;
+}
+
+.menu-base-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.menu-base-key {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 /* =========================
@@ -1618,65 +1729,54 @@ textarea.input {
 }
 
 /* =========================
-   22. side Menu Settings
+   20. Small Utility Blocks
 ========================= */
 
-.settings-menu-tab {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.settings-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.menu-settings-table-wrap {
+.settings-summary-card {
+  padding: 14px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
-  overflow: hidden;
-  overflow-x: auto;
 }
 
-.menu-settings-table {
-  width: 100%;
-  min-width: 560px;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.menu-settings-table thead th {
-  background: #f9fafb;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 700;
-  text-align: left;
-  padding: 12px 14px;
-  border-bottom: 1px solid #e5e7eb;
-  white-space: nowrap;
-}
-
-.menu-settings-table tbody td {
-  padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
+.settings-summary-label {
   font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.settings-summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111;
+}
+
+.split-pane {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.split-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.split-panel-title {
+  font-size: 13px;
+  font-weight: 700;
   color: #111827;
-  line-height: 1.45;
-  vertical-align: middle;
-}
-
-.menu-settings-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.menu-settings-check {
-  width: 72px;
-  text-align: center;
-}
-
-.menu-settings-check input[type="checkbox"] {
-  margin: 0;
 }
 
 /* =========================
-   20. Utility
+   21. Utility
 ========================= */
 
 .topgap {
@@ -1688,7 +1788,7 @@ textarea.input {
 }
 
 /* =========================
-   21. Responsive
+   22. Responsive
 ========================= */
 
 @media (max-width: 1100px) {
@@ -1800,7 +1900,7 @@ textarea.input {
   }
 
   .masked-secret-row,
-  .inline-action-row.logo-row{
+  .inline-action-row.logo-row {
     grid-template-columns: 1fr;
   }
 
@@ -1811,5 +1911,14 @@ textarea.input {
 
   .history-table {
     min-width: 640px;
+  }
+
+  .email-inline-row {
+    grid-template-columns: 1fr;
+  }
+
+  .email-at-mark {
+    justify-content: flex-start;
+    min-height: auto;
   }
 }

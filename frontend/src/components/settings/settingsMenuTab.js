@@ -3,6 +3,7 @@ import {
   SaveAppSettings,
 } from "../../../wailsjs/go/main/App";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
+import { mountAppShell } from "../appShell";
 
 const MENU_MESSAGE_ID = "settings-menu-message";
 
@@ -112,7 +113,12 @@ function renderMenuTableRows() {
             ${current.visible ? "checked" : ""}
           />
         </td>
-        <td>${escapeHtml(item.baseLabel)}</td>
+        <td>
+          <div class="menu-base-label">
+            <span>${escapeHtml(item.baseLabel)}</span>
+            <span class="menu-base-key">(${escapeHtml(item.id)})</span>
+          </div>
+        </td>
         <td>
           <input
             type="text"
@@ -150,9 +156,12 @@ function renderMenuSettingsCard() {
         </table>
       </div>
 
-      <div class="row single-action-row topgap-sm">
+      <div class="half-action-row topgap-sm">
         <button type="button" class="button" id="save-menu-settings-btn">
           메뉴 설정 저장
+        </button>
+        <button type="button" class="button-ghost" id="refresh-menu-settings-btn">
+          메뉴 새로 고침
         </button>
       </div>
     </section>
@@ -249,6 +258,11 @@ async function handleSaveMenuSettings() {
   }
 }
 
+function handleRefreshMenu() {
+  clearInlineMessage(MENU_MESSAGE_ID);
+  mountAppShell("app");
+}
+
 export async function bindSettingsMenuTabEvents() {
   try {
     if (!menuSettingsState.loaded) {
@@ -270,6 +284,13 @@ export async function bindSettingsMenuTabEvents() {
   if (saveButton) {
     saveButton.addEventListener("click", async () => {
       await handleSaveMenuSettings();
+    });
+  }
+
+  const refreshButton = document.getElementById("refresh-menu-settings-btn");
+  if (refreshButton) {
+    refreshButton.addEventListener("click", () => {
+      handleRefreshMenu();
     });
   }
 }

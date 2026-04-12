@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "pin_enabled": true,
+  "pin_enabled": false,
   "pin_length": 6,
-  "pin_hash": "BASE64_HASH_VALUE",
-  "salt": "BASE64_RANDOM_SALT",
-  "kdf": "pbkdf2-sha256",
+  "pin_hash": "",
+  "salt": "",
+  "kdf": "",
   "iterations": 120000
 }

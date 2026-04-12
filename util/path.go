@@ -14,6 +14,7 @@ type AppPaths struct {
 	Temp  string
 	Conf  string
 	Data  string
+	Doc   string
 	DB    string
 	Model string
 
@@ -55,6 +56,7 @@ func GetAppPaths() (*AppPaths, error) {
 	modelDir := filepath.Join(varDir, "model")
 	confDir := filepath.Join(varDir, "conf")
 	dbDir := filepath.Join(varDir, "db")
+	docDir := filepath.Join(varDir, "doc")
 
 	p := &AppPaths{
 		Root:  root,
@@ -63,6 +65,7 @@ func GetAppPaths() (*AppPaths, error) {
 		Temp:  tempDir,
 		Conf:  filepath.Join(varDir, "conf"),
 		Data:  filepath.Join(varDir, "data"),
+		Doc:   docDir,
 		DB:    filepath.Join(varDir, "db"),
 		Model: modelDir,
 

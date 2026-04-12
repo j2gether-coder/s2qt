@@ -3,6 +3,7 @@ import {
   SaveQTStep2Data,
   PreviewQTStep2HTML,
   OpenTempHTMLPreview,
+  SaveHistory,
 } from '../../../wailsjs/go/main/App';
 import {
   appState,
@@ -88,6 +89,21 @@ function buildStep2Payload(audienceId) {
   };
 }
 
+function buildHistoryPayload(audienceId, step2Payload) {
+  const basicInfo = getBasicInfo();
+
+  return {
+    title: basicInfo.title || '',
+    bibleText: basicInfo.bibleText || '',
+    hymn: basicInfo.hymn || '',
+    preacher: basicInfo.preacher || '',
+    churchName: basicInfo.churchName || '',
+    sermonDate: basicInfo.sermonDate || '',
+    audience: audienceId,
+    qtResultJson: JSON.stringify(step2Payload),
+  };
+}
+
 async function loadStep2Data(audienceId) {
   const data = await LoadQTStep2Data();
 
@@ -142,7 +158,11 @@ export async function bindQTStep2Events(audienceId) {
     await loadStep2Data(audienceId);
   } catch (error) {
     console.error(error);
-    setInlineMessage("qt-step2-message", error?.message || 'Step2 데이터 불러오기 중 오류가 발생했습니다.', "error");
+    setInlineMessage(
+      "qt-step2-message",
+      error?.message || 'Step2 데이터 불러오기 중 오류가 발생했습니다.',
+      "error"
+    );
   }
 
   const saveBtn = document.getElementById('saveQtJsonBtn');
@@ -157,8 +177,17 @@ export async function bindQTStep2Events(audienceId) {
       try {
         setAudienceStepStatus(audienceId, 'step2', 'running');
 
-        const req = buildStep2Payload(audienceId);
-        await SaveQTStep2Data(req);
+        const step2Payload = buildStep2Payload(audienceId);
+        await SaveQTStep2Data(step2Payload);
+
+        const historyReq = buildHistoryPayload(audienceId, step2Payload);
+        const historyId = await SaveHistory(historyReq);
+
+        appState.historySelected = {
+          historyId,
+          audienceId,
+          step1ResultJson: historyReq.qtResultJson || '',
+        };
 
         setAudienceStepStatus(audienceId, 'step2', 'done');
 
@@ -170,7 +199,11 @@ export async function bindQTStep2Events(audienceId) {
       } catch (error) {
         console.error(error);
         setAudienceStepStatus(audienceId, 'step2', 'error');
-        setInlineMessage("qt-step2-message", error?.message || 'Step2 저장 중 오류가 발생했습니다.', "error");
+        setInlineMessage(
+          "qt-step2-message",
+          error?.message || 'Step2 저장 중 오류가 발생했습니다.',
+          "error"
+        );
       }
     });
   }
@@ -192,7 +225,11 @@ export async function bindQTStep2Events(audienceId) {
       } catch (error) {
         console.error(error);
         setAudienceStepStatus(audienceId, 'step2', 'error');
-        setInlineMessage("qt-step2-message", error?.message || '미리보기 생성 중 오류가 발생했습니다.', "error");
+        setInlineMessage(
+          "qt-step2-message",
+          error?.message || '미리보기 생성 중 오류가 발생했습니다.',
+          "error"
+        );
       }
     });
   }
