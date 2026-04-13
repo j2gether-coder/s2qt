@@ -72,7 +72,6 @@ func (a *App) initLocalServices() error {
 	a.smtpSvc = service.NewSMTPService(a.settingsSvc)
 	a.historySvc = service.NewHistoryService(db)
 
-	// 기존 다른 service 초기화가 있다면 그대로 유지
 	return nil
 }
 
@@ -138,47 +137,127 @@ func (a *App) LoadTextFile(path string) (string, error) {
 func (a *App) GetVideoMeta(url string) (*service.VideoMeta, error) {
 	url = strings.TrimSpace(url)
 	if url == "" {
-		return nil, errors.New("URL이 비어 있습니다")
+		err := errors.New("URL이 비어 있습니다")
+		service.LogError("qt_prepare: video meta url empty")
+		return nil, err
 	}
 
+	service.LogInfo("qt_prepare: video meta fetch started")
+
 	paths, err := util.GetAppPaths()
+	if err != nil {
+		service.LogError("qt_prepare: get app paths failed: " + err.Error())
+		return nil, err
+	}
+
+	meta, err := service.FetchVideoMeta(paths.YtDlpExe, url)
+	if err != nil {
+		service.LogError("qt_prepare: video meta fetch failed: " + err.Error())
+		return nil, err
+	}
+
+	service.LogInfo("qt_prepare: video meta fetch completed")
+	return meta, nil
+}
+
+func (a *App) PrepareRuntimeForInput(inputType string) (*service.UtilCheckResult, error) {
+	inputType = strings.TrimSpace(strings.ToLower(inputType))
+
+	_, err := service.StartEventLog(inputType)
 	if err != nil {
 		return nil, err
 	}
 
-	return service.FetchVideoMeta(paths.YtDlpExe, url)
+	service.LogInfo("qt_prepare: runtime prepare requested")
+
+	var result *service.UtilCheckResult
+
+	switch inputType {
+	case "text":
+		result, err = service.CheckRuntimeForText()
+	case "audio":
+		result, err = service.CheckRuntimeForAudio(true)
+	case "video", "url", "youtube":
+		result, err = service.CheckRuntimeForVideo(true)
+	default:
+		err = fmt.Errorf("unsupported input type: %s", inputType)
+	}
+
+	if err != nil {
+		service.LogError("qt_prepare: runtime prepare failed: " + err.Error())
+		service.EndEventLog("FAILED")
+		return nil, err
+	}
+
+	if result != nil && !result.OK {
+		service.LogError("qt_prepare: runtime prepare failed: " + result.Message)
+		service.EndEventLog("FAILED")
+		return result, nil
+	}
+
+	service.LogInfo("qt_prepare: runtime prepare completed")
+	return result, nil
 }
 
 func (a *App) RunSourcePrepare(req service.SourcePrepareRequest) (*service.SourcePrepareResult, error) {
+	service.LogInfo("qt_prepare: source prepare started")
+
 	pipeline, err := service.NewPipelineService(nil)
 	if err != nil {
+		service.LogError("qt_prepare: pipeline service create failed: " + err.Error())
 		return nil, err
 	}
-	return pipeline.RunSourcePrepare(&req)
+
+	result, err := pipeline.RunSourcePrepare(&req)
+	if err != nil {
+		service.LogError("qt_prepare: source prepare failed: " + err.Error())
+		service.EndEventLog("FAILED")
+		return nil, err
+	}
+
+	service.LogInfo("qt_prepare: source prepare completed")
+	return result, nil
 }
 
 func (a *App) RunLLMPrepare(req service.LLMPrepareRequest) (*service.LLMPrepareResult, error) {
+	service.LogInfo("step1: llm prepare started")
+
 	pipeline, err := service.NewPipelineService(nil)
 	if err != nil {
+		service.LogError("step1: pipeline service create failed: " + err.Error())
 		return nil, err
 	}
-	return pipeline.RunLLMPrepare(&req)
+
+	result, err := pipeline.RunLLMPrepare(&req)
+	if err != nil {
+		service.LogError("step1: llm prepare failed: " + err.Error())
+		return nil, err
+	}
+
+	service.LogInfo("step1: llm prepare completed")
+	return result, nil
 }
 
 func (a *App) BuildQTPrompt(req service.LLMPrepareRequest) (string, error) {
+	service.LogInfo("step1: build prompt started")
+
 	paths, err := util.GetAppPaths()
 	if err != nil {
+		service.LogError("step1: get app paths failed: " + err.Error())
 		return "", err
 	}
 
 	rawBytes, err := os.ReadFile(paths.TempTxt)
 	if err != nil {
+		service.LogError("step1: temp.txt read failed: " + err.Error())
 		return "", err
 	}
 
 	rawText := strings.TrimSpace(string(rawBytes))
 	if rawText == "" {
-		return "", errors.New("temp.txt 내용이 비어 있습니다")
+		err := errors.New("temp.txt 내용이 비어 있습니다")
+		service.LogError("step1: temp.txt empty")
+		return "", err
 	}
 
 	meta := service.QTMeta{
@@ -194,64 +273,112 @@ func (a *App) BuildQTPrompt(req service.LLMPrepareRequest) (string, error) {
 	}
 
 	if meta.Title == "" {
-		return "", errors.New("제목이 비어 있습니다")
+		err := errors.New("제목이 비어 있습니다")
+		service.LogError("step1: title empty")
+		return "", err
 	}
 	if meta.BibleText == "" {
-		return "", errors.New("본문 성구가 비어 있습니다")
+		err := errors.New("본문 성구가 비어 있습니다")
+		service.LogError("step1: bible text empty")
+		return "", err
 	}
 	if meta.Audience == "" {
-		return "", errors.New("대상 연령층이 비어 있습니다")
+		err := errors.New("대상 연령층이 비어 있습니다")
+		service.LogError("step1: audience empty")
+		return "", err
 	}
 
 	llmSvc := &service.LLMService{}
-	return llmSvc.BuildPrompt(meta), nil
+	prompt := llmSvc.BuildPrompt(meta)
+
+	service.LogInfo("step1: build prompt completed")
+	return prompt, nil
 }
 
 func (a *App) SaveManualLLMResult(jsonText string) error {
+	service.LogInfo("step1: manual result save started")
+
 	paths, err := util.GetAppPaths()
 	if err != nil {
+		service.LogError("step1: get app paths failed: " + err.Error())
 		return err
 	}
 
 	jsonText = strings.TrimSpace(jsonText)
 	if jsonText == "" {
-		return errors.New("저장할 JSON 결과가 비어 있습니다")
+		err := errors.New("저장할 JSON 결과가 비어 있습니다")
+		service.LogError("step1: manual result empty")
+		return err
 	}
 
 	var js any
 	if err := json.Unmarshal([]byte(jsonText), &js); err != nil {
+		service.LogError("step1: invalid json result")
 		return errors.New("유효한 JSON 형식이 아닙니다")
 	}
 
-	return os.WriteFile(paths.TempJson, []byte(jsonText), 0o644)
+	if err := os.WriteFile(paths.TempJson, []byte(jsonText), 0o644); err != nil {
+		service.LogError("step1: temp.json write failed: " + err.Error())
+		return err
+	}
+
+	service.LogInfo("step1: manual result save completed")
+	return nil
 }
 
 func (a *App) LoadQTStep2Data() (*service.QTStep2Data, error) {
+	service.LogInfo("step2: load started")
+
 	svc, err := service.NewQTStep2Service()
 	if err != nil {
+		service.LogError("step2: service create failed: " + err.Error())
 		return nil, err
 	}
-	return svc.Load()
+
+	data, err := svc.Load()
+	if err != nil {
+		service.LogError("step2: load failed: " + err.Error())
+		return nil, err
+	}
+
+	service.LogInfo("step2: load completed")
+	return data, nil
 }
 
 func (a *App) SaveQTStep2Data(req service.QTStep2Data) error {
+	service.LogInfo("step2: save started")
+
 	svc, err := service.NewQTStep2Service()
 	if err != nil {
+		service.LogError("step2: service create failed: " + err.Error())
 		return err
 	}
-	return svc.Save(&req)
+
+	if err := svc.Save(&req); err != nil {
+		service.LogError("step2: save failed: " + err.Error())
+		return err
+	}
+
+	service.LogInfo("step2: save completed")
+	return nil
 }
 
 func (a *App) PreviewQTStep2HTML(req service.QTStep2Data) (*service.QTStep2PreviewResult, error) {
+	service.LogInfo("step2: preview started")
+
 	svc, err := service.NewQTStep2Service()
 	if err != nil {
+		service.LogError("step2: service create failed: " + err.Error())
 		return nil, err
 	}
 
 	htmlFile, err := svc.BuildHTML(&req)
 	if err != nil {
+		service.LogError("step2: preview build failed: " + err.Error())
 		return nil, err
 	}
+
+	service.LogInfo("step2: preview completed")
 
 	return &service.QTStep2PreviewResult{
 		Success:  true,
@@ -261,50 +388,102 @@ func (a *App) PreviewQTStep2HTML(req service.QTStep2Data) (*service.QTStep2Previ
 }
 
 func (a *App) OpenTempHTMLPreview() error {
+	service.LogInfo("step2: open temp html preview started")
+
 	paths, err := util.GetAppPaths()
 	if err != nil {
+		service.LogError("step2: get app paths failed: " + err.Error())
 		return err
 	}
 
 	absPath, err := filepath.Abs(paths.TempHtml)
 	if err != nil {
+		service.LogError("step2: temp html abs path failed: " + err.Error())
 		return err
 	}
 
 	if _, err := os.Stat(absPath); err != nil {
+		service.LogError("step2: temp.html not found: " + err.Error())
 		return fmt.Errorf("temp.html 파일이 없습니다: %w", err)
 	}
 
 	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", absPath)
 	if err := cmd.Start(); err != nil {
+		service.LogError("step2: browser preview open failed: " + err.Error())
 		return fmt.Errorf("기본 브라우저로 미리보기 열기 실패: %w", err)
 	}
 
+	service.LogInfo("step2: open temp html preview completed")
 	return nil
 }
 
 func (a *App) RunQTStep3(req service.QTStep3Request) (*service.QTStep3Result, error) {
+	service.LogInfo("step3: output generation started")
+
 	svc, err := service.NewQTStep3Service()
 	if err != nil {
+		service.LogError("step3: service create failed: " + err.Error())
 		return nil, err
 	}
-	return svc.Run(&req)
+
+	result, err := svc.Run(&req)
+	if err != nil {
+		service.LogError("step3: output generation failed: " + err.Error())
+		return nil, err
+	}
+
+	service.LogInfo("step3: output generation completed")
+	return result, nil
 }
 
 func (a *App) GeneratePNG(dpi int) (*service.PNGGenerateResult, error) {
+	service.LogInfo("step3: png generation started")
+
 	pngSvc, err := service.NewPNGService()
 	if err != nil {
+		service.LogError("step3: png service create failed: " + err.Error())
 		return nil, err
 	}
-	return pngSvc.GenerateFromTempHTML(dpi)
+
+	result, err := pngSvc.GenerateFromTempHTML(dpi)
+	if err != nil {
+		service.LogError("step3: png generation failed: " + err.Error())
+		return nil, err
+	}
+
+	service.LogInfo("step3: png generation completed")
+	return result, nil
 }
 
 func (a *App) OpenGeneratedFile(filePath string) error {
-	return a.outputFileService.OpenGeneratedFile(filePath)
+	service.LogInfo("step3: open generated file requested")
+
+	if err := a.outputFileService.OpenGeneratedFile(filePath); err != nil {
+		service.LogError("step3: open generated file failed: " + err.Error())
+		return err
+	}
+
+	service.LogInfo("step3: open generated file completed")
+	return nil
 }
 
 func (a *App) SaveGeneratedFile(filePath, audienceID, formatKey string) (string, error) {
-	return a.outputFileService.SaveGeneratedFile(filePath, audienceID, formatKey)
+	service.LogInfo("step3: save generated file requested format=" + strings.TrimSpace(formatKey))
+
+	savedPath, err := a.outputFileService.SaveGeneratedFile(filePath, audienceID, formatKey)
+	if err != nil {
+		service.LogError("step3: save generated file failed: " + err.Error())
+		return "", err
+	}
+
+	service.LogInfo("step3: save generated file completed")
+	return savedPath, nil
+}
+
+func (a *App) FinishCurrentRun() error {
+	service.LogInfo("step3: flow end requested")
+	service.EndEventLog("COMPLETED")
+	return nil
 }
 
 //
@@ -386,7 +565,17 @@ func (a *App) SaveHistory(req service.SaveHistoryRequest) (int64, error) {
 	if a.historySvc == nil {
 		return 0, fmt.Errorf("history service is not initialized")
 	}
-	return a.historySvc.SaveHistory(req)
+
+	service.LogInfo("step2: history save started")
+
+	historyID, err := a.historySvc.SaveHistory(req)
+	if err != nil {
+		service.LogError("step2: history save failed: " + err.Error())
+		return 0, err
+	}
+
+	service.LogInfo("step2: history save completed")
+	return historyID, nil
 }
 
 func (a *App) ListHistory() ([]service.HistoryMaster, error) {
@@ -433,17 +622,4 @@ func (a *App) TestSMTPSettings(pin string) (*service.SMTPTestResult, error) {
 		return nil, fmt.Errorf("smtp service is not initialized")
 	}
 	return a.smtpSvc.TestSendToSelf(pin)
-}
-
-func (a *App) PrepareRuntimeForInput(inputType string) (*service.UtilCheckResult, error) {
-	switch strings.TrimSpace(strings.ToLower(inputType)) {
-	case "text":
-		return service.CheckRuntimeForText()
-	case "audio":
-		return service.CheckRuntimeForAudio(true)
-	case "video", "url", "youtube":
-		return service.CheckRuntimeForVideo(true)
-	default:
-		return nil, fmt.Errorf("unsupported input type: %s", inputType)
-	}
 }

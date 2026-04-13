@@ -1,4 +1,4 @@
-import { RunQTStep3, OpenGeneratedFile, SaveGeneratedFile } from '../../../wailsjs/go/main/App';
+import { RunQTStep3, OpenGeneratedFile, SaveGeneratedFile, FinishCurrentRun } from '../../../wailsjs/go/main/App';
 import { Quit } from '../../../wailsjs/runtime/runtime';
 import {
   appState,
@@ -275,6 +275,7 @@ async function finishStep3Flow() {
   clearInlineMessage("qt-step3-message");
 
   try {
+    await FinishCurrentRun();
     await Quit();
   } catch (error) {
     console.error(error);

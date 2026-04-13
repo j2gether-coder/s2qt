@@ -1,6 +1,7 @@
 package service
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,14 @@ import (
 	"time"
 
 	"s2qt/util"
+)
+
+const (
+	defaultFFmpegPackageURL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+	defaultYtDlpURL         = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+	defaultModelURL         = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
+
+	ffmpegPackageFileName = "ffmpeg-release-essentials.zip"
 )
 
 type UtilComponent struct {
@@ -81,8 +90,11 @@ func CheckRuntimeForVideo(autoRepair bool) (*UtilCheckResult, error) {
 func EnsureRuntime(opts UtilCheckOptions, mode string) (*UtilCheckResult, error) {
 	paths, err := util.GetAppPaths()
 	if err != nil {
+		LogError("util: get app paths failed: " + err.Error())
 		return nil, err
 	}
+
+	LogInfo("util: runtime check started mode=" + mode)
 
 	result := &UtilCheckResult{
 		CheckedAt: time.Now(),
@@ -92,91 +104,146 @@ func EnsureRuntime(opts UtilCheckOptions, mode string) (*UtilCheckResult, error)
 		Missing:   []string{},
 		Installed: []string{},
 		Versions:  map[string]string{},
+		Message:   "",
 	}
 
-	if err := os.MkdirAll(paths.Conf, 0o755); err != nil {
+	if err := ensureDir(paths.Conf); err != nil {
+		LogError("util: ensure conf dir failed: " + err.Error())
 		return nil, err
 	}
-	if err := os.MkdirAll(paths.Data, 0o755); err != nil {
+	if err := ensureDir(paths.Data); err != nil {
+		LogError("util: ensure data dir failed: " + err.Error())
 		return nil, err
 	}
-	if err := os.MkdirAll(paths.Bin, 0o755); err != nil {
+	if err := ensureDir(paths.Bin); err != nil {
+		LogError("util: ensure bin dir failed: " + err.Error())
 		return nil, err
 	}
-	if err := os.MkdirAll(paths.Model, 0o755); err != nil {
+	if err := ensureDir(paths.Model); err != nil {
+		LogError("util: ensure model dir failed: " + err.Error())
 		return nil, err
 	}
 
-	components := buildComponents(paths, opts)
+	if opts.NeedFFmpeg {
+		LogInfo("util: ffmpeg package check started")
 
-	for _, c := range components {
+		result.Checked = append(result.Checked, "ffmpeg", "ffprobe")
+
+		ffmpegMissing := !fileExists(paths.FfmpegExe)
+		ffprobeMissing := !fileExists(paths.FfprobeExe)
+
+		if ffmpegMissing || ffprobeMissing {
+			LogInfo("util: ffmpeg package missing detected")
+
+			if opts.AutoRepair {
+				LogInfo("util: ffmpeg package install started")
+				if err := installFFmpegPackage(paths.Data, paths.Bin); err != nil {
+					result.OK = false
+					LogError("util: ffmpeg package install failed: " + err.Error())
+					if result.Message == "" {
+						result.Message = fmt.Sprintf("ffmpeg 패키지 설치 실패: %v", err)
+					}
+				} else {
+					LogInfo("util: ffmpeg package install completed")
+				}
+			} else {
+				result.OK = false
+			}
+		}
+
+		if fileExists(paths.FfmpegExe) {
+			if ffmpegMissing {
+				result.Installed = appendIfMissing(result.Installed, "ffmpeg")
+				LogInfo("util: ffmpeg.exe ready")
+			}
+		} else {
+			result.Missing = appendIfMissing(result.Missing, "ffmpeg")
+			result.OK = false
+			LogError("util: ffmpeg.exe missing")
+		}
+
+		if fileExists(paths.FfprobeExe) {
+			if ffprobeMissing {
+				result.Installed = appendIfMissing(result.Installed, "ffprobe")
+				LogInfo("util: ffprobe.exe ready")
+			}
+		} else {
+			result.Missing = appendIfMissing(result.Missing, "ffprobe")
+			result.OK = false
+			LogError("util: ffprobe.exe missing")
+		}
+	}
+
+	for _, c := range buildDirectComponents(paths, opts) {
+		LogInfo("util: component check started key=" + c.Key)
+
 		result.Checked = append(result.Checked, c.Key)
 
-		if fileExists(c.TargetPath) {
+		existedBefore := fileExists(c.TargetPath)
+		if existedBefore {
 			if c.Versioned && c.Key == "yt-dlp" {
 				result.Versions[c.Key] = getYtDlpVersion(c.TargetPath)
 			}
+			LogInfo("util: component already exists key=" + c.Key)
 			continue
 		}
 
-		result.Missing = append(result.Missing, c.Key)
+		if opts.AutoRepair && c.Downloadable {
+			LogInfo("util: component install started key=" + c.Key)
+			if err := installDirectComponent(paths.Data, c); err != nil {
+				result.OK = false
+				LogError("util: component install failed key=" + c.Key + " err=" + err.Error())
+				if result.Message == "" {
+					result.Message = fmt.Sprintf("%s 설치 실패: %v", c.Key, err)
+				}
+			}
+		}
 
-		if !opts.AutoRepair || !c.Downloadable {
+		if fileExists(c.TargetPath) {
+			result.Installed = appendIfMissing(result.Installed, c.Key)
+			LogInfo("util: component ready key=" + c.Key)
+
+			if c.Versioned && c.Key == "yt-dlp" {
+				result.Versions[c.Key] = getYtDlpVersion(c.TargetPath)
+			}
+		} else {
+			result.Missing = appendIfMissing(result.Missing, c.Key)
 			result.OK = false
-			continue
-		}
-
-		if err := installComponent(paths.Data, c); err != nil {
-			result.OK = false
-			result.Message = fmt.Sprintf("%s 설치 실패: %v", c.Key, err)
-			continue
-		}
-
-		result.Installed = append(result.Installed, c.Key)
-
-		if c.Versioned && c.Key == "yt-dlp" && fileExists(c.TargetPath) {
-			result.Versions[c.Key] = getYtDlpVersion(c.TargetPath)
+			LogError("util: component missing key=" + c.Key)
 		}
 	}
 
 	if !result.OK && result.Message == "" {
-		result.Message = "필수 런타임 구성요소가 누락되었습니다."
+		result.Message = "필수 런타임 구성요소가 누락되었거나 설치에 실패했습니다."
 	}
 	if result.OK && result.Message == "" {
 		result.Message = "런타임 준비가 완료되었습니다."
 	}
 
-	_ = saveUtilVersion(paths.Conf, result)
-	_ = cleanupDataDir(paths.Data)
+	if err := saveUtilVersion(paths.Conf, result); err != nil {
+		LogError("util: util_ver.json save failed: " + err.Error())
+	} else {
+		LogInfo("util: util_ver.json saved")
+	}
+
+	LogInfo("util: cleanup data dir started")
+	if err := cleanupDataDir(paths.Data); err != nil {
+		LogError("util: cleanup data dir failed: " + err.Error())
+	} else {
+		LogInfo("util: cleanup data dir completed")
+	}
+
+	if result.OK {
+		LogInfo("util: runtime check completed")
+	} else {
+		LogError("util: runtime check completed with failure")
+	}
 
 	return result, nil
 }
 
-func buildComponents(paths *util.AppPaths, opts UtilCheckOptions) []UtilComponent {
+func buildDirectComponents(paths *util.AppPaths, opts UtilCheckOptions) []UtilComponent {
 	items := []UtilComponent{}
-
-	if opts.NeedFFmpeg {
-		items = append(items,
-			UtilComponent{
-				Key:          "ffmpeg",
-				FileName:     "ffmpeg.exe",
-				TargetPath:   paths.FfmpegExe,
-				Downloadable: true,
-				Versioned:    false,
-				URL:          "",
-				Description:  "오디오 변환",
-			},
-			UtilComponent{
-				Key:          "ffprobe",
-				FileName:     "ffprobe.exe",
-				TargetPath:   paths.FfprobeExe,
-				Downloadable: true,
-				Versioned:    false,
-				URL:          "",
-				Description:  "미디어 정보 확인",
-			},
-		)
-	}
 
 	if opts.NeedYtDlp {
 		items = append(items, UtilComponent{
@@ -185,7 +252,7 @@ func buildComponents(paths *util.AppPaths, opts UtilCheckOptions) []UtilComponen
 			TargetPath:   paths.YtDlpExe,
 			Downloadable: true,
 			Versioned:    true,
-			URL:          "",
+			URL:          defaultYtDlpURL,
 			Description:  "동영상 다운로드",
 		})
 	}
@@ -197,7 +264,7 @@ func buildComponents(paths *util.AppPaths, opts UtilCheckOptions) []UtilComponen
 			TargetPath:   paths.WhisperModel,
 			Downloadable: true,
 			Versioned:    false,
-			URL:          "",
+			URL:          defaultModelURL,
 			Description:  "Whisper model",
 		})
 	}
@@ -205,35 +272,112 @@ func buildComponents(paths *util.AppPaths, opts UtilCheckOptions) []UtilComponen
 	return items
 }
 
-func installComponent(dataDir string, c UtilComponent) error {
+func installDirectComponent(dataDir string, c UtilComponent) error {
 	if strings.TrimSpace(c.URL) == "" {
 		return fmt.Errorf("download url not configured")
 	}
 
-	stagedPath, err := downloadToDataDir(dataDir, c)
+	LogInfo("util: download started key=" + c.Key)
+
+	stagedPath, err := downloadFile(dataDir, c.FileName, c.URL)
 	if err != nil {
+		LogError("util: download failed key=" + c.Key + " err=" + err.Error())
 		return err
 	}
 
 	if err := verifyDownloadedFile(stagedPath); err != nil {
+		LogError("util: verification failed key=" + c.Key + " err=" + err.Error())
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(c.TargetPath), 0o755); err != nil {
+	if err := ensureDir(filepath.Dir(c.TargetPath)); err != nil {
+		LogError("util: target dir ensure failed key=" + c.Key + " err=" + err.Error())
 		return err
 	}
 
-	return moveFile(stagedPath, c.TargetPath)
+	if err := copyFile(stagedPath, c.TargetPath); err != nil {
+		LogError("util: copy failed key=" + c.Key + " err=" + err.Error())
+		return err
+	}
+
+	LogInfo("util: download completed key=" + c.Key)
+	return nil
 }
 
-func downloadToDataDir(dataDir string, c UtilComponent) (string, error) {
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+func installFFmpegPackage(dataDir, binDir string) error {
+	if strings.TrimSpace(defaultFFmpegPackageURL) == "" {
+		return fmt.Errorf("ffmpeg package url not configured")
+	}
+
+	LogInfo("util: ffmpeg zip download started")
+
+	zipPath, err := downloadFile(dataDir, ffmpegPackageFileName, defaultFFmpegPackageURL)
+	if err != nil {
+		LogError("util: ffmpeg zip download failed: " + err.Error())
+		return err
+	}
+
+	LogInfo("util: ffmpeg zip download completed")
+
+	if err := verifyDownloadedFile(zipPath); err != nil {
+		LogError("util: ffmpeg zip verification failed: " + err.Error())
+		return err
+	}
+
+	extractDir := filepath.Join(dataDir, "ffmpeg_extract")
+	if err := os.RemoveAll(extractDir); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := ensureDir(extractDir); err != nil {
+		return err
+	}
+
+	LogInfo("util: ffmpeg zip extract started")
+	if err := unzipFile(zipPath, extractDir); err != nil {
+		LogError("util: ffmpeg zip extract failed: " + err.Error())
+		return err
+	}
+	LogInfo("util: ffmpeg zip extract completed")
+
+	ffmpegSrc, err := findFileRecursive(extractDir, "ffmpeg.exe")
+	if err != nil {
+		LogError("util: ffmpeg.exe search failed: " + err.Error())
+		return err
+	}
+
+	ffprobeSrc, err := findFileRecursive(extractDir, "ffprobe.exe")
+	if err != nil {
+		LogError("util: ffprobe.exe search failed: " + err.Error())
+		return err
+	}
+
+	if err := copyFile(ffmpegSrc, filepath.Join(binDir, "ffmpeg.exe")); err != nil {
+		LogError("util: ffmpeg.exe copy failed: " + err.Error())
+		return err
+	}
+	LogInfo("util: ffmpeg.exe copied")
+
+	if err := copyFile(ffprobeSrc, filepath.Join(binDir, "ffprobe.exe")); err != nil {
+		LogError("util: ffprobe.exe copy failed: " + err.Error())
+		return err
+	}
+	LogInfo("util: ffprobe.exe copied")
+
+	return nil
+}
+
+func downloadFile(dataDir, fileName, url string) (string, error) {
+	if err := ensureDir(dataDir); err != nil {
 		return "", err
 	}
 
-	stagedPath := filepath.Join(dataDir, c.FileName)
+	targetPath := filepath.Join(dataDir, fileName)
 
-	resp, err := http.Get(c.URL)
+	client := &http.Client{
+		Timeout: 10 * time.Minute,
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -243,7 +387,7 @@ func downloadToDataDir(dataDir string, c UtilComponent) (string, error) {
 		return "", fmt.Errorf("http status: %s", resp.Status)
 	}
 
-	out, err := os.Create(stagedPath)
+	out, err := os.Create(targetPath)
 	if err != nil {
 		return "", err
 	}
@@ -252,11 +396,96 @@ func downloadToDataDir(dataDir string, c UtilComponent) (string, error) {
 	if _, err := io.Copy(out, resp.Body); err != nil {
 		return "", err
 	}
+
 	if err := out.Sync(); err != nil {
 		return "", err
 	}
 
-	return stagedPath, nil
+	return targetPath, nil
+}
+
+func unzipFile(zipPath, destDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		targetPath := filepath.Join(destDir, f.Name)
+
+		// zip slip 방지
+		cleanDest := filepath.Clean(destDir) + string(os.PathSeparator)
+		cleanTarget := filepath.Clean(targetPath)
+		if !strings.HasPrefix(cleanTarget, cleanDest) {
+			return fmt.Errorf("invalid zip entry path: %s", f.Name)
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := ensureDir(cleanTarget); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := ensureDir(filepath.Dir(cleanTarget)); err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		out, err := os.Create(cleanTarget)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+
+		if _, err := io.Copy(out, rc); err != nil {
+			out.Close()
+			rc.Close()
+			return err
+		}
+
+		if err := out.Close(); err != nil {
+			rc.Close()
+			return err
+		}
+		if err := rc.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func findFileRecursive(rootDir, fileName string) (string, error) {
+	var found string
+
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(info.Name(), fileName) {
+			found = path
+			return io.EOF
+		}
+		return nil
+	})
+
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	if strings.TrimSpace(found) == "" {
+		return "", fmt.Errorf("%s not found in extracted package", fileName)
+	}
+
+	return found, nil
 }
 
 func verifyDownloadedFile(path string) error {
@@ -296,12 +525,7 @@ func saveUtilVersion(confDir string, result *UtilCheckResult) error {
 	info.LastCheckOK = result.OK
 
 	for _, key := range result.Checked {
-		info.Installed[key] = false
-	}
-	for _, key := range result.Checked {
-		if !contains(result.Missing, key) || contains(result.Installed, key) {
-			info.Installed[key] = true
-		}
+		info.Installed[key] = !contains(result.Missing, key)
 	}
 
 	for k, v := range result.Versions {
@@ -361,7 +585,8 @@ func cleanupDataDir(dataDir string) error {
 	}
 
 	for _, entry := range entries {
-		if err := os.RemoveAll(filepath.Join(dataDir, entry.Name())); err != nil {
+		fullPath := filepath.Join(dataDir, entry.Name())
+		if err := os.RemoveAll(fullPath); err != nil {
 			return err
 		}
 	}
@@ -372,19 +597,42 @@ func getYtDlpVersion(binPath string) string {
 	if !fileExists(binPath) {
 		return ""
 	}
+
 	cmd := exec.Command(binPath, "--version")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}
+
 	return strings.TrimSpace(string(out))
 }
 
-func moveFile(src, dst string) error {
-	if err := os.RemoveAll(dst); err != nil && !os.IsNotExist(err) {
+func utilcopyFile(src, dst string) error {
+	if err := ensureDir(filepath.Dir(dst)); err != nil {
 		return err
 	}
-	return os.Rename(src, dst)
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+
+	return out.Sync()
+}
+
+func ensureDir(path string) error {
+	return os.MkdirAll(path, 0o755)
 }
 
 func fileExists(path string) bool {
@@ -399,4 +647,11 @@ func contains(items []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func appendIfMissing(items []string, target string) []string {
+	if contains(items, target) {
+		return items
+	}
+	return append(items, target)
 }

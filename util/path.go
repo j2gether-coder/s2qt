@@ -9,14 +9,16 @@ import (
 type AppPaths struct {
 	Root string
 
-	Bin   string
-	Var   string
-	Temp  string
-	Conf  string
-	Data  string
-	Doc   string
-	DB    string
-	Model string
+	Bin          string
+	Var          string
+	Temp         string
+	Conf         string
+	Data         string
+	Doc          string
+	DB           string
+	Model        string
+	Log          string
+	EventLogFile string
 
 	// executables in bin
 	YtDlpExe   string
@@ -57,6 +59,7 @@ func GetAppPaths() (*AppPaths, error) {
 	confDir := filepath.Join(varDir, "conf")
 	dbDir := filepath.Join(varDir, "db")
 	docDir := filepath.Join(varDir, "doc")
+	logDir := filepath.Join(varDir, "log")
 
 	p := &AppPaths{
 		Root:  root,
@@ -67,6 +70,7 @@ func GetAppPaths() (*AppPaths, error) {
 		Data:  filepath.Join(varDir, "data"),
 		Doc:   docDir,
 		DB:    filepath.Join(varDir, "db"),
+		Log:   filepath.Join(varDir, "log"),
 		Model: modelDir,
 
 		YtDlpExe:   filepath.Join(binDir, "yt-dlp.exe"),
@@ -77,6 +81,7 @@ func GetAppPaths() (*AppPaths, error) {
 		WhisperModel: filepath.Join(modelDir, "ggml-tiny.bin"),
 		DBFile:       filepath.Join(dbDir, "s2qt.db"),
 		SecurityFile: filepath.Join(confDir, "security.json"),
+		EventLogFile: filepath.Join(logDir, "event.log"),
 
 		TempVideo: filepath.Join(tempDir, "video.mp4"),
 		TempWav:   filepath.Join(tempDir, "audio.wav"),
@@ -137,6 +142,7 @@ func EnsureDirs(p *AppPaths) error {
 		p.Data,
 		p.DB,
 		p.Model,
+		p.Log,
 	}
 
 	for _, d := range dirs {
