@@ -1799,10 +1799,6 @@ textarea.input {
   .output-option-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .output-result-grid-3col {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (min-width: 780px) {
@@ -1920,5 +1916,19 @@ textarea.input {
   .email-at-mark {
     justify-content: flex-start;
     min-height: auto;
+  }
+}
+
+/* =========================
+   23. Step3 Result Grid Override
+========================= */
+
+.qt-step3-result-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .qt-step3-result-grid {
+    grid-template-columns: 1fr;
   }
 }

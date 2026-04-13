@@ -1,8 +1,8 @@
 import {
   ListHistory,
-  GetHistory,
   GetHistoryQTJSON,
   DeleteHistory,
+  PrepareReworkFromHistory,
 } from "../../../wailsjs/go/main/App";
 import { appState, setAudienceStep, setBasicInfoField, setSelectedMenu } from "../../state/appState";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
@@ -10,18 +10,21 @@ import { mountAppShell } from "../appShell";
 
 const HISTORY_MESSAGE_ID = "history-workspace-message";
 
+const DEFAULT_HISTORY_FILTERS = {
+  keyword: "",
+  audience: "all",
+  sortKey: "createdAt",
+  sortDir: "desc",
+};
+
 let historyState = {
   loaded: false,
   loading: false,
+  searched: false,
   items: [],
   selectedIds: [],
   audienceMap: {},
-  filters: {
-    keyword: "",
-    audience: "all",
-    sortKey: "createdAt",
-    sortDir: "desc",
-  },
+  filters: { ...DEFAULT_HISTORY_FILTERS },
 };
 
 function safeValue(value) {
@@ -92,16 +95,27 @@ async function loadAudienceAvailability(historyId) {
 async function loadHistoryData() {
   historyState.loading = true;
 
-  const list = await ListHistory();
-  historyState.items = Array.isArray(list) ? list : [];
-  historyState.audienceMap = {};
+  try {
+    const list = await ListHistory();
+    historyState.items = Array.isArray(list) ? list : [];
+    historyState.audienceMap = {};
 
-  for (const item of historyState.items) {
-    historyState.audienceMap[item.id] = await loadAudienceAvailability(item.id);
+    for (const item of historyState.items) {
+      historyState.audienceMap[item.id] = await loadAudienceAvailability(item.id);
+    }
+
+    historyState.loaded = true;
+  } finally {
+    historyState.loading = false;
   }
+}
 
-  historyState.loaded = true;
-  historyState.loading = false;
+function resetHistoryResults() {
+  historyState.loaded = false;
+  historyState.searched = false;
+  historyState.items = [];
+  historyState.selectedIds = [];
+  historyState.audienceMap = {};
 }
 
 function getAvailableAudienceLabels(historyId) {
@@ -192,46 +206,44 @@ function renderSearchCard() {
           </select>
         </div>
       </div>
-    </section>
-  `;
-}
 
-function renderActionCard() {
-  const selectedCount = historyState.selectedIds.length;
-  const canRework = selectedCount === 1;
-  const canDelete = selectedCount >= 1;
-
-  return `
-    <section class="card">
-      <div class="half-action-row">
+      <div class="half-action-row topgap-sm">
         <button
           type="button"
           class="button"
-          id="history-rework-btn"
-          ${canRework ? "" : "disabled"}
+          id="history-search-btn"
         >
-          재작업
+          조회
         </button>
 
         <button
           type="button"
           class="button-ghost"
-          id="history-delete-btn"
-          ${canDelete ? "" : "disabled"}
+          id="history-search-reset-btn"
         >
-          삭제
+          초기화
         </button>
       </div>
     </section>
   `;
 }
 
-function renderTableRows(items) {
+function renderTableBodyContent(items) {
+  if (!historyState.searched) {
+    return `
+      <tr>
+        <td colspan="5">
+          <div class="history-empty-box">조회 버튼을 눌러 작업 목록을 불러오세요.</div>
+        </td>
+      </tr>
+    `;
+  }
+
   if (!items.length) {
     return `
       <tr>
         <td colspan="5">
-          <div class="history-empty-box">저장된 작업이 없습니다.</div>
+          <div class="history-empty-box">조회된 작업이 없습니다.</div>
         </td>
       </tr>
     `;
@@ -274,15 +286,45 @@ function renderTableRows(items) {
 
 function renderTableCard() {
   const items = getFilteredItems();
-  const totalCount = historyState.items.length;
-  const visibleCount = items.length;
-  const allChecked = items.length > 0 && items.every((item) => isSelected(item.id));
+  const totalCount = historyState.searched ? historyState.items.length : 0;
+  const visibleCount = historyState.searched ? items.length : 0;
+  const selectedCount = historyState.selectedIds.length;
+  const canRework = historyState.searched && selectedCount === 1;
+  const canDelete = historyState.searched && selectedCount >= 1;
+  const allChecked =
+    historyState.searched &&
+    items.length > 0 &&
+    items.every((item) => isSelected(item.id));
 
   return `
     <section class="card">
-      <h3 class="mini-title">작업 목록 
-          <span class="history-count-text">(${visibleCount}/${totalCount})</span>
-      </h3>
+      <div class="card-inline-head">
+        <div class="card-inline-head-left">
+          <h3 class="mini-title">작업 목록 
+            <span class="history-count-text">(${visibleCount}/${totalCount})</span>
+          </h3>
+        </div>
+      </div>
+
+      <div class="half-action-row topgap-sm">
+        <button
+          type="button"
+          class="button"
+          id="history-rework-btn"
+          ${canRework ? "" : "disabled"}
+        >
+          재작업
+        </button>
+
+        <button
+          type="button"
+          class="button-ghost"
+          id="history-delete-btn"
+          ${canDelete ? "" : "disabled"}
+        >
+          삭제
+        </button>
+      </div>
 
       <div class="history-table-wrap topgap-sm">
         <table class="history-table">
@@ -300,6 +342,7 @@ function renderTableCard() {
                   type="checkbox"
                   id="history-select-all"
                   ${allChecked ? "checked" : ""}
+                  ${historyState.searched && items.length > 0 ? "" : "disabled"}
                 />
               </th>
               <th>제목</th>
@@ -309,7 +352,7 @@ function renderTableCard() {
             </tr>
           </thead>
           <tbody>
-            ${renderTableRows(items)}
+            ${renderTableBodyContent(items)}
           </tbody>
         </table>
       </div>
@@ -327,7 +370,6 @@ export function renderHistoryWorkspace() {
       </section>
 
       ${renderSearchCard()}
-      ${renderActionCard()}
       ${renderTableCard()}
     </section>
   `;
@@ -340,6 +382,10 @@ function applySearchFiltersFromDom() {
   historyState.filters.sortDir = document.getElementById("history-sort-dir")?.value || "desc";
 }
 
+function resetSearchFilters() {
+  historyState.filters = { ...DEFAULT_HISTORY_FILTERS };
+}
+
 async function rerenderHistoryWorkspace() {
   const workspaceRoot = document.querySelector(".main-workspace");
   if (!workspaceRoot) return;
@@ -347,6 +393,28 @@ async function rerenderHistoryWorkspace() {
   const { renderMainWorkspace, bindMainWorkspaceEvents } = await import("../mainWorkspace");
   workspaceRoot.innerHTML = renderMainWorkspace();
   bindMainWorkspaceEvents();
+}
+
+async function handleSearchSubmit() {
+  clearInlineMessage(HISTORY_MESSAGE_ID);
+
+  try {
+    applySearchFiltersFromDom();
+    historyState.selectedIds = [];
+    await loadHistoryData();
+    historyState.searched = true;
+    await rerenderHistoryWorkspace();
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "작업 내역 조회 중 오류가 발생했습니다.", "error");
+  }
+}
+
+async function handleSearchReset() {
+  clearInlineMessage(HISTORY_MESSAGE_ID);
+  resetSearchFilters();
+  resetHistoryResults();
+  await rerenderHistoryWorkspace();
 }
 
 async function handleReworkSelected() {
@@ -360,28 +428,32 @@ async function handleReworkSelected() {
   const historyId = historyState.selectedIds[0];
 
   try {
-    const master = await GetHistory(historyId);
     const audienceIds = historyState.audienceMap[historyId] || [];
-    const audienceId = audienceIds[0];
 
-    if (!audienceId) {
+    if (!audienceIds.length) {
       setInlineMessage(HISTORY_MESSAGE_ID, "재작업할 연령대 정보를 찾을 수 없습니다.", "warning");
       return;
     }
 
-    const qtRow = await GetHistoryQTJSON(historyId, audienceId);
+    if (audienceIds.length !== 1) {
+      setInlineMessage(HISTORY_MESSAGE_ID, "재작업할 연령대 정보가 올바르지 않습니다.", "error");
+      return;
+    }
 
-    setBasicInfoField("title", master.title || "");
-    setBasicInfoField("bibleText", master.bibleText || "");
-    setBasicInfoField("hymn", master.hymn || "");
-    setBasicInfoField("preacher", master.preacher || "");
-    setBasicInfoField("churchName", master.churchName || "");
-    setBasicInfoField("sermonDate", master.sermonDate || "");
+    const audienceId = audienceIds[0];
+    const result = await PrepareReworkFromHistory(historyId, audienceId);
+
+    setBasicInfoField("title", result.title || "");
+    setBasicInfoField("bibleText", result.bibleText || "");
+    setBasicInfoField("hymn", result.hymn || "");
+    setBasicInfoField("preacher", result.preacher || "");
+    setBasicInfoField("churchName", result.churchName || "");
+    setBasicInfoField("sermonDate", result.sermonDate || "");
 
     appState.historySelected = {
       historyId,
       audienceId,
-      step1ResultJson: qtRow.qtResultJson || "",
+      tempJsonPath: result.tempJsonPath || "",
     };
 
     setSelectedMenu(audienceId);
@@ -409,6 +481,7 @@ async function handleDeleteSelected() {
 
     historyState.selectedIds = [];
     await loadHistoryData();
+    historyState.searched = true;
     showToast("선택한 작업을 삭제했습니다.", "success");
     await rerenderHistoryWorkspace();
   } catch (error) {
@@ -419,21 +492,29 @@ async function handleDeleteSelected() {
 
 function bindFilterEvents() {
   const keywordInput = document.getElementById("history-keyword-input");
-  const audienceFilter = document.getElementById("history-audience-filter");
-  const sortKey = document.getElementById("history-sort-key");
-  const sortDir = document.getElementById("history-sort-dir");
+  const searchBtn = document.getElementById("history-search-btn");
+  const resetBtn = document.getElementById("history-search-reset-btn");
 
-  [keywordInput, audienceFilter, sortKey, sortDir].forEach((el) => {
-    if (!el) return;
-    el.addEventListener("input", async () => {
-      applySearchFiltersFromDom();
-      await rerenderHistoryWorkspace();
+  if (keywordInput) {
+    keywordInput.addEventListener("keydown", async (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        await handleSearchSubmit();
+      }
     });
-    el.addEventListener("change", async () => {
-      applySearchFiltersFromDom();
-      await rerenderHistoryWorkspace();
+  }
+
+  if (searchBtn) {
+    searchBtn.addEventListener("click", async () => {
+      await handleSearchSubmit();
     });
-  });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", async () => {
+      await handleSearchReset();
+    });
+  }
 }
 
 function bindSelectionEvents() {
@@ -488,18 +569,6 @@ function bindActionEvents() {
 }
 
 export async function bindHistoryWorkspaceEvents() {
-  try {
-    if (!historyState.loaded && !historyState.loading) {
-      await loadHistoryData();
-      await rerenderHistoryWorkspace();
-      return;
-    }
-  } catch (error) {
-    console.error(error);
-    setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "작업 내역을 불러오는 중 오류가 발생했습니다.", "error");
-    return;
-  }
-
   bindFilterEvents();
   bindSelectionEvents();
   bindActionEvents();

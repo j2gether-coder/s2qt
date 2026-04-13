@@ -3,6 +3,7 @@ import {
   SaveAppSettings,
   SaveSecretSettingWithPin,
   HasSecretValue,
+  TestSMTPSettings,
 } from "../../../wailsjs/go/main/App";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 import { requirePinIfNeeded } from "../security/securityState";
@@ -335,7 +336,7 @@ function renderSmtpCard() {
     <section class="card">
       ${renderCardInlineHead(
         "SMTP",
-        "Step3에서 선택한 산출물을 이메일로 보낼 수 있습니다."
+        "보내는 메일을 설정하세요."
       )}
 
       <div class="form-field topgap-sm">
@@ -400,8 +401,9 @@ function renderSmtpCard() {
         ${renderSmtpPasswordArea()}
       </div>
 
-      <div class="row single-action-row topgap-sm">
+      <div class="half-action-row topgap-sm">
         <button type="button" class="button" id="save-smtp-settings-btn">SMTP 설정 저장</button>
+        <button type="button" class="button-ghost" id="test-smtp-settings-btn">메일 테스트</button>
       </div>
     </section>
   `;
@@ -593,6 +595,34 @@ async function handleSaveSmtpSettings() {
   }
 }
 
+async function handleTestSmtpSettings() {
+  clearInlineMessage(EXTRA_MESSAGE_ID);
+
+  await requirePinIfNeeded({
+    reason: "test_smtp",
+    message: "메일 테스트를 위해 PIN을 입력해 주세요.",
+    onSuccess: async () => {
+      try {
+        const pinValue = window.__lastVerifiedPin || "";
+        if (!pinValue) {
+          setInlineMessage(EXTRA_MESSAGE_ID, "PIN 확인 정보가 없습니다. 다시 시도해 주세요.", "error");
+          return;
+        }
+
+        const result = await TestSMTPSettings(pinValue);
+        showToast(result?.message || "테스트 메일을 발송했습니다.", "success");
+      } catch (error) {
+        console.error(error);
+        setInlineMessage(
+          EXTRA_MESSAGE_ID,
+          error?.message || "메일 테스트 중 오류가 발생했습니다.",
+          "error"
+        );
+      }
+    },
+  });
+}
+
 async function handleEnterSmtpPasswordEditMode() {
   clearInlineMessage(EXTRA_MESSAGE_ID);
 
@@ -702,6 +732,13 @@ export async function bindSettingsExtraTabEvents() {
   if (saveSmtpSettingsBtn) {
     saveSmtpSettingsBtn.addEventListener("click", async () => {
       await handleSaveSmtpSettings();
+    });
+  }
+
+  const testSmtpSettingsBtn = document.getElementById("test-smtp-settings-btn");
+  if (testSmtpSettingsBtn) {
+    testSmtpSettingsBtn.addEventListener("click", async () => {
+      await handleTestSmtpSettings();
     });
   }
 

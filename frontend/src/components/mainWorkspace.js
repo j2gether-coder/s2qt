@@ -18,6 +18,7 @@ import {
   LoadTextFile,
   RunSourcePrepare,
   GetVideoMeta,
+  PrepareRuntimeForInput,
 } from '../../wailsjs/go/main/App';
 import { renderQTStep1 } from './qt/qtStep1';
 import { renderQTStep2 } from './qt/qtStep2';
@@ -167,14 +168,18 @@ async function runQtPrepare() {
   try {
     const sourceType = appState?.source?.sourceType || '';
 
-    if (sourceType === 'video') {
-      await enrichVideoBasicInfoFromMeta();
-      updateQtPrepareStatus();
-      mountAppShell('app');
-    }
-
     setSourceStatus('RUNNING');
     mountAppShell('app');
+
+    const runtimeResult = await PrepareRuntimeForInput(sourceType);
+    if (!runtimeResult?.ok) {
+      throw new Error(runtimeResult?.message || '런타임 준비 중 오류가 발생했습니다.');
+    }
+
+    if (sourceType === 'video') {
+      await enrichVideoBasicInfoFromMeta();
+      mountAppShell('app');
+    }
 
     const payload = buildSourcePreparePayload();
     const result = await RunSourcePrepare(payload);
@@ -194,7 +199,7 @@ async function runQtPrepare() {
   } catch (error) {
     console.error(error);
     updateQtPrepareStatus();
-    setInlineMessage("workspace-message", error?.message || '자료 처리 중 오류가 발생했습니다.', "error");
+    setInlineMessage("workspace-message", error?.message || "자료 처리 중 오류가 발생했습니다.", "error");
     mountAppShell('app');
   }
 }

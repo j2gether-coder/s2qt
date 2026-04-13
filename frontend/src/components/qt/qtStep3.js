@@ -7,17 +7,27 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderFileLink(filePath) {
+function renderOpenButton(filePath, formatKey) {
   const value = String(filePath || '').trim();
 
   if (!value) {
-    return '-';
+    return `
+      <button class="button-ghost output-save-btn" type="button" disabled>
+        링크 열기
+      </button>
+    `;
   }
 
   return `
-    <a href="#" class="output-file-link" data-file="${escapeHtml(value)}">
-      ${escapeHtml(value)}
-    </a>
+    <button
+      class="button-ghost output-save-btn"
+      type="button"
+      data-format="${escapeHtml(formatKey)}"
+      data-file="${escapeHtml(value)}"
+      data-action="open"
+    >
+      링크 열기
+    </button>
   `;
 }
 
@@ -38,13 +48,14 @@ function renderSaveButton(filePath, formatKey) {
       type="button"
       data-format="${escapeHtml(formatKey)}"
       data-file="${escapeHtml(value)}"
+      data-action="save"
     >
       파일 저장
     </button>
   `;
 }
 
-function renderOutputItem(title, filePath, statusText, fileId, statusId, formatKey) {
+function renderOutputItem(title, filePath, statusText, openWrapId, saveWrapId, statusId, formatKey) {
   return `
     <div class="output-result-card">
       <div class="output-result-head">
@@ -52,11 +63,11 @@ function renderOutputItem(title, filePath, statusText, fileId, statusId, formatK
         <div class="output-result-status" id="${statusId}">${escapeHtml(statusText || '대기')}</div>
       </div>
 
-      <div class="file-line topgap-sm">
-        파일: <span id="${fileId}">${renderFileLink(filePath)}</span>
+      <div class="topgap-sm" id="${openWrapId}">
+        ${renderOpenButton(filePath, formatKey)}
       </div>
 
-      <div class="topgap-sm" id="${escapeHtml(formatKey)}SaveBtnWrap">
+      <div class="topgap-sm" id="${saveWrapId}">
         ${renderSaveButton(filePath, formatKey)}
       </div>
     </div>
@@ -88,22 +99,6 @@ export function renderQTStep3(audienceId, appState) {
             <span>PDF</span>
           </label>
 
-          <!--
-          TODO(step3-docx-pptx):
-          DOCX / PPTX는 현재 Step3에서 임시 제외.
-          추후 품질 검토 후 다시 노출할 때 아래 체크박스를 복구한다.
-
-          <label class="simple-check-item">
-            <input type="checkbox" id="makeDocxChk" />
-            <span>DOCX</span>
-          </label>
-
-          <label class="simple-check-item">
-            <input type="checkbox" id="makePptxChk" />
-            <span>PPTX</span>
-          </label>
-          -->
-
           <label>
             <input type="checkbox" id="makePngChk" checked />
             <span>PNG</span>
@@ -115,20 +110,10 @@ export function renderQTStep3(audienceId, appState) {
         </div>
       </section>
 
-      <section class="output-result-grid output-result-grid-3col">
-        ${renderOutputItem('HTML', output.htmlFile || '', output.htmlFile ? '완료' : '대기', 'htmlFilePath', 'htmlFileStatus', 'html')}
-        ${renderOutputItem('PDF', output.pdfFile || '', output.pdfFile ? '완료' : '대기', 'pdfFilePath', 'pdfFileStatus', 'pdf')}
-
-        <!--
-        TODO(step3-docx-pptx):
-        DOCX / PPTX는 현재 Step3에서 임시 제외.
-        추후 품질 검토 후 다시 노출할 때 아래 결과 카드도 함께 복구한다.
-
-        ${renderOutputItem('DOCX', output.docxFile || '', output.docxFile ? '완료' : '대기', 'docxFilePath', 'docxFileStatus', 'docx')}
-        ${renderOutputItem('PPTX', output.pptxFile || '', output.pptxFile ? '완료' : '대기', 'pptxFilePath', 'pptxFileStatus', 'pptx')}
-        -->
-
-        ${renderOutputItem('PNG', output.pngFile || '', output.pngFile ? '완료' : '대기', 'pngFilePath', 'pngFileStatus', 'png')}
+      <section class="output-result-grid output-result-grid-3col qt-step3-result-grid">
+        ${renderOutputItem('HTML', output.htmlFile || '', output.htmlFile ? '완료' : '대기', 'htmlOpenBtnWrap', 'htmlSaveBtnWrap', 'htmlFileStatus', 'html')}
+        ${renderOutputItem('PDF', output.pdfFile || '', output.pdfFile ? '완료' : '대기', 'pdfOpenBtnWrap', 'pdfSaveBtnWrap', 'pdfFileStatus', 'pdf')}
+        ${renderOutputItem('PNG', output.pngFile || '', output.pngFile ? '완료' : '대기', 'pngOpenBtnWrap', 'pngSaveBtnWrap', 'pngFileStatus', 'png')}
       </section>
 
       <section class="step-status-grid step-status-grid-3col">

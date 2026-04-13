@@ -25,6 +25,7 @@ type App struct {
 	outputFileService *service.OutputFileService
 	cryptoSvc         *service.CryptoService
 	settingsSvc       *service.SettingsService
+	smtpSvc           *service.SMTPService
 	historySvc        *service.HistoryService
 }
 
@@ -52,28 +53,26 @@ func (a *App) shutdown(ctx context.Context) {
 func (a *App) initLocalServices() error {
 	paths, err := util.GetAppPaths()
 	if err != nil {
-		return fmt.Errorf("failed to get app paths: %w", err)
+		return err
 	}
 
 	db, err := service.OpenSQLite(paths.DBFile)
 	if err != nil {
-		return fmt.Errorf("failed to open sqlite: %w", err)
-	}
-
-	if err := service.InitSQLite(db); err != nil {
-		return fmt.Errorf("failed to init sqlite: %w", err)
+		return err
 	}
 
 	cryptoSvc, err := service.NewCryptoService(paths.SecurityFile)
 	if err != nil {
-		return fmt.Errorf("failed to init crypto service: %w", err)
+		return err
 	}
 
 	a.db = db
 	a.cryptoSvc = cryptoSvc
 	a.settingsSvc = service.NewSettingsService(db, cryptoSvc)
+	a.smtpSvc = service.NewSMTPService(a.settingsSvc)
 	a.historySvc = service.NewHistoryService(db)
 
+	// 기존 다른 service 초기화가 있다면 그대로 유지
 	return nil
 }
 
@@ -418,6 +417,33 @@ func (a *App) DeleteHistory(historyID int64) error {
 	return a.historySvc.DeleteHistory(historyID)
 }
 
+func (a *App) PrepareReworkFromHistory(historyID int64, audience string) (service.ReworkPrepareResponse, error) {
+	if a.historySvc == nil {
+		return service.ReworkPrepareResponse{}, fmt.Errorf("history service is not initialized")
+	}
+	return a.historySvc.PrepareReworkFromHistory(historyID, audience)
+}
+
 func (a *App) LoadGuideDocument(sectionId string) (string, error) {
 	return service.LoadGuideDocument(sectionId)
+}
+
+func (a *App) TestSMTPSettings(pin string) (*service.SMTPTestResult, error) {
+	if a.smtpSvc == nil {
+		return nil, fmt.Errorf("smtp service is not initialized")
+	}
+	return a.smtpSvc.TestSendToSelf(pin)
+}
+
+func (a *App) PrepareRuntimeForInput(inputType string) (*service.UtilCheckResult, error) {
+	switch strings.TrimSpace(strings.ToLower(inputType)) {
+	case "text":
+		return service.CheckRuntimeForText()
+	case "audio":
+		return service.CheckRuntimeForAudio(true)
+	case "video", "url", "youtube":
+		return service.CheckRuntimeForVideo(true)
+	default:
+		return nil, fmt.Errorf("unsupported input type: %s", inputType)
+	}
 }

@@ -21,19 +21,32 @@ function setText(id, value) {
   if (el) el.textContent = value || '';
 }
 
-function setFileLink(containerId, filePath) {
+function setOpenButton(containerId, filePath, formatKey) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
-  if (!filePath) {
-    el.innerHTML = '-';
+  const value = String(filePath || '').trim();
+  const format = String(formatKey || '').trim();
+
+  if (!value) {
+    el.innerHTML = `
+      <button class="button-ghost output-save-btn" type="button" disabled>
+        링크 열기
+      </button>
+    `;
     return;
   }
 
   el.innerHTML = `
-    <a href="#" class="output-file-link" data-file="${filePath}">
-      ${filePath}
-    </a>
+    <button
+      class="button-ghost output-save-btn"
+      type="button"
+      data-format="${format}"
+      data-file="${value}"
+      data-action="open"
+    >
+      링크 열기
+    </button>
   `;
 }
 
@@ -59,6 +72,7 @@ function setSaveButton(containerId, filePath, formatKey) {
       type="button"
       data-format="${format}"
       data-file="${value}"
+      data-action="save"
     >
       파일 저장
     </button>
@@ -72,10 +86,10 @@ function applyOne(resultKey, item) {
     png: 'pngFileStatus',
   };
 
-  const fileMap = {
-    html: 'htmlFilePath',
-    pdf: 'pdfFilePath',
-    png: 'pngFilePath',
+  const openBtnMap = {
+    html: 'htmlOpenBtnWrap',
+    pdf: 'pdfOpenBtnWrap',
+    png: 'pngOpenBtnWrap',
   };
 
   const saveBtnMap = {
@@ -85,7 +99,7 @@ function applyOne(resultKey, item) {
   };
 
   setText(statusMap[resultKey], item?.status || '대기');
-  setFileLink(fileMap[resultKey], item?.filePath || '');
+  setOpenButton(openBtnMap[resultKey], item?.filePath || '', resultKey);
   setSaveButton(saveBtnMap[resultKey], item?.filePath || '', resultKey);
 }
 
@@ -164,16 +178,14 @@ function updateStep3ButtonState() {
   }
 }
 
-function bindFileOpenLinks() {
-  const links = document.querySelectorAll('.output-file-link[data-file]');
+function bindOpenButtons() {
+  const buttons = document.querySelectorAll('.output-save-btn[data-file][data-action="open"]');
 
-  links.forEach((link) => {
-    link.onclick = async (event) => {
-      event.preventDefault();
-
+  buttons.forEach((btn) => {
+    btn.onclick = async () => {
       clearInlineMessage("qt-step3-message");
 
-      const filePath = link.dataset.file || '';
+      const filePath = btn.dataset.file || '';
       if (!filePath.trim()) {
         setInlineMessage("qt-step3-message", '열 파일이 없습니다.', "warning");
         return;
@@ -191,7 +203,7 @@ function bindFileOpenLinks() {
 }
 
 function bindSaveAsButtons(audienceId) {
-  const buttons = document.querySelectorAll('.output-save-btn[data-file]');
+  const buttons = document.querySelectorAll('.output-save-btn[data-file][data-action="save"]');
 
   buttons.forEach((btn) => {
     btn.onclick = async () => {
@@ -240,7 +252,7 @@ async function runStep3(audienceId) {
     applyOne('pdf', result?.pdf);
     applyOne('png', result?.png);
 
-    bindFileOpenLinks();
+    bindOpenButtons();
     bindSaveAsButtons(audienceId);
 
     setAudienceStepStatus(audienceId, 'step3', 'done');
@@ -277,7 +289,7 @@ export function bindQTStep3Events(audienceId) {
 
   renderStepStatusFromState(audienceId);
 
-  bindFileOpenLinks();
+  bindOpenButtons();
   bindSaveAsButtons(audienceId);
   updateStep3ButtonState();
 

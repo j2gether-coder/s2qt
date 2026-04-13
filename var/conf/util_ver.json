@@ -1,0 +1,15 @@
+{
+  "last_checked_at": "2026-04-13T20:30:00+09:00",
+  "last_check_mode": "video",
+  "last_check_ok": true,
+  "installed": {
+    "ffmpeg": true,
+    "ffprobe": true,
+    "yt-dlp": true,
+    "ggml-tiny.bin": true
+  },
+  "versions": {
+    "yt-dlp": "2026.04.01"
+  },
+  "model_installed": true
+}
