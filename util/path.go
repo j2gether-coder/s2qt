@@ -66,11 +66,11 @@ func GetAppPaths() (*AppPaths, error) {
 		Bin:   binDir,
 		Var:   varDir,
 		Temp:  tempDir,
-		Conf:  filepath.Join(varDir, "conf"),
+		Conf:  confDir,
 		Data:  filepath.Join(varDir, "data"),
 		Doc:   docDir,
-		DB:    filepath.Join(varDir, "db"),
-		Log:   filepath.Join(varDir, "log"),
+		DB:    dbDir,
+		Log:   logDir,
 		Model: modelDir,
 
 		YtDlpExe:   filepath.Join(binDir, "yt-dlp.exe"),
@@ -98,9 +98,21 @@ func GetAppPaths() (*AppPaths, error) {
 	return p, EnsureDirs(p)
 }
 
-// 현재 작업 위치에서 시작해서 상위로 올라가며
-// go.mod 또는 wails.json 이 있는 폴더를 프로젝트 루트로 판단
+// 개발용: 현재 작업 경로에서 상위로 올라가며 go.mod / wails.json 탐색
+// 배포용: 실패 시 실행 파일 위치 기준으로 bin 상위 폴더를 루트로 사용
 func FindProjectRoot() (string, error) {
+	if root, err := findRootFromWorkingDir(); err == nil {
+		return root, nil
+	}
+
+	if root, err := findRootFromExecutable(); err == nil {
+		return root, nil
+	}
+
+	return "", errors.New("project root not found")
+}
+
+func findRootFromWorkingDir() (string, error) {
 	start, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -120,7 +132,28 @@ func FindProjectRoot() (string, error) {
 		dir = parent
 	}
 
-	return "", errors.New("project root not found")
+	return "", errors.New("project root not found from working directory")
+}
+
+func findRootFromExecutable() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+
+	exePath, err = filepath.Abs(exePath)
+	if err != nil {
+		return "", err
+	}
+
+	exeDir := filepath.Dir(exePath)
+	root := filepath.Dir(exeDir) // bin 상위를 루트로 간주
+
+	if root == "" {
+		return "", errors.New("invalid executable root")
+	}
+
+	return root, nil
 }
 
 func isProjectRoot(dir string) bool {
@@ -146,7 +179,7 @@ func EnsureDirs(p *AppPaths) error {
 	}
 
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
+		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
 		}
 	}

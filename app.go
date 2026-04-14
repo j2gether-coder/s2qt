@@ -36,12 +36,14 @@ func NewApp() *App {
 }
 
 func (a *App) startup(ctx context.Context) {
+
 	a.ctx = ctx
 	a.outputFileService.SetContext(ctx)
 
 	if err := a.initLocalServices(); err != nil {
-		panic(err)
+		return
 	}
+
 }
 
 func (a *App) shutdown(ctx context.Context) {
