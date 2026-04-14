@@ -36,11 +36,13 @@ export function renderQTStep1(audienceId, appState) {
       </section>
 
       <section class="card">
-        <h3 class="mini-title">AI(LLM) 처리 및 결과 저장</h3>
+        <div class="row between center">
+          <h3 class="mini-title">AI(LLM) 처리 및 결과 저장</h3>
 
-        <div class="mode-strip">
-          <span class="mode-label">현재 모드</span>
-          <span class="mode-value" id="llmModeBadge">${modeText}</span>
+          <div class="mode-strip">
+            <span class="mode-label">현재 모드</span>
+            <span class="mode-value" id="llmModeBadge">${modeText}</span>
+          </div>
         </div>
 
         ${

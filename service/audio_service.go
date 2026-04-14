@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -80,7 +79,7 @@ func (s *AudioService) convertToWav(inputAudioPath string) (string, error) {
 		s.Paths.TempWav,
 	}
 
-	out, err := exec.Command(s.Paths.FfmpegExe, args...).CombinedOutput()
+	out, err := newHiddenCommand(s.Paths.FfmpegExe, args...).CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("WAV 변환 실패: %w", err)
 	}
@@ -97,7 +96,7 @@ func (s *AudioService) transcribe() (string, error) {
 		"-of", strings.TrimSuffix(s.Paths.TempTxt, ".txt"),
 	}
 
-	out, err := exec.Command(s.Paths.WhisperExe, args...).CombinedOutput()
+	out, err := newHiddenCommand(s.Paths.WhisperExe, args...).CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("전사 실패: %w", err)
 	}

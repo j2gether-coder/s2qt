@@ -17,9 +17,9 @@ func main() {
 	err := wails.Run(&options.App{
 		Title:     "S2QT",
 		Width:     800,
-		Height:    750,
+		Height:    780,
 		MinWidth:  780,
-		MinHeight: 700,
+		MinHeight: 760,
 		Assets:    assets,
 		OnStartup: func(ctx context.Context) {
 			app.startup(ctx)

@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -71,7 +70,7 @@ func (s *VideoService) downloadVideo(url string) (string, error) {
 		url,
 	}
 
-	out, err := exec.Command(s.Paths.YtDlpExe, args...).CombinedOutput()
+	out, err := newHiddenCommand(s.Paths.YtDlpExe, args...).CombinedOutput()
 	return string(out), err
 }
 
@@ -85,7 +84,7 @@ func (s *VideoService) convertToWav() (string, error) {
 		s.Paths.TempWav,
 	}
 
-	out, err := exec.Command(s.Paths.FfmpegExe, args...).CombinedOutput()
+	out, err := newHiddenCommand(s.Paths.FfmpegExe, args...).CombinedOutput()
 	return string(out), err
 }
 
@@ -98,7 +97,7 @@ func (s *VideoService) transcribe() (string, error) {
 		"-of", strings.TrimSuffix(s.Paths.TempTxt, ".txt"),
 	}
 
-	out, err := exec.Command(s.Paths.WhisperExe, args...).CombinedOutput()
+	out, err := newHiddenCommand(s.Paths.WhisperExe, args...).CombinedOutput()
 	return string(out), err
 }
 

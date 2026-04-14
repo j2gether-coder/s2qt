@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"s2qt/util"
@@ -41,7 +43,7 @@ type UtilCheckOptions struct {
 }
 
 type UtilCheckResult struct {
-	CheckedAt time.Time         `json:"checked_at"`
+	CheckedAt string            `json:"checked_at"`
 	Mode      string            `json:"mode"`
 	OK        bool              `json:"ok"`
 	Checked   []string          `json:"checked"`
@@ -97,7 +99,7 @@ func EnsureRuntime(opts UtilCheckOptions, mode string) (*UtilCheckResult, error)
 	LogInfo("util: runtime check started mode=" + mode)
 
 	result := &UtilCheckResult{
-		CheckedAt: time.Now(),
+		CheckedAt: time.Now().Format(time.RFC3339),
 		Mode:      mode,
 		OK:        true,
 		Checked:   []string{},
@@ -520,7 +522,7 @@ func saveUtilVersion(confDir string, result *UtilCheckResult) error {
 		info.Versions = map[string]string{}
 	}
 
-	info.LastCheckedAt = result.CheckedAt.Format(time.RFC3339)
+	info.LastCheckedAt = result.CheckedAt
 	info.LastCheckMode = result.Mode
 	info.LastCheckOK = result.OK
 
@@ -598,7 +600,7 @@ func getYtDlpVersion(binPath string) string {
 		return ""
 	}
 
-	cmd := exec.Command(binPath, "--version")
+	cmd := newHiddenCommand(binPath, "--version")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -654,4 +656,19 @@ func appendIfMissing(items []string, target string) []string {
 		return items
 	}
 	return append(items, target)
+}
+
+const createNoWindow = 0x08000000
+
+func newHiddenCommand(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: createNoWindow,
+		}
+	}
+
+	return cmd
 }

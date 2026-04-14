@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os/exec"
 	"syscall"
 )
 
@@ -34,7 +33,7 @@ func FetchVideoMeta(ytdlpPath, url string) (*VideoMeta, error) {
 		return nil, errors.New("URL is empty")
 	}
 
-	cmd := exec.Command(
+	cmd := newHiddenCommand(
 		ytdlpPath,
 		"--no-playlist",
 		"--dump-json",

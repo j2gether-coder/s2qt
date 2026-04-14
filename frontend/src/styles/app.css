@@ -1140,6 +1140,12 @@ textarea.input {
   flex-wrap: wrap;
 }
 
+.row.between.center {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 /* =========================
    14. Step2
 ========================= */
