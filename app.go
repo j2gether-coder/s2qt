@@ -47,6 +47,9 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	service.LogInfo("app: close button clicked, shutting down")
+	service.EndEventLog("CLOSED")
+
 	if a.db != nil {
 		_ = a.db.Close()
 	}
@@ -134,6 +137,38 @@ func (a *App) SelectAudioFile() (string, error) {
 func (a *App) LoadTextFile(path string) (string, error) {
 	svc := service.NewTxtService()
 	return svc.LoadTextFile(path)
+}
+
+func (a *App) SelectImageFile() (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("context is not initialized")
+	}
+
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "이미지 파일 선택",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "이미지 파일",
+				Pattern:     "*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(path), nil
+}
+
+func (a *App) LoadImageAsDataURI(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", errors.New("이미지 경로가 비어 있습니다")
+	}
+	dataURI := service.EncodeImageAsDataURI(path)
+	if dataURI == "" {
+		return "", errors.New("이미지 파일을 읽을 수 없습니다: " + path)
+	}
+	return dataURI, nil
 }
 
 func (a *App) GetVideoMeta(url string) (*service.VideoMeta, error) {
@@ -557,6 +592,51 @@ func (a *App) GetPinLength() (int, error) {
 		return 6, fmt.Errorf("crypto service is not initialized")
 	}
 	return a.cryptoSvc.GetPinLength(), nil
+}
+
+func (a *App) GetPinLockoutStatus() (service.PinLockoutStatus, error) {
+	if a.cryptoSvc == nil {
+		return service.PinLockoutStatus{}, fmt.Errorf("crypto service is not initialized")
+	}
+	return a.cryptoSvc.GetPinLockoutStatus(), nil
+}
+
+// ResetPinLockout clears the PIN configuration and wipes all encrypted
+// secret settings. Used both when the PIN is permanently locked out and when
+// the user forgets their PIN (Strategy A: recover by discarding secrets,
+// preserving history/general settings).
+//
+// The confirmed flag must be true; the UI is required to obtain explicit
+// user consent (checkbox + confirm dialog) before calling this binding.
+func (a *App) ResetPinLockout(confirmed bool) error {
+	if !confirmed {
+		return fmt.Errorf("reset must be explicitly confirmed by the user")
+	}
+	if a.cryptoSvc == nil {
+		return fmt.Errorf("crypto service is not initialized")
+	}
+	if a.settingsSvc == nil {
+		return fmt.Errorf("settings service is not initialized")
+	}
+
+	service.LogWarn("SECURITY RESET scope=secrets user_confirmed=true - wiping encrypted values")
+
+	wipedKeys, err := a.settingsSvc.WipeAllSecretValues()
+	if err != nil {
+		service.LogError("security: wipe secret values failed: " + err.Error())
+		return err
+	}
+	if len(wipedKeys) > 0 {
+		service.LogWarn("SECURITY RESET wiped_keys=" + strings.Join(wipedKeys, ","))
+	}
+
+	if err := a.cryptoSvc.ResetPinLockout(); err != nil {
+		service.LogError("security: reset pin config failed: " + err.Error())
+		return err
+	}
+
+	service.LogInfo("SECURITY RESET completed scope=secrets")
+	return nil
 }
 
 //

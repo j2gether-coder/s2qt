@@ -203,6 +203,42 @@ func (s *SettingsService) HasSecretSetting(key string) (bool, error) {
 	return stringsTrim(item.Value) != "", nil
 }
 
+// WipeAllSecretValues clears the value of every row where is_secret=1.
+// Used by the PIN-loss recovery flow: after the PIN-derived key is abandoned,
+// no encrypted value can be decrypted, so we must remove them.
+// Returns the list of keys that were wiped for audit logging.
+func (s *SettingsService) WipeAllSecretValues() ([]string, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("settings service db is nil")
+	}
+
+	rows, err := s.db.Query(`SELECT setting_key FROM app_settings WHERE is_secret = 1 AND setting_value <> ''`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list secret settings: %w", err)
+	}
+
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("failed to scan secret key: %w", err)
+		}
+		keys = append(keys, k)
+	}
+	rows.Close()
+
+	if _, err := s.db.Exec(`
+UPDATE app_settings
+SET setting_value = '', updated_at = ?
+WHERE is_secret = 1
+`, nowText()); err != nil {
+		return nil, fmt.Errorf("failed to wipe secret values: %w", err)
+	}
+
+	return keys, nil
+}
+
 // DecryptSecretSetting is optional internal helper.
 // 프론트에는 보통 노출하지 않는 것을 권장.
 func (s *SettingsService) DecryptSecretSetting(key, pin string) (string, error) {

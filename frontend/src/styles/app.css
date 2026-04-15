@@ -1646,6 +1646,68 @@ textarea.input {
 }
 
 /* =========================
+   Logo Preview Modal
+========================= */
+
+.logo-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.logo-preview-panel {
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  max-width: min(720px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.logo-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logo-preview-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.logo-preview-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 16px;
+  min-height: 200px;
+  overflow: auto;
+}
+
+.logo-preview-body img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+}
+
+.logo-preview-caption {
+  font-size: 12px;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+/* =========================
    19. Pin / Security
 ========================= */
 

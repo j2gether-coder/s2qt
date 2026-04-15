@@ -317,6 +317,10 @@ func resolveFooterImagePath(path string) string {
 	return filepath.Clean(path)
 }
 
+func EncodeImageAsDataURI(path string) string {
+	return encodeImageAsDataURI(path)
+}
+
 func encodeImageAsDataURI(path string) string {
 	path = resolveFooterImagePath(path)
 	if strings.TrimSpace(path) == "" {

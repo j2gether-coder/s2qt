@@ -1,4 +1,9 @@
-import { GetPinLength, VerifyPin } from "../../../wailsjs/go/main/App";
+import {
+  GetPinLength,
+  VerifyPin,
+  GetPinLockoutStatus,
+  ResetPinLockout,
+} from "../../../wailsjs/go/main/App";
 import { setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 
 const modalState = {
@@ -10,6 +15,9 @@ const modalState = {
   digits: [],
   onSuccess: null,
   onCancel: null,
+  lockoutRemaining: 0,
+  lockoutTimerId: null,
+  permanentLock: false,
 };
 
 function getModalRoot() {
@@ -89,6 +97,36 @@ export function renderPinModal() {
     return;
   }
 
+  const locked = modalState.lockoutRemaining > 0 || modalState.permanentLock;
+  const disabledAttr = locked ? "disabled" : "";
+
+  let lockoutBanner = "";
+  if (modalState.permanentLock) {
+    lockoutBanner = `
+      <div class="pin-lockout-banner pin-lockout-permanent">
+        PIN이 영구 잠금되었습니다. 보안 설정을 초기화해야 합니다.<br>
+        <small>초기화 시 저장된 SMTP / LLM 비밀값은 삭제되며 재입력이 필요합니다.</small>
+      </div>
+    `;
+  } else if (modalState.lockoutRemaining > 0) {
+    lockoutBanner = `
+      <div class="pin-lockout-banner pin-lockout-temporary">
+        PIN 잠금 중입니다. <strong id="pin-lockout-countdown">${modalState.lockoutRemaining}</strong>초 후 재시도 가능합니다.
+      </div>
+    `;
+  }
+
+  const footerButtons = modalState.permanentLock
+    ? `
+        <button type="button" class="secondary-button" id="pin-cancel-btn">닫기</button>
+        <button type="button" class="primary-button" id="pin-reset-btn">보안 설정 초기화</button>
+      `
+    : `
+        <button type="button" class="link-button" id="pin-forgot-btn">PIN을 잊으셨나요?</button>
+        <button type="button" class="secondary-button" id="pin-cancel-btn">취소</button>
+        <button type="button" class="primary-button" id="pin-submit-btn" ${disabledAttr}>확인</button>
+      `;
+
   root.innerHTML = `
     <div class="pin-modal-overlay">
       <div class="pin-modal-panel" role="dialog" aria-modal="true" aria-labelledby="pin-modal-title">
@@ -101,6 +139,8 @@ export function renderPinModal() {
             ${escapeHtml(modalState.message || "PIN을 입력해 주세요.")}
           </div>
 
+          ${lockoutBanner}
+
           <div class="pin-display" id="pin-display">
             ${getMaskedPinDisplay()}
           </div>
@@ -112,14 +152,13 @@ export function renderPinModal() {
           </div>
 
           <div class="pin-keypad-actions">
-            <button type="button" class="pin-key pin-action-key" id="pin-clear-one-btn">지우기</button>
-            <button type="button" class="pin-key pin-action-key" id="pin-clear-all-btn">전체삭제</button>
+            <button type="button" class="pin-key pin-action-key" id="pin-clear-one-btn" ${disabledAttr}>지우기</button>
+            <button type="button" class="pin-key pin-action-key" id="pin-clear-all-btn" ${disabledAttr}>전체삭제</button>
           </div>
         </div>
 
         <div class="pin-modal-footer">
-          <button type="button" class="secondary-button" id="pin-cancel-btn">취소</button>
-          <button type="button" class="primary-button" id="pin-submit-btn">확인</button>
+          ${footerButtons}
         </div>
       </div>
     </div>
@@ -141,19 +180,25 @@ export function openPinModal({
   modalState.onSuccess = onSuccess || null;
   modalState.onCancel = onCancel || null;
   modalState.digits = buildRandomDigits();
+  modalState.lockoutRemaining = 0;
+  modalState.permanentLock = false;
+  stopLockoutTimer();
 
-  loadPinLength()
-    .then(() => {
-      renderPinModal();
-    })
+  Promise.all([loadPinLength(), refreshLockoutStatus()])
     .catch((error) => {
       console.error(error);
       modalState.maxLength = 6;
+    })
+    .finally(() => {
       renderPinModal();
+      if (modalState.lockoutRemaining > 0) {
+        startLockoutTimer();
+      }
     });
 }
 
 export function closePinModal() {
+  stopLockoutTimer();
   modalState.visible = false;
   modalState.reason = "";
   modalState.message = "";
@@ -161,8 +206,48 @@ export function closePinModal() {
   modalState.onSuccess = null;
   modalState.onCancel = null;
   modalState.digits = [];
+  modalState.lockoutRemaining = 0;
+  modalState.permanentLock = false;
   clearInlineMessage("pin-inline-message");
   renderPinModal();
+}
+
+async function refreshLockoutStatus() {
+  try {
+    const status = await GetPinLockoutStatus();
+    if (!status) return;
+    modalState.permanentLock = !!status.permanent;
+    const remaining = Number(status.remainingSecs) || 0;
+    modalState.lockoutRemaining = remaining > 0 ? remaining : 0;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function stopLockoutTimer() {
+  if (modalState.lockoutTimerId) {
+    clearInterval(modalState.lockoutTimerId);
+    modalState.lockoutTimerId = null;
+  }
+}
+
+function startLockoutTimer() {
+  stopLockoutTimer();
+  modalState.lockoutTimerId = setInterval(() => {
+    if (modalState.lockoutRemaining > 0) {
+      modalState.lockoutRemaining -= 1;
+    }
+
+    const countdownEl = document.getElementById("pin-lockout-countdown");
+    if (countdownEl) {
+      countdownEl.textContent = String(Math.max(modalState.lockoutRemaining, 0));
+    }
+
+    if (modalState.lockoutRemaining <= 0) {
+      stopLockoutTimer();
+      renderPinModal();
+    }
+  }, 1000);
 }
 
 async function loadPinLength() {
@@ -184,6 +269,7 @@ function updatePinDisplay() {
 
 export function appendPinDigit(digit) {
   if (!modalState.visible) return;
+  if (modalState.permanentLock || modalState.lockoutRemaining > 0) return;
   if (modalState.input.length >= modalState.maxLength) return;
 
   modalState.input += String(digit);
@@ -211,6 +297,10 @@ export function clearPinInput() {
 export async function submitPin() {
   clearInlineMessage("pin-inline-message");
 
+  if (modalState.permanentLock || modalState.lockoutRemaining > 0) {
+    return;
+  }
+
   if (modalState.input.length !== modalState.maxLength) {
     setInlineMessage(
       "pin-inline-message",
@@ -227,7 +317,11 @@ export async function submitPin() {
       setInlineMessage("pin-inline-message", "PIN이 올바르지 않습니다.", "error");
       clearPinInput();
       modalState.digits = buildRandomDigits();
+      await refreshLockoutStatus();
       renderPinModal();
+      if (modalState.lockoutRemaining > 0) {
+        startLockoutTimer();
+      }
       return;
     }
 
@@ -242,9 +336,59 @@ export async function submitPin() {
     }
   } catch (error) {
     console.error(error);
+    const msg = error?.message || "PIN 확인 중 오류가 발생했습니다.";
+    setInlineMessage("pin-inline-message", msg, "error");
+    clearPinInput();
+    modalState.digits = buildRandomDigits();
+    await refreshLockoutStatus();
+    renderPinModal();
+    if (modalState.lockoutRemaining > 0) {
+      startLockoutTimer();
+    }
+  }
+}
+
+function confirmSecurityReset() {
+  const primary = window.confirm(
+    [
+      "[보안 설정 초기화]",
+      "",
+      "이 작업은 되돌릴 수 없습니다.",
+      "",
+      " - 저장된 SMTP 비밀번호, LLM API 키 등",
+      "   암호화된 모든 비밀값이 삭제됩니다.",
+      " - PIN 설정이 해제됩니다.",
+      " - QT 히스토리와 일반 설정(교회 정보 등)은 유지됩니다.",
+      "",
+      "계속 진행하시겠습니까?",
+    ].join("\n")
+  );
+  if (!primary) return false;
+
+  const confirmText = window.prompt(
+    '확인을 위해 "초기화" 를 정확히 입력해 주세요.'
+  );
+  return (confirmText || "").trim() === "초기화";
+}
+
+async function handleResetLockout() {
+  if (!confirmSecurityReset()) return;
+
+  try {
+    await ResetPinLockout(true);
+    window.alert(
+      "보안 설정이 초기화되었습니다.\n설정 화면에서 PIN을 다시 등록한 뒤 SMTP / LLM 정보를 재입력해 주세요."
+    );
+    const cancelHandler = modalState.onCancel;
+    closePinModal();
+    if (typeof cancelHandler === "function") {
+      await cancelHandler();
+    }
+  } catch (error) {
+    console.error(error);
     setInlineMessage(
       "pin-inline-message",
-      error?.message || "PIN 확인 중 오류가 발생했습니다.",
+      error?.message || "보안 설정 초기화 중 오류가 발생했습니다.",
       "error"
     );
   }
@@ -288,6 +432,20 @@ export function bindPinModalEvents() {
   if (submitBtn) {
     submitBtn.addEventListener("click", async () => {
       await submitPin();
+    });
+  }
+
+  const resetBtn = document.getElementById("pin-reset-btn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", async () => {
+      await handleResetLockout();
+    });
+  }
+
+  const forgotBtn = document.getElementById("pin-forgot-btn");
+  if (forgotBtn) {
+    forgotBtn.addEventListener("click", async () => {
+      await handleResetLockout();
     });
   }
 }

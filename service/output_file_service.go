@@ -38,7 +38,7 @@ func (s *OutputFileService) OpenGeneratedFile(filePath string) error {
 
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", path).Start()
+		return newHiddenCommand("cmd", "/c", "start", "", path).Start()
 	case "darwin":
 		return exec.Command("open", path).Start()
 	default:

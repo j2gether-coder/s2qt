@@ -5,12 +5,14 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -22,16 +24,29 @@ const (
 	defaultKDFName         = "pbkdf2-sha256"
 	defaultSaltSize        = 32
 	defaultKeySize         = 32 // AES-256
+
+	pinLockoutPermanent = 15
 )
 
+// PinLockoutStatus describes the current lockout state returned to UI.
+type PinLockoutStatus struct {
+	FailedCount     int   `json:"failedCount"`
+	LockedUntilUnix int64 `json:"lockedUntilUnix"`
+	RemainingSecs   int64 `json:"remainingSecs"`
+	Permanent       bool  `json:"permanent"`
+}
+
 type SecurityConfig struct {
-	Version    int    `json:"version"`
-	PinEnabled bool   `json:"pin_enabled"`
-	PinLength  int    `json:"pin_length"`
-	PinHash    string `json:"pin_hash"`
-	Salt       string `json:"salt"`
-	KDF        string `json:"kdf"`
-	Iterations int    `json:"iterations"`
+	Version         int    `json:"version"`
+	PinEnabled      bool   `json:"pin_enabled"`
+	PinLength       int    `json:"pin_length"`
+	PinHash         string `json:"pin_hash"`
+	Salt            string `json:"salt"`
+	KDF             string `json:"kdf"`
+	Iterations      int    `json:"iterations"`
+	FailedCount     int    `json:"failed_count"`
+	LockedUntilUnix int64  `json:"locked_until_unix"`
+	PermanentLock   bool   `json:"permanent_lock"`
 }
 
 type CryptoService struct {
@@ -108,6 +123,9 @@ func (s *CryptoService) SetupPin(pin string) error {
 	s.config.PinEnabled = true
 	s.config.PinHash = hash
 	s.config.Salt = base64.StdEncoding.EncodeToString(salt)
+	s.config.FailedCount = 0
+	s.config.LockedUntilUnix = 0
+	s.config.PermanentLock = false
 
 	return s.saveConfig()
 }
@@ -134,6 +152,16 @@ func (s *CryptoService) VerifyPin(pin string) (bool, error) {
 		return false, fmt.Errorf("pin is not enabled")
 	}
 
+	if s.config.PermanentLock {
+		return false, fmt.Errorf("PIN이 영구 잠금 상태입니다. 보안 설정 초기화가 필요합니다")
+	}
+
+	now := time.Now().Unix()
+	if s.config.LockedUntilUnix > now {
+		remain := s.config.LockedUntilUnix - now
+		return false, fmt.Errorf("PIN 잠금 상태입니다. %d초 후 다시 시도해 주세요", remain)
+	}
+
 	if err := s.validatePinFormat(pin); err != nil {
 		return false, err
 	}
@@ -148,7 +176,87 @@ func (s *CryptoService) VerifyPin(pin string) (bool, error) {
 		return false, err
 	}
 
-	return hash == s.config.PinHash, nil
+	matched := subtle.ConstantTimeCompare([]byte(hash), []byte(s.config.PinHash)) == 1
+
+	if matched {
+		if s.config.FailedCount != 0 || s.config.LockedUntilUnix != 0 {
+			s.config.FailedCount = 0
+			s.config.LockedUntilUnix = 0
+			_ = s.saveConfig()
+		}
+		return true, nil
+	}
+
+	if err := s.registerFailedAttempt(); err != nil {
+		return false, err
+	}
+
+	if s.config.PermanentLock {
+		return false, fmt.Errorf("PIN 실패 횟수가 초과되어 영구 잠금되었습니다. 보안 설정 초기화가 필요합니다")
+	}
+	if s.config.LockedUntilUnix > time.Now().Unix() {
+		remain := s.config.LockedUntilUnix - time.Now().Unix()
+		return false, fmt.Errorf("PIN 잠금이 적용되었습니다. %d초 후 다시 시도해 주세요", remain)
+	}
+	return false, nil
+}
+
+// registerFailedAttempt increments failure counter and applies staged lockout.
+//
+//	5회: 30초, 7회: 5분, 10회: 30분, 15회: 영구 잠금
+func (s *CryptoService) registerFailedAttempt() error {
+	s.config.FailedCount++
+
+	var delaySec int64
+	switch {
+	case s.config.FailedCount >= pinLockoutPermanent:
+		s.config.PermanentLock = true
+	case s.config.FailedCount >= 10:
+		delaySec = 30 * 60
+	case s.config.FailedCount >= 7:
+		delaySec = 5 * 60
+	case s.config.FailedCount >= 5:
+		delaySec = 30
+	}
+
+	if delaySec > 0 {
+		s.config.LockedUntilUnix = time.Now().Unix() + delaySec
+	}
+
+	return s.saveConfig()
+}
+
+// GetPinLockoutStatus exposes the current lockout state for the UI.
+func (s *CryptoService) GetPinLockoutStatus() PinLockoutStatus {
+	if s == nil || s.config == nil {
+		return PinLockoutStatus{}
+	}
+	status := PinLockoutStatus{
+		FailedCount:     s.config.FailedCount,
+		LockedUntilUnix: s.config.LockedUntilUnix,
+		Permanent:       s.config.PermanentLock,
+	}
+	now := time.Now().Unix()
+	if s.config.LockedUntilUnix > now {
+		status.RemainingSecs = s.config.LockedUntilUnix - now
+	}
+	return status
+}
+
+// ResetPinLockout clears the PIN security file and returns a list of secret
+// setting keys that must be wiped by the caller (SMTP/LLM passwords become
+// undecryptable once the PIN is removed).
+func (s *CryptoService) ResetPinLockout() error {
+	if s == nil || s.config == nil {
+		return fmt.Errorf("crypto service is not initialized")
+	}
+	s.config.PinEnabled = false
+	s.config.PinHash = ""
+	s.config.Salt = ""
+	s.config.FailedCount = 0
+	s.config.LockedUntilUnix = 0
+	s.config.PermanentLock = false
+	return s.saveConfig()
 }
 
 func (s *CryptoService) ClearPin() error {
@@ -159,6 +267,9 @@ func (s *CryptoService) ClearPin() error {
 	s.config.PinEnabled = false
 	s.config.PinHash = ""
 	s.config.Salt = ""
+	s.config.FailedCount = 0
+	s.config.LockedUntilUnix = 0
+	s.config.PermanentLock = false
 	return s.saveConfig()
 }
 
@@ -263,7 +374,7 @@ func (s *CryptoService) saveConfig() error {
 		return fmt.Errorf("failed to marshal security config: %w", err)
 	}
 
-	if err := os.WriteFile(s.securityFile, b, 0o644); err != nil {
+	if err := os.WriteFile(s.securityFile, b, 0o600); err != nil {
 		return fmt.Errorf("failed to write security file: %w", err)
 	}
 

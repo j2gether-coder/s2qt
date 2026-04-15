@@ -5,6 +5,8 @@ import {
   GetPinLength,
   SetupPin,
   ChangePin,
+  SelectImageFile,
+  LoadImageAsDataURI,
 } from "../../../wailsjs/go/main/App";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 
@@ -426,17 +428,17 @@ function renderChurchCard() {
       </div>
 
       <div class="form-field topgap-sm">
-        <label class="form-label">로고 경로</label>
-        <div class="inline-action-row logo-row">
-          <input
-            type="text"
-            id="church-logo-path-input"
-            class="input"
-            value="${escapeHtml(basicSettingsState.logoPath)}"
-            placeholder="로고 파일 경로를 입력해 주세요."
-          />
+        <label class="form-label">로고 파일</label>
+        <div class="half-action-row">
           <button type="button" class="button-ghost" id="select-logo-btn">파일 탐색기</button>
           <button type="button" class="button-ghost" id="preview-logo-btn">로고 미리 보기</button>
+        </div>
+        <div class="field-help-text">
+          ${
+            basicSettingsState.logoPath
+              ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
+              : "파일 탐색기에서 로고 파일을 선택해 주세요."
+          }
         </div>
       </div>
 
@@ -445,7 +447,7 @@ function renderChurchCard() {
         <textarea
           id="church-footer-text-input"
           class="input"
-          rows="5"
+          rows="4"
           placeholder="문서 하단 공통 문구를 입력해 주세요."
         >${escapeHtml(basicSettingsState.footerText)}</textarea>
         <div class="field-help-text">
@@ -742,29 +744,94 @@ async function handleSavePinProgress() {
   }
 }
 
-function handleSelectLogo() {
+async function handleSelectLogo() {
   clearInlineMessage(BASIC_MESSAGE_ID);
-  setInlineMessage(
-    BASIC_MESSAGE_ID,
-    "파일 탐색기 기능은 다음 단계에서 연결합니다.",
-    "info"
-  );
+  try {
+    const path = await SelectImageFile();
+    if (!path) {
+      return;
+    }
+    basicSettingsState.logoPath = path;
+    rerenderBasicTab();
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(
+      BASIC_MESSAGE_ID,
+      error?.message || "파일 선택 중 오류가 발생했습니다.",
+      "error"
+    );
+  }
 }
 
-function handlePreviewLogo() {
+async function handlePreviewLogo() {
   clearInlineMessage(BASIC_MESSAGE_ID);
 
-  const logoPath = document.getElementById("church-logo-path-input")?.value || "";
-  if (!logoPath.trim()) {
-    setInlineMessage(BASIC_MESSAGE_ID, "로고 경로를 입력해 주세요.", "warning");
+  const logoPath = safeValue(basicSettingsState.logoPath).trim();
+  if (!logoPath) {
+    setInlineMessage(BASIC_MESSAGE_ID, "먼저 파일 탐색기에서 로고 파일을 선택해 주세요.", "warning");
     return;
   }
 
-  setInlineMessage(
-    BASIC_MESSAGE_ID,
-    "로고 미리 보기 기능은 다음 단계에서 연결합니다.",
-    "info"
-  );
+  try {
+    const dataURI = await LoadImageAsDataURI(logoPath);
+    openLogoPreviewModal(dataURI, logoPath);
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(
+      BASIC_MESSAGE_ID,
+      error?.message || "이미지 파일을 불러오지 못했습니다.",
+      "error"
+    );
+  }
+}
+
+function openLogoPreviewModal(dataURI, captionPath) {
+  closeLogoPreviewModal();
+
+  const overlay = document.createElement("div");
+  overlay.id = "logo-preview-overlay";
+  overlay.className = "logo-preview-overlay";
+  overlay.innerHTML = `
+    <div class="logo-preview-panel" role="dialog" aria-label="로고 미리 보기">
+      <div class="logo-preview-header">
+        <div class="logo-preview-title">로고 미리 보기</div>
+        <button type="button" class="button-ghost" id="logo-preview-close">닫기</button>
+      </div>
+      <div class="logo-preview-body">
+        <img src="${escapeHtml(dataURI)}" alt="로고 미리 보기" />
+      </div>
+      <div class="logo-preview-caption">${escapeHtml(captionPath)}</div>
+    </div>
+  `;
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) {
+      closeLogoPreviewModal();
+    }
+  });
+
+  document.body.appendChild(overlay);
+
+  const closeBtn = document.getElementById("logo-preview-close");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeLogoPreviewModal);
+  }
+
+  document.addEventListener("keydown", handleLogoPreviewKey);
+}
+
+function closeLogoPreviewModal() {
+  const overlay = document.getElementById("logo-preview-overlay");
+  if (overlay) {
+    overlay.remove();
+  }
+  document.removeEventListener("keydown", handleLogoPreviewKey);
+}
+
+function handleLogoPreviewKey(event) {
+  if (event.key === "Escape") {
+    closeLogoPreviewModal();
+  }
 }
 
 async function handleSaveChurchSettings() {
@@ -791,7 +858,7 @@ async function handleSaveChurchSettings() {
       },
       {
         key: "church.logo_path",
-        value: document.getElementById("church-logo-path-input")?.value || "",
+        value: basicSettingsState.logoPath || "",
         valueType: "text",
         isSecret: false,
         group: "church",
@@ -815,7 +882,6 @@ async function handleSaveChurchSettings() {
     await SaveAppSettings(items);
 
     basicSettingsState.churchName = document.getElementById("church-name-input")?.value || "";
-    basicSettingsState.logoPath = document.getElementById("church-logo-path-input")?.value || "";
     basicSettingsState.homepageUrl = homepageUrl.trim();
     basicSettingsState.footerText = document.getElementById("church-footer-text-input")?.value || "";
 
