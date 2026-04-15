@@ -405,14 +405,17 @@ function renderChurchCard() {
 
       <div class="form-grid two-column-grid topgap-sm">
         <div class="form-field">
-          <label class="form-label">교회명 또는 브랜드명</label>
+          <label class="form-label">교단명, 교회명 또는 브랜드명</label>
           <input
             type="text"
             id="church-name-input"
             class="input"
             value="${escapeHtml(basicSettingsState.churchName)}"
-            placeholder="교회/브랜드명을 입력해 주세요."
+            placeholder="교단, 교회명/브랜드명을 입력하세요."
           />
+          <div class="field-help-text">
+            쉼표(,)로 구분하여 입력하세요.
+          </div>
         </div>
 
         <div class="form-field">
@@ -446,12 +449,12 @@ function renderChurchCard() {
         <label class="form-label">기본 하단 문구</label>
         <textarea
           id="church-footer-text-input"
-          class="input"
-          rows="4"
+          class="textarea-2rows"
+          rows="2"
           placeholder="문서 하단 공통 문구를 입력해 주세요."
         >${escapeHtml(basicSettingsState.footerText)}</textarea>
         <div class="field-help-text">
-          권장: 1~2줄, 60자 내외
+          권장: 1~2줄, 60자 내외 (예: 말씀을 묵상으로, 묵상을 삶으로)
         </div>
       </div>
 

@@ -387,6 +387,14 @@ textarea {
   line-height: 1.55;
 }
 
+input::placeholder,
+textarea::placeholder {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a8f98;
+  opacity: 1;
+}
+
 .completion-guide {
   margin-top: 14px;
   padding: 10px 12px;
@@ -1489,6 +1497,15 @@ textarea.input {
   margin-bottom: 6px;
 }
 
+.textarea-2rows {
+  width: 100%;
+  min-height: auto;
+  height: auto;
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
 /* =========================
    17. History
 ========================= */
@@ -1579,6 +1596,18 @@ textarea.input {
 .history-count-text {
   font-weight: 400;
   color: #6b7280;
+}
+
+select {
+  font-size: 13px;
+  font-weight: 400;
+  color: #444;
+}
+
+select option {
+  font-size: 13px;
+  font-weight: 400;
+  color: #444;
 }
 
 /* =========================
