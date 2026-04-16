@@ -1506,6 +1506,34 @@ textarea.input {
   resize: vertical;
 }
 
+.label-inline-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.checkbox-label-compact{
+  font-size:13px;
+  line-height:1.4;
+}
+
+.topgap-xs{
+  margin-top:4px;
+}
+
+.settings-guide-list{
+  margin: 6px 0 0 18px;
+  padding: 0;
+  color: var(--text-muted, #666);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-guide-list li{
+  margin: 2px 0;
+}
 /* =========================
    17. History
 ========================= */

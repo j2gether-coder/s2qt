@@ -406,6 +406,12 @@ function renderChurchCard() {
       <h3 class="mini-title">교회/브랜드 설정</h3>
       <p class="body-note topgap-sm">문서에 사용할 기본 정보를 설정합니다.</p>
 
+      <ul class="settings-guide-list topgap-xs">
+        <li>교회명은 "교단명, 교회명" 형식으로 입력하는 것을 권장합니다.</li>
+        <li>로고는 밝은 배경에서도 글자와 심볼이 잘 보이는 이미지를 권장합니다.</li>
+        <li>흰색 또는 매우 연한 색의 글자가 포함된 로고는 문서의 꼬리말에서 잘 보이지 않을 수 있습니다.</li>
+      </ul>
+
       <div class="form-grid two-column-grid topgap-sm">
         <div class="form-field">
           <label class="form-label">교단명, 교회명 또는 브랜드명</label>
@@ -414,11 +420,8 @@ function renderChurchCard() {
             id="church-name-input"
             class="input"
             value="${escapeHtml(basicSettingsState.churchName)}"
-            placeholder="교단, 교회명/브랜드명을 입력하세요."
+            placeholder="예: 대한OOO, OO교회"
           />
-          <div class="field-help-text">
-            교회명은 "교단명, 교회명" 형식으로 입력하는 것을 권장합니다.
-          </div>
         </div>
 
         <div class="form-field">
@@ -434,32 +437,30 @@ function renderChurchCard() {
       </div>
 
       <div class="form-field topgap-sm">
-        <label class="form-label">로고 파일</label>
-        <div class="half-action-row">
-          <button type="button" class="button-ghost" id="select-logo-btn">파일 탐색기</button>
-          <button type="button" class="button-ghost" id="preview-logo-btn">로고 미리 보기</button>
-        </div>
+        <div class="label-inline-row">
+          <label class="form-label">로고 파일</label>
 
-        <div class="form-check topgap-sm">
-          <label class="checkbox-label">
+          <label class="checkbox-label checkbox-label-compact">
             <input
               type="checkbox"
               id="church-brand-image-included-check"
               ${basicSettingsState.brandImageIncluded ? "checked" : ""}
             />
-            <span>로고 이미지에 교회명 또는 브랜드명이 함께 포함되어 있으면 체크하세요.</span>
+            <span>로고 이미지에 교회명 또는 브랜드명이 함께 있으면 체크하세요.</span>
           </label>
         </div>
 
-        <div class="field-help-text">
+        <div class="half-action-row">
+          <button type="button" class="button-ghost" id="select-logo-btn">파일 탐색기</button>
+          <button type="button" class="button-ghost" id="preview-logo-btn">로고 미리 보기</button>
+        </div>
+
+        <div class="field-help-text topgap-sm">
           ${
             basicSettingsState.logoPath
-            ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
-            : "밝은 배경에서도 글자와 심볼이 잘 보이는 로고를 권장합니다."
+              ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
+              : "선택된 파일이 없습니다."
           }
-        </div>
-        <div class="field-help-text">
-          흰색 또는 매우 연한 색의 글자가 포함된 로고는 산출물 하단에서 잘 보이지 않을 수 있습니다.
         </div>
       </div>
 
@@ -821,7 +822,7 @@ function openLogoPreviewModal(dataURI, captionPath) {
       <div class="logo-preview-body">
         <img src="${escapeHtml(dataURI)}" alt="로고 미리 보기" />
       </div>
-      <div class="field-help-text">흰색 배경에서도 글자와 심볼이 분명하게 보이는 로고를 사용하는 것을 권장합니다.</div>
+      <div class="field-help-text">흰색 배경에서도 글자와 심볼이 분명하게 보이는 로고를 권장합니다.</div>
       <div class="logo-preview-caption">${escapeHtml(captionPath)}</div>
     </div>
   `;
