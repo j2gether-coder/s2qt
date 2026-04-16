@@ -455,7 +455,7 @@ function renderChurchCard() {
           ${
             basicSettingsState.logoPath
             ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
-            : "파일 탐색기에서 로고 파일을 선택해 주세요."
+            : "[Tip] 파일 탐색기에서 로고 파일을 선택하실 때 로고의 글자색이 흰색 계열이 아닌 로고를 선택하세요."
           }
         </div>
       </div>
@@ -818,6 +818,7 @@ function openLogoPreviewModal(dataURI, captionPath) {
       <div class="logo-preview-body">
         <img src="${escapeHtml(dataURI)}" alt="로고 미리 보기" />
       </div>
+      <div class="field-help-text">로고의 글자색이 아닌 로고로 이용하세요.</div>
       <div class="logo-preview-caption">${escapeHtml(captionPath)}</div>
     </div>
   `;
