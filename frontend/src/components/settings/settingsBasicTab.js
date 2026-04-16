@@ -459,7 +459,7 @@ function renderChurchCard() {
           }
         </div>
         <div class="field-help-text">
-          흰색 또는 매우 연한 색의 글자가 포함된 로고는 footer에서 잘 보이지 않을 수 있습니다.
+          흰색 또는 매우 연한 색의 글자가 포함된 로고는 산출물 하단에서 잘 보이지 않을 수 있습니다.
         </div>
       </div>
 
