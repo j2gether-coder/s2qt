@@ -417,7 +417,7 @@ function renderChurchCard() {
             placeholder="교단, 교회명/브랜드명을 입력하세요."
           />
           <div class="field-help-text">
-            쉼표(,)로 구분하여 입력하세요.
+            교회명은 "교단명, 교회명" 형식으로 입력하는 것을 권장합니다.
           </div>
         </div>
 
@@ -447,7 +447,7 @@ function renderChurchCard() {
               id="church-brand-image-included-check"
               ${basicSettingsState.brandImageIncluded ? "checked" : ""}
             />
-            <span>로고에 교회명/브랜드 이름이 포함되어 있으면 체크하세요.</span>
+            <span>로고 이미지에 교회명 또는 브랜드명이 함께 포함되어 있으면 체크하세요.</span>
           </label>
         </div>
 
@@ -455,8 +455,11 @@ function renderChurchCard() {
           ${
             basicSettingsState.logoPath
             ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
-            : "[Tip] 파일 탐색기에서 로고 파일을 선택하실 때 로고의 글자색이 흰색 계열이 아닌 로고를 선택하세요."
+            : "밝은 배경에서도 글자와 심볼이 잘 보이는 로고를 권장합니다."
           }
+        </div>
+        <div class="field-help-text">
+          흰색 또는 매우 연한 색의 글자가 포함된 로고는 footer에서 잘 보이지 않을 수 있습니다.
         </div>
       </div>
 
@@ -818,7 +821,7 @@ function openLogoPreviewModal(dataURI, captionPath) {
       <div class="logo-preview-body">
         <img src="${escapeHtml(dataURI)}" alt="로고 미리 보기" />
       </div>
-      <div class="field-help-text">로고의 글자색이 희색 계열이 아닌 로고로 이용하세요.</div>
+      <div class="field-help-text">흰색 배경에서도 글자와 심볼이 분명하게 보이는 로고를 사용하는 것을 권장합니다.</div>
       <div class="logo-preview-caption">${escapeHtml(captionPath)}</div>
     </div>
   `;
