@@ -74,7 +74,7 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		return nil, fmt.Errorf("html 파일을 찾을 수 없습니다: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(pngPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(pngPath), 0o755); err != nil {
 		return nil, fmt.Errorf("출력 폴더 생성 실패: %w", err)
 	}
 
@@ -133,7 +133,7 @@ func (s *PNGService) buildPNGSourceFromHTMLFile(htmlPath string, footerOverride 
 		return "", err
 	}
 
-	if err := os.WriteFile(sourcePath, []byte(sourceHTML), 0644); err != nil {
+	if err := os.WriteFile(sourcePath, []byte(sourceHTML), 0o644); err != nil {
 		return "", fmt.Errorf("png source html 저장 실패: %w", err)
 	}
 
@@ -148,14 +148,22 @@ func buildPNGSourcePath(tempHTMLPath string) string {
 func (s *PNGService) wrapHTMLForPNG(content string, footerOverride *QTFooterConfig) (string, error) {
 	pngStyle := loadQTPNGStyle()
 	cleaned := normalizeHTMLFragment(content)
+
 	qrSvc, err := NewQRService()
 	if err != nil {
 		return "", err
 	}
-	resolvedFooter, err := qrSvc.PrepareFooterAssets(QTFooterModeDefault, footerOverride)
+
+	mode := QTFooterModeDefault
+	if footerOverride != nil && footerOverride.Mode != "" {
+		mode = footerOverride.Mode
+	}
+
+	resolvedFooter, err := qrSvc.PrepareFooterAssets(mode, footerOverride)
 	if err != nil {
 		return "", err
 	}
+
 	layoutBody := buildQTFixedPageLayout(cleaned, resolvedFooter)
 	pngStyle = mergeQTFooterRuntimeStyle(pngStyle, resolvedFooter)
 

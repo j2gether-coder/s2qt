@@ -44,6 +44,7 @@ let basicSettingsState = {
   logoPath: "",
   homepageUrl: "",
   footerText: "",
+  brandImageIncluded: false,
 };
 
 function safeValue(value) {
@@ -195,6 +196,8 @@ async function loadBasicSettings() {
     logoPath: safeValue(churchMap.get("church.logo_path")?.value || ""),
     homepageUrl: safeValue(churchMap.get("church.homepage_url")?.value || ""),
     footerText: safeValue(churchMap.get("church.default_footer_text")?.value || ""),
+    brandImageIncluded:
+      safeValue(churchMap.get("church.logo_with_name")?.value || "").toUpperCase() === "Y",
   };
 }
 
@@ -436,11 +439,23 @@ function renderChurchCard() {
           <button type="button" class="button-ghost" id="select-logo-btn">파일 탐색기</button>
           <button type="button" class="button-ghost" id="preview-logo-btn">로고 미리 보기</button>
         </div>
+
+        <div class="form-check topgap-sm">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              id="church-brand-image-included-check"
+              ${basicSettingsState.brandImageIncluded ? "checked" : ""}
+            />
+            <span>로고에 교회명/브랜드 이름이 포함되어 있으면 체크하세요.</span>
+          </label>
+        </div>
+
         <div class="field-help-text">
           ${
             basicSettingsState.logoPath
-              ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
-              : "파일 탐색기에서 로고 파일을 선택해 주세요."
+            ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
+            : "파일 탐색기에서 로고 파일을 선택해 주세요."
           }
         </div>
       </div>
@@ -880,6 +895,13 @@ async function handleSaveChurchSettings() {
         isSecret: false,
         group: "church",
       },
+      {
+        key: "church.logo_with_name",
+        value: document.getElementById("church-brand-image-included-check")?.checked ? "Y" : "N",
+        valueType: "text",
+        isSecret: false,
+        group: "church",
+      },
     ];
 
     await SaveAppSettings(items);
@@ -887,6 +909,8 @@ async function handleSaveChurchSettings() {
     basicSettingsState.churchName = document.getElementById("church-name-input")?.value || "";
     basicSettingsState.homepageUrl = homepageUrl.trim();
     basicSettingsState.footerText = document.getElementById("church-footer-text-input")?.value || "";
+    basicSettingsState.brandImageIncluded = 
+      !!document.getElementById("church-brand-image-included-check")?.checked;
 
     showToast("교회/브랜드 설정이 저장되었습니다.", "success");
   } catch (error) {

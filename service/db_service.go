@@ -137,8 +137,14 @@ func EnsureSettingsDefaults(db *sql.DB) error {
 		{"smtp.password", "", "password", 1, "smtp"},
 		{"smtp.security", "tls", "text", 0, "smtp"},
 
+		// church footer / brand settings
+		// church.name:
+		// - 교단 + 교회명 조합
+		// - 또는 브랜드명
+		// - 즉 하나의 명칭 필드로 사용
 		{"church.name", "", "text", 0, "church"},
 		{"church.logo_path", "", "text", 0, "church"},
+		{"church.brand_image_included", "false", "boolean", 0, "church"},
 		{"church.homepage_url", "", "url", 0, "church"},
 		{"church.default_footer_text", "", "multiline", 0, "church"},
 

@@ -40,11 +40,12 @@ type QTFooterConfig struct {
 	ShowDivider bool         `json:"show_divider"`
 	ShowQR      bool         `json:"show_qr"`
 
-	FooterText  string `json:"footer_text,omitempty"`
-	ChurchName  string `json:"church_name,omitempty"`
-	LogoPath    string `json:"logo_path,omitempty"`
-	HomepageURL string `json:"homepage_url,omitempty"`
-	QRImagePath string `json:"qr_image_path,omitempty"`
+	FooterText     string `json:"footer_text,omitempty"`
+	ChurchName     string `json:"church_name,omitempty"`
+	LogoPath       string `json:"logo_path,omitempty"`
+	BrandImagePath string `json:"brand_image_path,omitempty"`
+	HomepageURL    string `json:"homepage_url,omitempty"`
+	QRImagePath    string `json:"qr_image_path,omitempty"`
 
 	QRPosition string  `json:"qr_position,omitempty"`
 	QRSizeMM   float64 `json:"qr_size_mm,omitempty"`
@@ -220,6 +221,9 @@ func mergeQTFooterConfig(base, override QTFooterConfig) QTFooterConfig {
 	if strings.TrimSpace(override.LogoPath) != "" {
 		base.LogoPath = override.LogoPath
 	}
+	if strings.TrimSpace(override.BrandImagePath) != "" {
+		base.BrandImagePath = override.BrandImagePath
+	}
 	if strings.TrimSpace(override.HomepageURL) != "" {
 		base.HomepageURL = override.HomepageURL
 	}
@@ -269,17 +273,33 @@ func normalizeResolvedFooterConfig(cfg QTFooterConfig) QTFooterConfig {
 	if cfg.Mode == "" {
 		cfg.Mode = QTFooterModeDefault
 	}
-	if !cfg.ShowFooter && !cfg.ShowQR && strings.TrimSpace(cfg.FooterText) == "" && strings.TrimSpace(cfg.HomepageURL) == "" {
-		cfg.ShowFooter = true
-		cfg.ShowDivider = true
-		cfg.ShowQR = true
-	}
 	if cfg.QRPosition == "" {
 		cfg.QRPosition = "right-bottom"
 	}
 	if cfg.QRSizeMM <= 0 {
 		cfg.QRSizeMM = 27.0
 	}
+
+	cfg.FooterText = strings.TrimSpace(cfg.FooterText)
+	cfg.ChurchName = strings.TrimSpace(cfg.ChurchName)
+	cfg.LogoPath = strings.TrimSpace(cfg.LogoPath)
+	cfg.BrandImagePath = strings.TrimSpace(cfg.BrandImagePath)
+	cfg.HomepageURL = strings.TrimSpace(cfg.HomepageURL)
+	cfg.QRImagePath = strings.TrimSpace(cfg.QRImagePath)
+
+	if cfg.HomepageURL == "" {
+		cfg.ShowQR = false
+		cfg.QRImagePath = ""
+	}
+
+	if !cfg.ShowFooter && cfg.FooterText == "" && cfg.ChurchName == "" && cfg.LogoPath == "" && cfg.BrandImagePath == "" {
+		cfg.ShowFooter = true
+		cfg.ShowDivider = true
+		if cfg.FooterText == "" {
+			cfg.FooterText = "말씀을 묵상으로, 묵상을 삶으로"
+		}
+	}
+
 	if cfg.SafeAreaMM <= 0 {
 		cfg.SafeAreaMM = resolveFooterSafeAreaMM(cfg)
 	}
@@ -290,7 +310,7 @@ func resolveFooterSafeAreaMM(cfg QTFooterConfig) float64 {
 	if cfg.SafeAreaMM > 0 {
 		return cfg.SafeAreaMM
 	}
-	if cfg.ShowQR && strings.TrimSpace(cfg.LogoPath) != "" {
+	if cfg.ShowQR && (strings.TrimSpace(cfg.BrandImagePath) != "" || strings.TrimSpace(cfg.LogoPath) != "") {
 		return 40.0
 	}
 	if cfg.ShowQR {
@@ -326,10 +346,12 @@ func encodeImageAsDataURI(path string) string {
 	if strings.TrimSpace(path) == "" {
 		return ""
 	}
+
 	b, err := os.ReadFile(path)
 	if err != nil || len(b) == 0 {
 		return ""
 	}
+
 	ext := strings.ToLower(filepath.Ext(path))
 	mime := "image/png"
 	if ext == ".jpg" || ext == ".jpeg" {
@@ -337,6 +359,7 @@ func encodeImageAsDataURI(path string) string {
 	} else if ext == ".webp" {
 		mime = "image/webp"
 	}
+
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(b)
 }
 
@@ -385,7 +408,7 @@ func (s *QRService) WriteQRCode(text, outPath string, opts *QRRenderOptions) (*Q
 		return nil, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return nil, fmt.Errorf("QR 출력 폴더 생성 실패: %w", err)
 	}
 
@@ -414,12 +437,21 @@ func (s *QRService) WriteDefaultS2QTLinkQRCode() (*QRGenerateResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	text := normalizeURLIfNeeded(firstNonEmpty(cfg.HomepageURL, "https://s2qt.example.com"))
-	return s.WriteQRCode(text, cfg.QRImagePath, &fileCfg.QRDefaults)
+
+	qrText := strings.TrimSpace(cfg.HomepageURL)
+	if qrText == "" {
+		qrText = "https://s2gt.blogspot.com/"
+	}
+
+	return s.WriteQRCode(normalizeURLIfNeeded(qrText), cfg.QRImagePath, &fileCfg.QRDefaults)
 }
 
 func (s *QRService) WriteChurchURLQRCode(churchURL, outPath string, opts *QRRenderOptions) (*QRGenerateResult, error) {
 	churchURL = normalizeURLIfNeeded(churchURL)
+	if strings.TrimSpace(churchURL) == "" {
+		return nil, fmt.Errorf("교회 홈페이지 URL이 비어 있습니다")
+	}
+
 	if strings.TrimSpace(outPath) == "" {
 		cfg, _, err := resolveFooterConfig(QTFooterModeSubscriber, nil)
 		if err != nil {
@@ -427,6 +459,7 @@ func (s *QRService) WriteChurchURLQRCode(churchURL, outPath string, opts *QRRend
 		}
 		outPath = cfg.QRImagePath
 	}
+
 	return s.WriteQRCode(churchURL, outPath, opts)
 }
 
@@ -436,12 +469,20 @@ func (s *QRService) PrepareFooterAssets(mode QTFooterMode, override *QTFooterCon
 		return nil, err
 	}
 
+	resolved.LogoPath = resolveFooterImagePath(resolved.LogoPath)
+	resolved.BrandImagePath = resolveFooterImagePath(resolved.BrandImagePath)
+	resolved.QRImagePath = resolveFooterImagePath(resolved.QRImagePath)
+
 	if resolved.ShowQR {
 		qrText := strings.TrimSpace(resolved.HomepageURL)
 		if qrText == "" && resolved.Mode == QTFooterModeDefault {
-			qrText = "https://s2qt.example.com"
+			qrText = "https://s2gt.blogspot.com/"
 		}
-		if qrText != "" {
+
+		if qrText == "" {
+			resolved.ShowQR = false
+			resolved.QRImagePath = ""
+		} else {
 			result, err := s.WriteQRCode(normalizeURLIfNeeded(qrText), resolved.QRImagePath, &fileCfg.QRDefaults)
 			if err != nil {
 				return nil, err
@@ -450,8 +491,6 @@ func (s *QRService) PrepareFooterAssets(mode QTFooterMode, override *QTFooterCon
 		}
 	}
 
-	resolved.LogoPath = resolveFooterImagePath(resolved.LogoPath)
-	resolved.QRImagePath = resolveFooterImagePath(resolved.QRImagePath)
 	resolved.SafeAreaMM = resolveFooterSafeAreaMM(*resolved)
 	return resolved, nil
 }
@@ -622,6 +661,7 @@ func normalizeURLIfNeeded(s string) string {
 	if s == "" {
 		return s
 	}
+
 	lower := strings.ToLower(s)
 	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
 		return s

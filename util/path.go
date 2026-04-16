@@ -19,6 +19,12 @@ type AppPaths struct {
 	Model        string
 	Log          string
 	EventLogFile string
+	Image        string
+
+	ChurchLogoFile  string
+	ChurchBrandFile string
+	ChurchQRFile    string
+	DefaultQRFile   string
 
 	// executables in bin
 	YtDlpExe   string
@@ -60,6 +66,7 @@ func GetAppPaths() (*AppPaths, error) {
 	dbDir := filepath.Join(varDir, "db")
 	docDir := filepath.Join(varDir, "doc")
 	logDir := filepath.Join(varDir, "log")
+	imageDir := filepath.Join(varDir, "image")
 
 	p := &AppPaths{
 		Root:  root,
@@ -72,6 +79,7 @@ func GetAppPaths() (*AppPaths, error) {
 		DB:    dbDir,
 		Log:   logDir,
 		Model: modelDir,
+		Image: imageDir,
 
 		YtDlpExe:   filepath.Join(binDir, "yt-dlp.exe"),
 		FfmpegExe:  filepath.Join(binDir, "ffmpeg.exe"),
@@ -93,6 +101,11 @@ func GetAppPaths() (*AppPaths, error) {
 		TempDocx:  filepath.Join(tempDir, "temp.docx"),
 		TempPptx:  filepath.Join(tempDir, "temp.pptx"),
 		TempPng:   filepath.Join(tempDir, "temp.png"),
+
+		ChurchLogoFile:  filepath.Join(imageDir, "church_logo.png"),
+		ChurchBrandFile: filepath.Join(imageDir, "church_brand.png"),
+		ChurchQRFile:    filepath.Join(imageDir, "church_qr.png"),
+		DefaultQRFile:   filepath.Join(imageDir, "s2qt_link.png"),
 	}
 
 	return p, EnsureDirs(p)
@@ -176,6 +189,7 @@ func EnsureDirs(p *AppPaths) error {
 		p.DB,
 		p.Model,
 		p.Log,
+		p.Image,
 	}
 
 	for _, d := range dirs {

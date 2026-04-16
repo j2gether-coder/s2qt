@@ -104,7 +104,12 @@ func (s *QTStep3Service) makePDF() error {
 		return fmt.Errorf("temp.html 읽기 실패: %w", err)
 	}
 
-	_, err = pdfSvc.SaveHtmlAndMakePDF(string(b))
+	footerCfg, err := s.buildFooterConfig()
+	if err != nil {
+		return err
+	}
+
+	_, err = pdfSvc.SaveHtmlAndMakePDFWithFooter(string(b), footerCfg)
 	return err
 }
 
@@ -114,6 +119,30 @@ func (s *QTStep3Service) makePNG(dpi int) error {
 		return err
 	}
 
-	_, err = pngSvc.GenerateFromTempHTML(dpi)
+	footerCfg, err := s.buildFooterConfig()
+	if err != nil {
+		return err
+	}
+
+	_, err = pngSvc.GenerateFromTempHTMLWithFooter(dpi, footerCfg)
 	return err
+}
+
+func (s *QTStep3Service) buildFooterConfig() (*QTFooterConfig, error) {
+	db, err := OpenSQLite(s.Paths.DBFile)
+	if err != nil {
+		return nil, fmt.Errorf("step3 db open 실패: %w", err)
+	}
+
+	footerSvc, err := NewFooterService(db)
+	if err != nil {
+		return nil, fmt.Errorf("footer service 생성 실패: %w", err)
+	}
+
+	cfg, err := footerSvc.PrepareFooterConfigFromDB(QTFooterModeSubscriber)
+	if err != nil {
+		return nil, fmt.Errorf("footer config 준비 실패: %w", err)
+	}
+
+	return cfg, nil
 }

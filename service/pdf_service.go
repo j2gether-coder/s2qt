@@ -162,6 +162,15 @@ body{
   flex: 0 0 auto !important;
 }
 
+.qt-footer-brand-image{
+  max-width: 58mm !important;
+  max-height: 8mm !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
 .qt-footer-church{
   font-size: 10px !important;
   font-weight: 700 !important;
@@ -470,8 +479,6 @@ func NewPDFService() (*PDFService, error) {
 	}, nil
 }
 
-// SaveHtmlAndMakePDF는 Step3의 최종 HTML 조각(fragment)을 입력으로 받아
-// temp.md, temp.html, temp.pdf를 생성한다.
 func (s *PDFService) SaveHtmlAndMakePDF(html string) (*PDFResult, error) {
 	return s.SaveHtmlAndMakePDFWithFooter(html, nil)
 }
@@ -615,14 +622,22 @@ func (s *PDFService) wrapHTMLForHTML(content string) (string, error) {
 func (s *PDFService) wrapHTMLForPDF(content string, footerOverride *QTFooterConfig) (string, error) {
 	pdfStyle := loadQTPDFStyle()
 	cleaned := normalizeHTMLFragment(content)
+
 	qrSvc, err := NewQRService()
 	if err != nil {
 		return "", err
 	}
-	resolvedFooter, err := qrSvc.PrepareFooterAssets(QTFooterModeDefault, footerOverride)
+
+	mode := QTFooterModeDefault
+	if footerOverride != nil && footerOverride.Mode != "" {
+		mode = footerOverride.Mode
+	}
+
+	resolvedFooter, err := qrSvc.PrepareFooterAssets(mode, footerOverride)
 	if err != nil {
 		return "", err
 	}
+
 	layoutBody := buildQTFixedPageLayout(cleaned, resolvedFooter)
 	pdfStyle = mergeQTFooterRuntimeStyle(pdfStyle, resolvedFooter)
 
@@ -717,15 +732,29 @@ func buildQTFooterHTML(cfg *QTFooterConfig) string {
 		parts = append(parts, brandHTML)
 	}
 
-	if strings.TrimSpace(cfg.FooterText) != "" {
-		parts = append(parts, `<div class="qt-footer-text">`+cfg.FooterText+`</div>`)
+	footerText := strings.TrimSpace(cfg.FooterText)
+	if footerText == "" {
+		footerText = qtFooterMessage
 	}
+	if footerText != "" {
+		parts = append(parts, `<div class="qt-footer-text">`+footerText+`</div>`)
+	}
+
 	parts = append(parts, `</div>`)
 
 	return "\n" + strings.Join(parts, "\n")
 }
 
 func buildQTFooterBrandHTML(cfg *QTFooterConfig) string {
+	if cfg == nil {
+		return ""
+	}
+
+	brandImageData := encodeImageAsDataURI(cfg.BrandImagePath)
+	if brandImageData != "" {
+		return `<div class="qt-footer-brand"><img class="qt-footer-brand-image" src="` + brandImageData + `" alt="church brand" /></div>`
+	}
+
 	logoData := encodeImageAsDataURI(cfg.LogoPath)
 	churchName := strings.TrimSpace(cfg.ChurchName)
 
@@ -742,6 +771,7 @@ func buildQTFooterBrandHTML(cfg *QTFooterConfig) string {
 		parts = append(parts, `<div class="qt-footer-church">`+churchName+`</div>`)
 	}
 	parts = append(parts, `</div>`)
+
 	return strings.Join(parts, "")
 }
 
