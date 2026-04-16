@@ -818,7 +818,7 @@ function openLogoPreviewModal(dataURI, captionPath) {
       <div class="logo-preview-body">
         <img src="${escapeHtml(dataURI)}" alt="로고 미리 보기" />
       </div>
-      <div class="field-help-text">로고의 글자색이 아닌 로고로 이용하세요.</div>
+      <div class="field-help-text">로고의 글자색이 희색 계열이 아닌 로고로 이용하세요.</div>
       <div class="logo-preview-caption">${escapeHtml(captionPath)}</div>
     </div>
   `;
