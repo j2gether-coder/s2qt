@@ -1,18 +1,23 @@
 package service
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
 	"s2qt/util"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type FileSaveService struct {
+type FileService struct {
+	ctx   context.Context
 	Paths *util.AppPaths
 }
 
@@ -38,18 +43,93 @@ type DialogFileFilter struct {
 	Pattern     string
 }
 
-func NewFileSaveService() (*FileSaveService, error) {
+func NewFileService() (*FileService, error) {
 	paths, err := util.GetAppPaths()
 	if err != nil {
 		return nil, err
 	}
 
-	return &FileSaveService{
+	return &FileService{
 		Paths: paths,
 	}, nil
 }
 
-func (s *FileSaveService) SaveOutputAs(
+func (s *FileService) SetContext(ctx context.Context) {
+	s.ctx = ctx
+}
+
+func (s *FileService) OpenGeneratedFile(filePath string) error {
+	path := strings.TrimSpace(filePath)
+	if path == "" {
+		return fmt.Errorf("file path is empty")
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("file not found: %w", err)
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		return newHiddenCommand("cmd", "/c", "start", "", path).Start()
+	case "darwin":
+		return exec.Command("open", path).Start()
+	default:
+		return exec.Command("xdg-open", path).Start()
+	}
+}
+
+// Wails SaveFileDialog 기반 저장
+func (s *FileService) SaveGeneratedFile(filePath, audienceID, formatKey string) (string, error) {
+	src := strings.TrimSpace(filePath)
+	if src == "" {
+		return "", fmt.Errorf("source file path is empty")
+	}
+
+	if _, err := os.Stat(src); err != nil {
+		return "", fmt.Errorf("source file not found: %w", err)
+	}
+
+	ext := normalizeExt(src, formatKey)
+	if ext == "" {
+		return "", fmt.Errorf("cannot determine file extension")
+	}
+
+	defaultName := buildDefaultQTFileName(audienceID, ext)
+
+	targetPath, err := wruntime.SaveFileDialog(s.ctx, wruntime.SaveDialogOptions{
+		Title:                "산출물 저장",
+		DefaultDirectory:     filepath.Dir(src),
+		DefaultFilename:      defaultName,
+		CanCreateDirectories: true,
+		Filters: []wruntime.FileFilter{
+			{
+				DisplayName: strings.ToUpper(ext) + " 파일",
+				Pattern:     "*." + ext,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	targetPath = strings.TrimSpace(targetPath)
+	if targetPath == "" {
+		return "", nil
+	}
+
+	if filepath.Ext(targetPath) == "" {
+		targetPath += "." + ext
+	}
+
+	if err := CopyFile(src, targetPath); err != nil {
+		return "", err
+	}
+
+	return targetPath, nil
+}
+
+// 커스텀 saveDialog 주입 기반 저장
+func (s *FileService) SaveOutputAs(
 	req *SaveOutputAsRequest,
 	saveDialog func(defaultFilename string, filters []DialogFileFilter) (string, error),
 ) (*SaveOutputAsResult, error) {
@@ -72,7 +152,7 @@ func (s *FileSaveService) SaveOutputAs(
 		return nil, fmt.Errorf("원본 경로가 파일이 아닙니다")
 	}
 
-	defaultName := s.buildDefaultFileName(req)
+	defaultName := buildDefaultFileName(req)
 	filters := buildDialogFilters(format, sourcePath)
 
 	targetPath, err := saveDialog(defaultName, filters)
@@ -95,7 +175,7 @@ func (s *FileSaveService) SaveOutputAs(
 
 	targetPath = ensureExtension(targetPath, sourcePath, format)
 
-	if err := copyFile(sourcePath, targetPath); err != nil {
+	if err := CopyFile(sourcePath, targetPath); err != nil {
 		return nil, fmt.Errorf("파일 저장 실패: %w", err)
 	}
 
@@ -110,7 +190,7 @@ func (s *FileSaveService) SaveOutputAs(
 	}, nil
 }
 
-func (s *FileSaveService) buildDefaultFileName(req *SaveOutputAsRequest) string {
+func buildDefaultFileName(req *SaveOutputAsRequest) string {
 	if req == nil {
 		return "QT_qt_" + time.Now().Format("20060102") + ".txt"
 	}
@@ -118,7 +198,7 @@ func (s *FileSaveService) buildDefaultFileName(req *SaveOutputAsRequest) string 
 	sourcePath := strings.TrimSpace(req.SourcePath)
 	format := strings.ToLower(strings.TrimSpace(req.Format))
 	sermonDate := strings.TrimSpace(req.SermonDate)
-	audience := audienceFileLabel(req.Audience)
+	audience := audienceFileLabelEnglish(req.Audience)
 
 	targetExt := extFromFormat(format)
 	if targetExt == "" {
@@ -136,7 +216,12 @@ func (s *FileSaveService) buildDefaultFileName(req *SaveOutputAsRequest) string 
 	return "QT_" + audience + "_" + datePart + targetExt
 }
 
-func audienceFileLabel(audience string) string {
+func buildDefaultQTFileName(audienceID, ext string) string {
+	yyMMdd := time.Now().Format("060102")
+	return fmt.Sprintf("QT_%s_%s.%s", audienceLabelKorean(audienceID), yyMMdd, ext)
+}
+
+func audienceFileLabelEnglish(audience string) string {
 	switch strings.ToLower(strings.TrimSpace(audience)) {
 	case "adult":
 		return "adult"
@@ -151,21 +236,33 @@ func audienceFileLabel(audience string) string {
 	}
 }
 
+func audienceLabelKorean(audienceID string) string {
+	switch strings.TrimSpace(audienceID) {
+	case "adult":
+		return "장년"
+	case "young_adult":
+		return "청년"
+	case "teen":
+		return "중고등부"
+	case "child":
+		return "어린이"
+	default:
+		return "공통"
+	}
+}
+
 func normalizeDateForFileName(v string) string {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return ""
 	}
 
-	// 1) YYYY-MM-DD / YYYY.MM.DD / YYYY/MM/DD / YYYYMMDD 대응
 	reDigits := regexp.MustCompile(`\d`)
 	digits := strings.Join(reDigits.FindAllString(v, -1), "")
-
 	if len(digits) >= 8 {
 		return digits[:8]
 	}
 
-	// 2) Go date parse 시도
 	layouts := []string{
 		"2006-01-02",
 		"2006.01.02",
@@ -175,7 +272,6 @@ func normalizeDateForFileName(v string) string {
 		"2006.1.2",
 		"2006/1/2",
 	}
-
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, v); err == nil {
 			return t.Format("20060102")
@@ -258,39 +354,10 @@ func ensureExtension(targetPath, sourcePath, format string) string {
 	return targetPath + wantExt
 }
 
-func copyFile(sourcePath, targetPath string) error {
-	if strings.TrimSpace(sourcePath) == "" {
-		return fmt.Errorf("원본 파일 경로가 비어 있습니다")
+func normalizeExt(filePath, formatKey string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(strings.TrimSpace(filePath)), "."))
+	if ext != "" {
+		return ext
 	}
-	if strings.TrimSpace(targetPath) == "" {
-		return fmt.Errorf("대상 파일 경로가 비어 있습니다")
-	}
-
-	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		return fmt.Errorf("원본 파일 열기 실패: %w", err)
-	}
-	defer sourceFile.Close()
-
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-		return fmt.Errorf("대상 폴더 생성 실패: %w", err)
-	}
-
-	targetFile, err := os.Create(targetPath)
-	if err != nil {
-		return fmt.Errorf("대상 파일 생성 실패: %w", err)
-	}
-	defer func() {
-		_ = targetFile.Close()
-	}()
-
-	if _, err := io.Copy(targetFile, sourceFile); err != nil {
-		return fmt.Errorf("파일 복사 실패: %w", err)
-	}
-
-	if err := targetFile.Sync(); err != nil {
-		return fmt.Errorf("파일 저장 확정 실패: %w", err)
-	}
-
-	return nil
+	return strings.ToLower(strings.TrimSpace(formatKey))
 }

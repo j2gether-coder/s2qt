@@ -22,28 +22,31 @@ type App struct {
 
 	db *sql.DB
 
-	outputFileService *service.OutputFileService
-	cryptoSvc         *service.CryptoService
-	settingsSvc       *service.SettingsService
-	smtpSvc           *service.SMTPService
-	historySvc        *service.HistoryService
+	fileSvc     *service.FileService
+	cryptoSvc   *service.CryptoService
+	settingsSvc *service.SettingsService
+	smtpSvc     *service.SMTPService
+	historySvc  *service.HistoryService
 }
 
 func NewApp() *App {
+	fileSvc, _ := service.NewFileService()
+
 	return &App{
-		outputFileService: service.NewOutputFileService(),
+		fileSvc: fileSvc,
 	}
 }
 
 func (a *App) startup(ctx context.Context) {
-
 	a.ctx = ctx
-	a.outputFileService.SetContext(ctx)
+
+	if a.fileSvc != nil {
+		a.fileSvc.SetContext(ctx)
+	}
 
 	if err := a.initLocalServices(); err != nil {
 		return
 	}
-
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -169,6 +172,25 @@ func (a *App) LoadImageAsDataURI(path string) (string, error) {
 		return "", errors.New("이미지 파일을 읽을 수 없습니다: " + path)
 	}
 	return dataURI, nil
+}
+
+func (a *App) PrepareSiteLogoFile(srcPath string) (string, error) {
+	service.LogInfo("settings: prepare site logo file requested")
+
+	svc, err := service.NewSiteFileService()
+	if err != nil {
+		service.LogError("settings: site file service create failed: " + err.Error())
+		return "", err
+	}
+
+	resultPath, err := svc.PrepareSiteLogoFile(srcPath)
+	if err != nil {
+		service.LogError("settings: prepare site logo file failed: " + err.Error())
+		return "", err
+	}
+
+	service.LogInfo("settings: prepare site logo file completed")
+	return resultPath, nil
 }
 
 func (a *App) GetVideoMeta(url string) (*service.VideoMeta, error) {
@@ -495,7 +517,11 @@ func (a *App) GeneratePNG(dpi int) (*service.PNGGenerateResult, error) {
 func (a *App) OpenGeneratedFile(filePath string) error {
 	service.LogInfo("step3: open generated file requested")
 
-	if err := a.outputFileService.OpenGeneratedFile(filePath); err != nil {
+	if a.fileSvc == nil {
+		return fmt.Errorf("file service is not initialized")
+	}
+
+	if err := a.fileSvc.OpenGeneratedFile(filePath); err != nil {
 		service.LogError("step3: open generated file failed: " + err.Error())
 		return err
 	}
@@ -507,7 +533,11 @@ func (a *App) OpenGeneratedFile(filePath string) error {
 func (a *App) SaveGeneratedFile(filePath, audienceID, formatKey string) (string, error) {
 	service.LogInfo("step3: save generated file requested format=" + strings.TrimSpace(formatKey))
 
-	savedPath, err := a.outputFileService.SaveGeneratedFile(filePath, audienceID, formatKey)
+	if a.fileSvc == nil {
+		return "", fmt.Errorf("file service is not initialized")
+	}
+
+	savedPath, err := a.fileSvc.SaveGeneratedFile(filePath, audienceID, formatKey)
 	if err != nil {
 		service.LogError("step3: save generated file failed: " + err.Error())
 		return "", err

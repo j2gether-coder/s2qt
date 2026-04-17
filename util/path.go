@@ -21,10 +21,9 @@ type AppPaths struct {
 	EventLogFile string
 	Image        string
 
-	ChurchLogoFile  string
-	ChurchBrandFile string
-	ChurchQRFile    string
-	DefaultQRFile   string
+	SiteLogoFile  string
+	SiteQRFile    string
+	DefaultQRFile string
 
 	// executables in bin
 	YtDlpExe   string
@@ -102,10 +101,9 @@ func GetAppPaths() (*AppPaths, error) {
 		TempPptx:  filepath.Join(tempDir, "temp.pptx"),
 		TempPng:   filepath.Join(tempDir, "temp.png"),
 
-		ChurchLogoFile:  filepath.Join(imageDir, "church_logo.png"),
-		ChurchBrandFile: filepath.Join(imageDir, "church_brand.png"),
-		ChurchQRFile:    filepath.Join(imageDir, "church_qr.png"),
-		DefaultQRFile:   filepath.Join(imageDir, "s2qt_link.png"),
+		SiteLogoFile:  filepath.Join(imageDir, "site_logo.png"),
+		SiteQRFile:    filepath.Join(imageDir, "site_qr.png"),
+		DefaultQRFile: filepath.Join(imageDir, "s2qt_link.png"),
 	}
 
 	return p, EnsureDirs(p)

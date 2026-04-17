@@ -192,11 +192,6 @@ func (s *FooterService) resolveBrandImagePath(settings *FooterSettings) string {
 		return ""
 	}
 
-	brandPath := s.defaultBrandImagePath()
-	if ifileExists(brandPath) {
-		return brandPath
-	}
-
 	if ifileExists(logoPath) {
 		return logoPath
 	}
@@ -204,16 +199,9 @@ func (s *FooterService) resolveBrandImagePath(settings *FooterSettings) string {
 	return ""
 }
 
-func (s *FooterService) defaultBrandImagePath() string {
-	if s.Paths != nil && strings.TrimSpace(s.Paths.ChurchBrandFile) != "" {
-		return s.Paths.ChurchBrandFile
-	}
-	return resolveFooterImagePath("var/image/church_brand.png")
-}
-
 func (s *FooterService) defaultQRImagePath() string {
-	if s.Paths != nil && strings.TrimSpace(s.Paths.ChurchQRFile) != "" {
-		return s.Paths.ChurchQRFile
+	if s.Paths != nil && strings.TrimSpace(s.Paths.SiteQRFile) != "" {
+		return s.Paths.SiteQRFile
 	}
 	return resolveFooterImagePath("var/image/church_qr.png")
 }

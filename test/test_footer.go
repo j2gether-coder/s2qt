@@ -54,7 +54,7 @@ func run() error {
 	}
 
 	// 테스트 원본 로고를 고정 경로(church_logo.png)로 준비
-	if err := prepareTestLogoFile(input.LogoPath, paths.ChurchLogoFile); err != nil {
+	if err := prepareTestLogoFile(input.LogoPath, paths.SiteLogoFile); err != nil {
 		return fmt.Errorf("test logo prepare failed: %w", err)
 	}
 
@@ -67,7 +67,7 @@ func run() error {
 		return fmt.Errorf("db init failed: %w", err)
 	}
 
-	backups, err := upsertFooterTestSettings(db, input, paths.ChurchLogoFile)
+	backups, err := upsertFooterTestSettings(db, input, paths.SiteLogoFile)
 	if err != nil {
 		return fmt.Errorf("failed to save test settings: %w", err)
 	}
@@ -118,9 +118,8 @@ func run() error {
 		result.PNG.Success, result.PNG.Status, result.PNG.FilePath, result.PNG.Error)
 
 	checkFiles(
-		paths.ChurchLogoFile,
-		paths.ChurchBrandFile,
-		paths.ChurchQRFile,
+		paths.SiteLogoFile,
+		paths.SiteQRFile,
 		paths.DefaultQRFile,
 		paths.TempJson,
 		paths.TempHtml,

@@ -7,11 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"s2qt/util"
@@ -297,7 +294,7 @@ func installDirectComponent(dataDir string, c UtilComponent) error {
 		return err
 	}
 
-	if err := copyFile(stagedPath, c.TargetPath); err != nil {
+	if err := CopyFile(stagedPath, c.TargetPath); err != nil {
 		LogError("util: copy failed key=" + c.Key + " err=" + err.Error())
 		return err
 	}
@@ -353,13 +350,13 @@ func installFFmpegPackage(dataDir, binDir string) error {
 		return err
 	}
 
-	if err := copyFile(ffmpegSrc, filepath.Join(binDir, "ffmpeg.exe")); err != nil {
+	if err := CopyFile(ffmpegSrc, filepath.Join(binDir, "ffmpeg.exe")); err != nil {
 		LogError("util: ffmpeg.exe copy failed: " + err.Error())
 		return err
 	}
 	LogInfo("util: ffmpeg.exe copied")
 
-	if err := copyFile(ffprobeSrc, filepath.Join(binDir, "ffprobe.exe")); err != nil {
+	if err := CopyFile(ffprobeSrc, filepath.Join(binDir, "ffprobe.exe")); err != nil {
 		LogError("util: ffprobe.exe copy failed: " + err.Error())
 		return err
 	}
@@ -609,30 +606,6 @@ func getYtDlpVersion(binPath string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func utilcopyFile(src, dst string) error {
-	if err := ensureDir(filepath.Dir(dst)); err != nil {
-		return err
-	}
-
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-
-	return out.Sync()
-}
-
 func ensureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }
@@ -656,19 +629,4 @@ func appendIfMissing(items []string, target string) []string {
 		return items
 	}
 	return append(items, target)
-}
-
-const createNoWindow = 0x08000000
-
-func newHiddenCommand(name string, args ...string) *exec.Cmd {
-	cmd := exec.Command(name, args...)
-
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: createNoWindow,
-		}
-	}
-
-	return cmd
 }
