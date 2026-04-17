@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "skin_image_path": "var/template/test_template.png",
+  "output_html_path": "var/temp/temp_skin_source.html",
+  "output_pdf_path": "var/temp/temp_skin.pdf",
+  "output_png_path": "var/temp/temp_skin.png",
+  "safe_top_mm": 28,
+  "safe_right_mm": 18,
+  "safe_bottom_mm": 46,
+  "safe_left_mm": 18,
+  "content_max_width_mm": 172,
+  "debug_safe_area": true
+}

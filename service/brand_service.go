@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
+	stddraw "image/draw"
 	"image/jpeg"
 	"image/png"
 	"os"
@@ -15,6 +15,7 @@ import (
 
 	"s2qt/util"
 
+	"golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
@@ -66,35 +67,49 @@ func (s *BrandService) PrepareBrandImageFromDB() (*BrandPrepareResult, error) {
 	if strings.TrimSpace(sourcePath) == "" {
 		return nil, fmt.Errorf("church.logo_path 가 비어 있습니다")
 	}
-	if !ifileExists(sourcePath) {
+	if !FileExists(sourcePath) {
 		return nil, fmt.Errorf("로고 원본 이미지를 찾을 수 없습니다: %s", sourcePath)
 	}
 
-	outPath := s.defaultBrandOutputPath()
-	if err := EnsureParentDir(outPath); err != nil {
+	brandPath := s.defaultBrandOutputPath() // 내부 중간 파일
+	finalPath := s.defaultFinalOutputPath() // 최종 site_logo.png
+
+	if err := EnsureParentDir(brandPath); err != nil {
+		return nil, err
+	}
+	if err := EnsureParentDir(finalPath); err != nil {
 		return nil, err
 	}
 
 	if settings.BrandImageIncluded {
-		if err := s.writeNormalizedPNG(sourcePath, outPath); err != nil {
+		if err := s.writeNormalizedPNG(sourcePath, brandPath); err != nil {
 			return nil, err
 		}
+		if err := CopyFile(brandPath, finalPath); err != nil {
+			return nil, fmt.Errorf("최종 site_logo.png 반영 실패: %w", err)
+		}
+		_ = os.Remove(brandPath)
+
 		return &BrandPrepareResult{
 			Success:   true,
-			Message:   "완성형 로고 이미지를 footer용 이미지로 저장했습니다.",
-			BrandFile: outPath,
+			Message:   "완성형 로고 이미지를 정규화한 뒤 site_logo.png로 반영했습니다.",
+			BrandFile: finalPath,
 			Source:    sourcePath,
 		}, nil
 	}
 
-	if err := s.writeComposedBrandPNG(sourcePath, outPath, settings); err != nil {
+	if err := s.writeComposedBrandPNG(sourcePath, brandPath, settings); err != nil {
 		return nil, err
 	}
+	if err := CopyFile(brandPath, finalPath); err != nil {
+		return nil, fmt.Errorf("합성 결과를 site_logo.png로 반영 실패: %w", err)
+	}
+	_ = os.Remove(brandPath)
 
 	return &BrandPrepareResult{
 		Success:   true,
-		Message:   "로고와 교회명을 합성한 footer용 이미지를 생성했습니다.",
-		BrandFile: outPath,
+		Message:   "로고와 교회명을 합성한 뒤 site_logo.png로 반영했습니다.",
+		BrandFile: finalPath,
 		Source:    sourcePath,
 	}, nil
 }
@@ -149,7 +164,6 @@ WHERE setting_key IN (` + strings.Join(placeholders, ",") + `)
 			result.ChurchName = normalizeChurchDisplayName(v)
 			result.Denomination, result.ChurchOnlyName = splitChurchDisplayName(v)
 			if strings.TrimSpace(result.ChurchOnlyName) == "" {
-				// 쉼표가 없는 경우 전체를 교회명으로 본다.
 				result.ChurchOnlyName = strings.TrimSpace(v)
 			}
 		case "church.logo_path":
@@ -167,18 +181,18 @@ WHERE setting_key IN (` + strings.Join(placeholders, ",") + `)
 }
 
 func (s *BrandService) defaultBrandOutputPath() string {
-	if s.Paths != nil {
-		siteLogo := strings.TrimSpace(s.Paths.SiteLogoFile)
-		if siteLogo != "" {
-			ext := filepath.Ext(siteLogo)
-			if ext == "" {
-				ext = ".png"
-			}
-			base := strings.TrimSuffix(siteLogo, ext)
-			return base + "_brand" + ext
-		}
+	if s.Paths != nil && strings.TrimSpace(s.Paths.SiteLogoFile) != "" {
+		dir := filepath.Dir(s.Paths.SiteLogoFile)
+		return filepath.Join(dir, "site_brand.png")
 	}
-	return resolveFooterImagePath("var/image/site_logo_brand.png")
+	return resolveFooterImagePath("var/image/site_brand.png")
+}
+
+func (s *BrandService) defaultFinalOutputPath() string {
+	if s.Paths != nil && strings.TrimSpace(s.Paths.SiteLogoFile) != "" {
+		return s.Paths.SiteLogoFile
+	}
+	return resolveFooterImagePath("var/image/site_logo.png")
 }
 
 func (s *BrandService) writeNormalizedPNG(srcPath, outPath string) error {
@@ -189,7 +203,7 @@ func (s *BrandService) writeNormalizedPNG(srcPath, outPath string) error {
 
 	b := img.Bounds()
 	canvas := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	draw.Draw(canvas, canvas.Bounds(), img, b.Min, draw.Src)
+	stddraw.Draw(canvas, canvas.Bounds(), img, b.Min, stddraw.Src)
 
 	f, err := os.Create(outPath)
 	if err != nil {
@@ -223,57 +237,81 @@ func (s *BrandService) writeComposedBrandPNG(srcPath, outPath string, settings *
 	if err != nil {
 		return fmt.Errorf("교단명 폰트 로드 실패: %w", err)
 	}
-
 	churchFace, err := loadSystemFontFace(16)
 	if err != nil {
 		return fmt.Errorf("교회명 폰트 로드 실패: %w", err)
 	}
 
+	denomW := measureTextWidth(denomFace, denomText)
+	churchW := measureTextWidth(churchFace, churchText)
+	textBlockW := maxInt(denomW, churchW)
+
+	denomH := faceLineHeight(denomFace)
+	churchH := faceLineHeight(churchFace)
+
+	textGap := 4
+	textBlockH := churchH
+	if denomText != "" {
+		textBlockH = denomH + textGap + churchH
+	}
+
 	logoBounds := logoImg.Bounds()
 	logoW := logoBounds.Dx()
 	logoH := logoBounds.Dy()
+	if logoW <= 0 || logoH <= 0 {
+		return fmt.Errorf("로고 이미지 크기가 올바르지 않습니다")
+	}
+
+	targetLogoH := textBlockH
+	if targetLogoH < 20 {
+		targetLogoH = 20
+	}
+	targetLogoW := int(float64(logoW) * (float64(targetLogoH) / float64(logoH)))
+	if targetLogoW < 1 {
+		targetLogoW = 1
+	}
+
+	resizedLogo := image.NewRGBA(image.Rect(0, 0, targetLogoW, targetLogoH))
+	draw.ApproxBiLinear.Scale(resizedLogo, resizedLogo.Bounds(), logoImg, logoBounds, draw.Over, nil)
 
 	paddingX := 12
 	paddingY := 8
 	gap := 12
 
-	denomW := measureTextWidth(denomFace, denomText)
-	churchW := measureTextWidth(churchFace, churchText)
-	textW := maxInt(denomW, churchW)
-
-	denomH := faceLineHeight(denomFace)
-	churchH := faceLineHeight(churchFace)
-
-	textBlockH := churchH
-	if denomText != "" {
-		textBlockH = denomH + 4 + churchH
-	}
-
-	canvasW := paddingX + logoW + gap + textW + paddingX
-	canvasH := maxInt(logoH+(paddingY*2), textBlockH+(paddingY*2))
+	canvasW := paddingX + targetLogoW + gap + textBlockW + paddingX
+	canvasH := maxInt(targetLogoH+(paddingY*2), textBlockH+(paddingY*2))
 
 	canvas := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
-	draw.Draw(canvas, canvas.Bounds(), image.Transparent, image.Point{}, draw.Src)
+	stddraw.Draw(canvas, canvas.Bounds(), image.Transparent, image.Point{}, stddraw.Src)
 
 	logoX := paddingX
-	logoY := (canvasH - logoH) / 2
-	draw.Draw(
+	logoY := (canvasH - targetLogoH) / 2
+	stddraw.Draw(
 		canvas,
-		image.Rect(logoX, logoY, logoX+logoW, logoY+logoH),
-		logoImg,
-		logoBounds.Min,
-		draw.Over,
+		image.Rect(logoX, logoY, logoX+targetLogoW, logoY+targetLogoH),
+		resizedLogo,
+		image.Point{},
+		stddraw.Over,
 	)
 
-	textX := paddingX + logoW + gap
+	textX := paddingX + targetLogoW + gap
 	textTop := (canvasH - textBlockH) / 2
 
 	denomColor := color.RGBA{R: 90, G: 90, B: 90, A: 255}
-	churchColor := color.RGBA{R: 25, G: 25, B: 25, A: 255}
+	churchColor := color.RGBA{R: 20, G: 20, B: 20, A: 255}
 
 	if denomText != "" {
 		drawTextLine(canvas, denomFace, textX, textTop+faceAscent(denomFace), denomText, denomColor)
-		drawTextLine(canvas, churchFace, textX, textTop+denomH+4+faceAscent(churchFace), churchText, churchColor)
+
+		churchX := textX + (textBlockW-churchW)/2
+		drawTextLine(
+			canvas,
+			churchFace,
+			churchX,
+			textTop+denomH+textGap+faceAscent(churchFace),
+			churchText,
+			churchColor,
+		)
 	} else {
 		drawTextLine(canvas, churchFace, textX, textTop+faceAscent(churchFace), churchText, churchColor)
 	}
@@ -371,7 +409,7 @@ func candidateSystemFontPaths() []string {
 	}
 }
 
-func drawTextLine(dst draw.Image, face font.Face, x, y int, text string, clr color.Color) {
+func drawTextLine(dst stddraw.Image, face font.Face, x, y int, text string, clr color.Color) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
