@@ -2,6 +2,10 @@ package service
 
 import (
 	"fmt"
+	"image"
+	"image/color"
+	stddraw "image/draw"
+	"image/png"
 	"net/url"
 	"os"
 	"os/exec"
@@ -108,6 +112,11 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 
 	if _, err := os.Stat(pngPath); err != nil {
 		return nil, fmt.Errorf("PNG 파일 생성 확인 실패: %w", err)
+	}
+
+	// 생성된 PNG의 가장자리와 연결된 흰 배경만 투명화
+	if err := transparentizePNGBackground(pngPath, 248); err != nil {
+		return nil, fmt.Errorf("PNG 배경 투명화 실패: %w", err)
 	}
 
 	return &PNGGenerateResult{
@@ -270,4 +279,99 @@ func findBrowserExecutable() (string, error) {
 	}
 
 	return "", fmt.Errorf("headless 실행 가능한 Edge/Chrome 브라우저를 찾을 수 없습니다")
+}
+
+func transparentizePNGBackground(pngPath string, whiteThreshold uint8) error {
+	f, err := os.Open(pngPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	srcImg, err := png.Decode(f)
+	if err != nil {
+		return err
+	}
+
+	b := srcImg.Bounds()
+	rgba := image.NewRGBA(b)
+	stddraw.Draw(rgba, b, srcImg, b.Min, stddraw.Src)
+
+	w := b.Dx()
+	h := b.Dy()
+	if w <= 0 || h <= 0 {
+		return fmt.Errorf("invalid png size: %dx%d", w, h)
+	}
+
+	visited := make([]bool, w*h)
+
+	type pt struct {
+		x int
+		y int
+	}
+
+	indexOf := func(x, y int) int {
+		return y*w + x
+	}
+
+	isNearWhite := func(c color.RGBA) bool {
+		return c.A > 0 &&
+			c.R >= whiteThreshold &&
+			c.G >= whiteThreshold &&
+			c.B >= whiteThreshold
+	}
+
+	queue := make([]pt, 0, w+h)
+
+	enqueueIfBackground := func(x, y int) {
+		if x < 0 || x >= w || y < 0 || y >= h {
+			return
+		}
+		idx := indexOf(x, y)
+		if visited[idx] {
+			return
+		}
+
+		c := rgba.RGBAAt(b.Min.X+x, b.Min.Y+y)
+		if !isNearWhite(c) {
+			return
+		}
+
+		visited[idx] = true
+		queue = append(queue, pt{x: x, y: y})
+	}
+
+	// 테두리에서 시작: 가장자리와 연결된 흰 배경만 제거
+	for x := 0; x < w; x++ {
+		enqueueIfBackground(x, 0)
+		enqueueIfBackground(x, h-1)
+	}
+	for y := 0; y < h; y++ {
+		enqueueIfBackground(0, y)
+		enqueueIfBackground(w-1, y)
+	}
+
+	for head := 0; head < len(queue); head++ {
+		p := queue[head]
+
+		px := b.Min.X + p.x
+		py := b.Min.Y + p.y
+
+		c := rgba.RGBAAt(px, py)
+		c.A = 0
+		rgba.SetRGBA(px, py, c)
+
+		enqueueIfBackground(p.x-1, p.y)
+		enqueueIfBackground(p.x+1, p.y)
+		enqueueIfBackground(p.x, p.y-1)
+		enqueueIfBackground(p.x, p.y+1)
+	}
+
+	out, err := os.Create(pngPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	return png.Encode(out, rgba)
 }
