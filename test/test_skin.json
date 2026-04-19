@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "skin_image_path": "var/template/test_template.png",
+  "skin_image_path": "var/template/template002.png",
   "foreground_png_path": "var/temp/temp.png",
   "output_png_path": "var/temp/temp_skin.png",
   "output_pdf_path": "var/temp/temp_skin.pdf",
