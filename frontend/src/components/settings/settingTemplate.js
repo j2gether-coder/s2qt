@@ -6,66 +6,27 @@ const TEMPLATE_CATEGORIES = [
 ];
 
 const PAGE_SIZE = 5;
+const TEMPLATE_NO_IMAGE_PATH = "var/template/no_image.png";
 
-const DUMMY_TEMPLATES = [
-  {
-    id: "tpl_0001",
-    name: "3월 템플릿",
-    fileName: "template_001.png",
-    category: "monthly",
-    previewImage: "var/template/tpl_0001/preview.png",
-  },
-  {
-    id: "tpl_0002",
-    name: "4월 템플릿",
-    fileName: "template_002.png",
-    category: "monthly",
-    previewImage: "var/template/tpl_0002/preview.png",
-  },
-  {
-    id: "tpl_0003",
-    name: "5월 템플릿",
-    fileName: "template_003.png",
-    category: "monthly",
-    previewImage: "var/template/tpl_0003/preview.png",
-  },
-  {
-    id: "tpl_0004",
-    name: "여름 템플릿",
-    fileName: "template_004.png",
-    category: "seasonal",
-    previewImage: "var/template/tpl_0004/preview.png",
-  },
-  {
-    id: "tpl_0005",
-    name: "가을 템플릿",
-    fileName: "template_005.png",
-    category: "seasonal",
-    previewImage: "var/template/tpl_0005/preview.png",
-  },
-  {
-    id: "tpl_0006",
-    name: "성탄 템플릿",
-    fileName: "template_006.png",
-    category: "liturgical",
-    previewImage: "var/template/tpl_0006/preview.png",
-  },
-  {
-    id: "tpl_0007",
-    name: "부활절 템플릿",
-    fileName: "template_007.png",
-    category: "liturgical",
-    previewImage: "var/template/tpl_0007/preview.png",
-  },
-];
+let templateLoadPromise = null;
 
 let templateUiState = {
   enabled: false,
   selectedCategory: "all",
   selectedId: "",
   selectedPage: 1,
-  templates: [...DUMMY_TEMPLATES],
+  templates: [],
+  noImageDataURI: "",
+  isLoading: false,
+  isRefreshing: false,
+  hasLoaded: false,
+  statusMessage: "",
+  statusType: "info", // info | error | success
 };
+
+function getAppBindings() {
+  return window?.go?.main?.App || null;
+}
 
 function escapeHtml(value = "") {
   return String(value)
@@ -76,12 +37,54 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
+function normalizeCategory(value) {
+  const v = String(value || "").trim();
+  const found = TEMPLATE_CATEGORIES.find((item) => item.id === v);
+  return found ? found.id : "all";
+}
+
+function setStatusMessage(message = "", type = "info") {
+  templateUiState.statusMessage = String(message || "").trim();
+  templateUiState.statusType = type || "info";
+}
+
+function clearStatusMessage() {
+  templateUiState.statusMessage = "";
+  templateUiState.statusType = "info";
+}
+
+function getStatusInlineStyle() {
+  if (templateUiState.statusType === "error") {
+    return "margin-top:8px; padding:10px 12px; border:1px solid #fecaca; background:#fef2f2; color:#991b1b; border-radius:8px;";
+  }
+  if (templateUiState.statusType === "success") {
+    return "margin-top:8px; padding:10px 12px; border:1px solid #bbf7d0; background:#f0fdf4; color:#166534; border-radius:8px;";
+  }
+  return "margin-top:8px;";
+}
+
+function resolveTemplatePreviewPath(value = "") {
+  const path = String(value || "").trim();
+  return path || TEMPLATE_NO_IMAGE_PATH;
+}
+
 function getTemplateById(templateId) {
   return templateUiState.templates.find((item) => item.id === templateId) || null;
 }
 
 function getSelectedTemplate() {
   return getTemplateById(templateUiState.selectedId);
+}
+
+function isValidSelectedTemplate() {
+  return !!getSelectedTemplate();
+}
+
+function ensureSelectedTemplateIsValid() {
+  if (!templateUiState.selectedId) return;
+  if (!isValidSelectedTemplate()) {
+    templateUiState.selectedId = "";
+  }
 }
 
 function getFilteredTemplates() {
@@ -109,21 +112,148 @@ function getPagedTemplates() {
   };
 }
 
+function buildTemplateSupportLabel(item) {
+  const supports = [];
+  if (item?.hasPdfAsset) supports.push("PDF");
+  if (item?.hasPngAsset) supports.push("PNG");
+  if (!supports.length) return "산출물 정보 없음";
+  return supports.join(" / ");
+}
+
+function buildTemplateCategoryLabel(categoryId) {
+  const found = TEMPLATE_CATEGORIES.find((item) => item.id === categoryId);
+  return found ? found.label : "기타";
+}
+
+function getTemplatePreviewDataURI(item) {
+  return item?.previewDataURI || templateUiState.noImageDataURI || "";
+}
+
+async function fetchImageDataURI(path) {
+  const app = getAppBindings();
+  if (!app?.LoadImageAsDataURI) {
+    return "";
+  }
+
+  const targetPath = String(path || "").trim();
+  if (!targetPath) {
+    return "";
+  }
+
+  try {
+    return await app.LoadImageAsDataURI(targetPath);
+  } catch (error) {
+    console.error("image data uri load failed:", targetPath, error);
+    return "";
+  }
+}
+
+async function ensureNoImagePreviewLoaded() {
+  if (templateUiState.noImageDataURI) {
+    return false;
+  }
+
+  const dataURI = await fetchImageDataURI(TEMPLATE_NO_IMAGE_PATH);
+  if (!dataURI) {
+    return false;
+  }
+
+  templateUiState.noImageDataURI = dataURI;
+  return true;
+}
+
+async function loadTemplatePreviewDataIfNeeded(item) {
+  if (!item || item.previewDataURI) {
+    return false;
+  }
+
+  const dataURI = await fetchImageDataURI(resolveTemplatePreviewPath(item.previewPath));
+  if (!dataURI) {
+    return false;
+  }
+
+  const target = getTemplateById(item.id);
+  if (!target) {
+    return false;
+  }
+
+  target.previewDataURI = dataURI;
+  return true;
+}
+
+async function loadPagedTemplatePreviewImagesIfNeeded() {
+  const { items } = getPagedTemplates();
+  let changed = false;
+
+  for (const item of items) {
+    const loaded = await loadTemplatePreviewDataIfNeeded(item);
+    if (loaded) {
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+async function loadSelectedPreviewImageIfNeeded() {
+  let changed = false;
+
+  const loadedNoImage = await ensureNoImagePreviewLoaded();
+  if (loadedNoImage) {
+    changed = true;
+  }
+
+  const loadedPaged = await loadPagedTemplatePreviewImagesIfNeeded();
+  if (loadedPaged) {
+    changed = true;
+  }
+
+  const selected = getSelectedTemplate();
+  if (selected) {
+    const loadedSelected = await loadTemplatePreviewDataIfNeeded(selected);
+    if (loadedSelected) {
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    rerenderTemplatePanelOnly();
+  }
+}
+
+function renderStatusNote() {
+  if (!templateUiState.statusMessage) {
+    return "";
+  }
+
+  return `
+    <div class="body-note topgap-sm" style="${getStatusInlineStyle()}">
+      <p>${escapeHtml(templateUiState.statusMessage)}</p>
+    </div>
+  `;
+}
+
 function renderTemplateGuideCard() {
   return `
     <section class="card">
       <div class="settings-block">
         <h3 class="settings-block-title">템플릿 설정</h3>
         <div class="body-note topgap-sm">
-          <p>PNG 산출물에 템플릿을 적용할 수 있습니다.</p>
-          <p>템플릿을 선택하지 않으면 기존 PNG가 생성됩니다.</p>
+          <p>PDF와 PNG 산출물에 템플릿을 적용할 수 있습니다.</p>
           <p>템플릿은 환경설정에서 선택한 후 Step3 산출물 생성 시 반영됩니다.</p>
+          <p>템플릿 파일은 var/template 아래에 배치되며, 현재 목록은 실제 파일 기준으로 표시됩니다.</p>
         </div>
+        ${renderStatusNote()}
       </div>
 
       <div class="settings-block topgap-md">
         <label class="settings-check-row">
-          <input type="checkbox" id="templateEnabled" ${templateUiState.enabled ? "checked" : ""} />
+          <input
+            type="checkbox"
+            id="templateEnabled"
+            ${templateUiState.enabled ? "checked" : ""}
+            ${templateUiState.isLoading ? "disabled" : ""}
+          />
           <span>템플릿 사용</span>
         </label>
       </div>
@@ -133,21 +263,33 @@ function renderTemplateGuideCard() {
 
 function renderCategoryTabs() {
   return `
-    <div class="settings-template-category-tabs">
-      ${TEMPLATE_CATEGORIES.map(
-        (item) => `
-          <button
-            type="button"
-            class="step-tab ${templateUiState.selectedCategory === item.id ? "active" : ""}"
-            data-template-category="${item.id}"
-            ${templateUiState.enabled ? "" : "disabled"}
-          >
-            ${item.label}
-          </button>
-        `
-      ).join("")}
+    <div class="radio-inline-group" role="radiogroup" aria-label="템플릿 분류">
+      ${TEMPLATE_CATEGORIES.map((item) => `
+        <label class="radio-inline-item">
+          <input
+            type="radio"
+            name="templateCategory"
+            value="${item.id}"
+            ${templateUiState.selectedCategory === item.id ? "checked" : ""}
+            ${templateUiState.isLoading ? "disabled" : ""}
+          />
+          <span>${item.label}</span>
+        </label>
+      `).join("")}
     </div>
   `;
+}
+
+function renderTemplateEmptyMessage() {
+  if (templateUiState.isLoading) {
+    return "템플릿 목록을 불러오는 중입니다.";
+  }
+
+  if (!templateUiState.templates.length) {
+    return "등록된 템플릿이 없습니다. var/template에 템플릿을 배치한 후 목록 새로고침을 눌러 주세요.";
+  }
+
+  return "선택한 분류에 템플릿이 없습니다.";
 }
 
 function renderTemplateTable() {
@@ -156,7 +298,7 @@ function renderTemplateTable() {
   if (!items.length) {
     return `
       <div class="settings-template-empty">
-        선택한 분류에 템플릿이 없습니다.
+        ${escapeHtml(renderTemplateEmptyMessage())}
       </div>
     `;
   }
@@ -178,8 +320,11 @@ function renderTemplateTable() {
           ${items
             .map((item) => {
               const isSelected = templateUiState.selectedId === item.id;
+              const disabled = templateUiState.isLoading || !item.isValid;
+              const thumb = getTemplatePreviewDataURI(item);
+
               return `
-                <tr class="${isSelected ? "is-selected" : ""}" data-template-row="${escapeHtml(item.id)}">
+                <tr class="${isSelected ? "is-selected" : ""} ${!item.isValid ? "is-disabled" : ""}" data-template-row="${escapeHtml(item.id)}">
                   <td>
                     <label class="settings-template-radio-wrap">
                       <input
@@ -187,12 +332,22 @@ function renderTemplateTable() {
                         name="templateSelect"
                         value="${escapeHtml(item.id)}"
                         ${isSelected ? "checked" : ""}
-                        ${templateUiState.enabled ? "" : "disabled"}
+                        ${disabled ? "disabled" : ""}
                       />
                     </label>
                   </td>
                   <td class="settings-template-table-name-cell">
-                    ${escapeHtml(item.name)}
+                    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                      <div style="width:34px; height:46px; flex:0 0 34px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#f8fafc;">
+                        ${thumb ? `<img src="${thumb}" alt="${escapeHtml(item.name || item.id)} 썸네일" style="width:100%; height:100%; object-fit:cover; display:block;" />` : ``}
+                      </div>
+                      <div style="min-width:0;">
+                        <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                          ${escapeHtml(item.name || item.id)}
+                        </div>
+                        <div class="settings-template-table-sub">${escapeHtml(buildTemplateSupportLabel(item))}</div>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               `;
@@ -213,7 +368,7 @@ function renderPagination() {
         type="button"
         class="settings-template-page-btn"
         data-template-page="prev"
-        ${templateUiState.enabled && currentPage > 1 ? "" : "disabled"}
+        ${currentPage > 1 && !templateUiState.isLoading ? "" : "disabled"}
       >
         이전
       </button>
@@ -227,7 +382,7 @@ function renderPagination() {
         type="button"
         class="settings-template-page-btn"
         data-template-page="next"
-        ${templateUiState.enabled && currentPage < totalPages ? "" : "disabled"}
+        ${currentPage < totalPages && !templateUiState.isLoading ? "" : "disabled"}
       >
         다음
       </button>
@@ -236,20 +391,53 @@ function renderPagination() {
 }
 
 function renderTemplatePreviewPanel() {
-  const selected = getSelectedTemplate();
-
-  if (!templateUiState.enabled) {
+  if (!templateUiState.hasLoaded && templateUiState.statusType === "error") {
     return `
-      <div class="settings-template-preview-empty">
-        템플릿 사용이 꺼져 있습니다.
+      <div class="settings-template-preview-panel">
+        <div class="settings-template-preview-empty">
+          템플릿 설정 정보를 불러오지 못했습니다.
+        </div>
       </div>
     `;
   }
 
-  if (!selected) {
+  const selected = getSelectedTemplate();
+  const fallbackImage = templateUiState.noImageDataURI
+    ? `<img src="${templateUiState.noImageDataURI}" alt="no image preview" />`
+    : `<div class="settings-template-preview-empty">no_image.png를 불러오는 중입니다.</div>`;
+
+  if (selected) {
+    const previewImage = getTemplatePreviewDataURI(selected)
+      ? `<img src="${getTemplatePreviewDataURI(selected)}" alt="${escapeHtml(selected.name)} 미리보기" />`
+      : fallbackImage;
+
     return `
-      <div class="settings-template-preview-empty">
-        선택된 템플릿이 없습니다.
+      <div class="settings-template-preview-panel">
+        <div class="settings-template-preview-large">
+          ${previewImage}
+        </div>
+
+        <div class="settings-template-preview-detail">
+          <div class="settings-template-preview-title">${escapeHtml(selected.name || selected.id)}</div>
+          <div class="settings-template-preview-sub">
+            ${escapeHtml(buildTemplateCategoryLabel(selected.category))} / ${escapeHtml(buildTemplateSupportLabel(selected))}
+            ${templateUiState.enabled ? "" : " / 적용 꺼짐"}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (!templateUiState.enabled) {
+    return `
+      <div class="settings-template-preview-panel">
+        <div class="settings-template-preview-large">
+          ${fallbackImage}
+        </div>
+        <div class="settings-template-preview-detail">
+          <div class="settings-template-preview-title">NO IMAGE</div>
+          <div class="settings-template-preview-sub">현재는 미리보기만 확인 중입니다. Step3 적용은 꺼져 있습니다.</div>
+        </div>
       </div>
     `;
   }
@@ -257,18 +445,19 @@ function renderTemplatePreviewPanel() {
   return `
     <div class="settings-template-preview-panel">
       <div class="settings-template-preview-large">
-        <img src="${escapeHtml(selected.previewImage)}" alt="${escapeHtml(selected.name)} 미리보기" />
+        ${fallbackImage}
       </div>
-
       <div class="settings-template-preview-detail">
-        <div class="settings-template-preview-title">${escapeHtml(selected.name)}</div>
-        <div class="settings-template-preview-sub">${escapeHtml(selected.fileName)}</div>
+        <div class="settings-template-preview-title">NO IMAGE</div>
+        <div class="settings-template-preview-sub">선택된 템플릿이 없습니다.</div>
       </div>
     </div>
   `;
 }
 
 function renderTemplateSelectionCard() {
+  const refreshSymbol = templateUiState.isRefreshing ? "⏳" : "🔄";
+
   return `
     <section class="card topgap-md">
       <div class="settings-block">
@@ -282,7 +471,21 @@ function renderTemplateSelectionCard() {
       <div class="settings-block topgap-md">
         <div class="settings-template-picker-layout">
           <div class="settings-template-picker-list">
-            <div class="settings-field-label">템플릿 목록</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+              <div class="settings-field-label" style="margin-bottom:0;">템플릿 목록</div>
+              <button
+                type="button"
+                class="settings-template-page-btn"
+                id="templateRefreshBtn"
+                title="목록 새로고침"
+                aria-label="목록 새로고침"
+                style="width:38px; min-width:38px; padding:0;"
+                ${templateUiState.isLoading || templateUiState.isRefreshing ? "disabled" : ""}
+              >
+                ${refreshSymbol}
+              </button>
+            </div>
+
             ${renderTemplateTable()}
             ${renderPagination()}
           </div>
@@ -314,47 +517,208 @@ function rerenderTemplatePanelOnly() {
   bindSettingTemplateTabEvents();
 }
 
-function selectTemplate(templateId) {
+async function persistTemplateSettings() {
+  const app = getAppBindings();
+  if (!app?.SaveTemplateSettings) {
+    throw new Error("SaveTemplateSettings binding is not available");
+  }
+
+  ensureSelectedTemplateIsValid();
+
+  await app.SaveTemplateSettings({
+    enabled: !!templateUiState.enabled,
+    selectedCategory: templateUiState.selectedCategory,
+    selectedId: templateUiState.selectedId,
+  });
+}
+
+function mapTemplateSettings(settings) {
+  templateUiState.enabled = !!settings?.enabled;
+  templateUiState.selectedCategory = normalizeCategory(settings?.selectedCategory);
+  templateUiState.selectedId = String(settings?.selectedId || "").trim();
+}
+
+function mapTemplates(items) {
+  templateUiState.templates = Array.isArray(items)
+    ? items.map((item) => ({
+        id: String(item?.id || "").trim(),
+        name: String(item?.name || item?.id || "").trim(),
+        category: normalizeCategory(item?.category),
+        previewPath: resolveTemplatePreviewPath(item?.previewPath),
+        hasPdfAsset: !!item?.hasPdfAsset,
+        hasPngAsset: !!item?.hasPngAsset,
+        isValid: item?.isValid !== false,
+        previewDataURI: "",
+      }))
+    : [];
+
+  ensureSelectedTemplateIsValid();
+}
+
+async function loadTemplateState() {
+  const app = getAppBindings();
+  if (!app?.LoadTemplateSettings || !app?.ListTemplates) {
+    throw new Error("Template bindings are not available");
+  }
+
+  const [settings, templates] = await Promise.all([
+    app.LoadTemplateSettings(),
+    app.ListTemplates(),
+  ]);
+
+  mapTemplateSettings(settings || {});
+  mapTemplates(templates || []);
+  templateUiState.selectedPage = 1;
+}
+
+async function ensureTemplateTabInitialized(force = false) {
+  if (templateUiState.hasLoaded && !force) {
+    void loadSelectedPreviewImageIfNeeded();
+    return;
+  }
+
+  if (templateLoadPromise && !force) {
+    await templateLoadPromise;
+    return;
+  }
+
+  templateUiState.isLoading = true;
+  clearStatusMessage();
+  rerenderTemplatePanelOnly();
+
+  templateLoadPromise = (async () => {
+    let initSucceeded = false;
+
+    try {
+      await loadTemplateState();
+      templateUiState.hasLoaded = true;
+      clearStatusMessage();
+      initSucceeded = true;
+    } catch (error) {
+      console.error("template settings init failed", error);
+      templateUiState.hasLoaded = false;
+      setStatusMessage("템플릿 설정 정보를 불러오지 못했습니다.", "error");
+    } finally {
+      templateUiState.isLoading = false;
+      rerenderTemplatePanelOnly();
+
+      if (initSucceeded) {
+        void loadSelectedPreviewImageIfNeeded();
+      }
+
+      templateLoadPromise = null;
+    }
+  })();
+
+  await templateLoadPromise;
+}
+
+async function refreshTemplateList() {
+  const app = getAppBindings();
+  if (!app?.RefreshTemplates) {
+    setStatusMessage("템플릿 목록 새로고침 기능을 사용할 수 없습니다.", "error");
+    rerenderTemplatePanelOnly();
+    return;
+  }
+
+  templateUiState.isRefreshing = true;
+  clearStatusMessage();
+  rerenderTemplatePanelOnly();
+
+  try {
+    const items = await app.RefreshTemplates();
+    mapTemplates(items || []);
+    templateUiState.selectedPage = 1;
+
+    ensureSelectedTemplateIsValid();
+    await persistTemplateSettings();
+
+    setStatusMessage("템플릿 목록을 새로고침했습니다.", "success");
+  } catch (error) {
+    console.error("template refresh failed", error);
+    setStatusMessage("템플릿 목록을 새로고침하지 못했습니다.", "error");
+  } finally {
+    templateUiState.isRefreshing = false;
+    rerenderTemplatePanelOnly();
+    void loadSelectedPreviewImageIfNeeded();
+  }
+}
+
+async function updateTemplateEnabled(enabled) {
+  templateUiState.enabled = !!enabled;
+
+  try {
+    await persistTemplateSettings();
+    clearStatusMessage();
+  } catch (error) {
+    console.error("template enabled save failed", error);
+    setStatusMessage("템플릿 사용 설정 저장에 실패했습니다.", "error");
+  }
+
+  rerenderTemplatePanelOnly();
+  void loadSelectedPreviewImageIfNeeded();
+}
+
+async function updateTemplateCategory(category) {
+  templateUiState.selectedCategory = normalizeCategory(category);
+  templateUiState.selectedPage = 1;
+
+  try {
+    await persistTemplateSettings();
+    clearStatusMessage();
+  } catch (error) {
+    console.error("template category save failed", error);
+    setStatusMessage("템플릿 분류 저장에 실패했습니다.", "error");
+  }
+
+  rerenderTemplatePanelOnly();
+  void loadSelectedPreviewImageIfNeeded();
+}
+
+async function selectTemplate(templateId) {
   const found = getTemplateById(templateId);
-  if (!found) return;
+  if (!found || !found.isValid) return;
 
   templateUiState.selectedId = found.id;
+
+  try {
+    await persistTemplateSettings();
+    clearStatusMessage();
+  } catch (error) {
+    console.error("template select save failed", error);
+    setStatusMessage("선택한 템플릿 저장에 실패했습니다.", "error");
+  }
+
   rerenderTemplatePanelOnly();
+  void loadSelectedPreviewImageIfNeeded();
 }
 
 export function bindSettingTemplateTabEvents() {
   const enabledEl = document.querySelector("#templateEnabled");
-  const categoryButtons = document.querySelectorAll("[data-template-category]");
+  const categoryRadios = document.querySelectorAll('input[name="templateCategory"]');
   const pageButtons = document.querySelectorAll("[data-template-page]");
   const rowButtons = document.querySelectorAll("[data-template-row]");
   const radioButtons = document.querySelectorAll('input[name="templateSelect"]');
+  const refreshBtn = document.querySelector("#templateRefreshBtn");
+
+  void ensureTemplateTabInitialized();
 
   if (enabledEl) {
     enabledEl.addEventListener("change", () => {
-      templateUiState.enabled = enabledEl.checked;
-
-      if (!templateUiState.enabled) {
-        templateUiState.selectedId = "";
-      }
-
-      templateUiState.selectedPage = 1;
-      rerenderTemplatePanelOnly();
+      void updateTemplateEnabled(enabledEl.checked);
     });
   }
 
-  categoryButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!templateUiState.enabled) return;
-
-      templateUiState.selectedCategory = button.dataset.templateCategory || "all";
-      templateUiState.selectedPage = 1;
-      rerenderTemplatePanelOnly();
+  categoryRadios.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.disabled) return;
+      void updateTemplateCategory(radio.value || "all");
     });
   });
 
   pageButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      if (!templateUiState.enabled) return;
+      if (templateUiState.isLoading) return;
 
       const action = button.dataset.templatePage;
       const { currentPage, totalPages } = getPagedTemplates();
@@ -366,28 +730,33 @@ export function bindSettingTemplateTabEvents() {
       }
 
       rerenderTemplatePanelOnly();
+      void loadSelectedPreviewImageIfNeeded();
     });
   });
 
   rowButtons.forEach((row) => {
     row.addEventListener("click", (event) => {
-      if (!templateUiState.enabled) return;
-
       const input = row.querySelector('input[name="templateSelect"]');
-      if (!input) return;
+      if (!input || input.disabled) return;
 
-      if (event.target.tagName !== "INPUT") {
+      if (event.target?.tagName !== "INPUT") {
         input.checked = true;
       }
 
-      selectTemplate(row.dataset.templateRow || "");
+      void selectTemplate(row.dataset.templateRow || "");
     });
   });
 
   radioButtons.forEach((radio) => {
     radio.addEventListener("change", () => {
-      if (!templateUiState.enabled) return;
-      selectTemplate(radio.value || "");
+      if (radio.disabled) return;
+      void selectTemplate(radio.value || "");
     });
   });
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      void refreshTemplateList();
+    });
+  }
 }

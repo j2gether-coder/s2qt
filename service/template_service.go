@@ -16,6 +16,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	_ "image/jpeg"
+	_ "image/png"
 
 	"s2qt/util"
 )
@@ -32,52 +33,68 @@ const (
 )
 
 type TemplateSettings struct {
-	Enabled          bool
-	SelectedID       string
-	SelectedCategory string
+	Enabled          bool   `json:"enabled"`
+	SelectedCategory string `json:"selectedCategory"`
+	SelectedID       string `json:"selectedId"`
+}
+
+type TemplateSettingsSaveRequest struct {
+	Enabled          bool   `json:"enabled"`
+	SelectedCategory string `json:"selectedCategory"`
+	SelectedID       string `json:"selectedId"`
 }
 
 type TemplatePlacement struct {
-	ForegroundLeftPX   int
-	ForegroundTopPX    int
-	ForegroundWidthPX  int
-	ForegroundHeightPX int
-	FitMode            string
-	AlignX             string
-	AlignY             string
-	DebugRect          bool
+	LeftPX    int    `json:"left_px"`
+	TopPX     int    `json:"top_px"`
+	WidthPX   int    `json:"width_px"`
+	HeightPX  int    `json:"height_px"`
+	FitMode   string `json:"fit_mode"`
+	AlignX    string `json:"align_x"`
+	AlignY    string `json:"align_y"`
+	DebugRect bool   `json:"debug_rect,omitempty"`
 }
 
 type TemplateManifest struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	Category           string `json:"category"`
-	PreviewImage       string `json:"preview_image"`
-	BackgroundImage    string `json:"background_image"`
-	PDFBackgroundImage string `json:"pdf_background_image"`
-	PNGBackgroundImage string `json:"png_background_image"`
-	SkinImagePath      string `json:"skin_image_path"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Enabled  *bool  `json:"enabled,omitempty"`
 
-	ForegroundLeftPX   int    `json:"foreground_left_px"`
-	ForegroundTopPX    int    `json:"foreground_top_px"`
-	ForegroundWidthPX  int    `json:"foreground_width_px"`
-	ForegroundHeightPX int    `json:"foreground_height_px"`
-	FitMode            string `json:"fit_mode"`
-	AlignX             string `json:"align_x"`
-	AlignY             string `json:"align_y"`
-	DebugRect          bool   `json:"debug_rect"`
+	// 권장: 단일 공통 자산
+	TemplateImage string `json:"template_image,omitempty"`
+
+	// 구버전/확장 호환 fallback
+	PreviewImage       string `json:"preview_image,omitempty"`
+	BackgroundImage    string `json:"background_image,omitempty"`
+	PDFBackgroundImage string `json:"pdf_background_image,omitempty"`
+	PNGBackgroundImage string `json:"png_background_image,omitempty"`
+	SkinImagePath      string `json:"skin_image_path,omitempty"`
+
+	PNGPlacement TemplatePlacement `json:"png_placement,omitempty"`
+}
+
+type TemplateListItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	PreviewPath string `json:"previewPath"`
+
+	HasPDFAsset bool `json:"hasPdfAsset"`
+	HasPNGAsset bool `json:"hasPngAsset"`
+	IsValid     bool `json:"isValid"`
 }
 
 type TemplateItem struct {
-	ID                  string
-	Name                string
-	Category            string
-	Dir                 string
-	PreviewImagePath    string
-	BackgroundImagePath string
-	PDFBackgroundPath   string
-	PNGBackgroundPath   string
-	PNGPlacement        TemplatePlacement
+	ID           string
+	Name         string
+	Category     string
+	Dir          string
+	PreviewPath  string
+	CommonPath   string
+	PDFPath      string
+	PNGPath      string
+	PNGPlacement TemplatePlacement
 }
 
 type TemplateApplyRequest struct {
@@ -88,12 +105,12 @@ type TemplateApplyRequest struct {
 }
 
 type TemplateApplyResult struct {
-	Enabled    bool
-	TemplateID string
-	PDFApplied bool
-	PNGApplied bool
-	PDFError   string
-	PNGError   string
+	Enabled    bool   `json:"enabled"`
+	TemplateID string `json:"templateId"`
+	PDFApplied bool   `json:"pdfApplied"`
+	PNGApplied bool   `json:"pngApplied"`
+	PDFError   string `json:"pdfError"`
+	PNGError   string `json:"pngError"`
 }
 
 func (r *TemplateApplyResult) HasError() bool {
@@ -104,16 +121,8 @@ func (r *TemplateApplyResult) HasError() bool {
 }
 
 type TemplateService struct {
-	Paths *util.AppPaths
 	DB    *sql.DB
-}
-
-func NewTemplateService() (*TemplateService, error) {
-	paths, err := util.GetAppPaths()
-	if err != nil {
-		return nil, err
-	}
-	return &TemplateService{Paths: paths}, nil
+	Paths *util.AppPaths
 }
 
 func NewTemplateServiceWithDB(db *sql.DB) (*TemplateService, error) {
@@ -127,72 +136,13 @@ func NewTemplateServiceWithDB(db *sql.DB) (*TemplateService, error) {
 	}
 
 	return &TemplateService{
-		Paths: paths,
 		DB:    db,
+		Paths: paths,
 	}, nil
 }
 
-func (s *TemplateService) ApplySelectedTemplate(req *TemplateApplyRequest) (*TemplateApplyResult, error) {
-	if req == nil {
-		return nil, fmt.Errorf("template apply request가 비어 있습니다")
-	}
-	if s.Paths == nil {
-		return nil, fmt.Errorf("paths가 nil 입니다")
-	}
-
-	settings, err := s.LoadTemplateSettings()
-	if err != nil {
-		return nil, err
-	}
-
-	result := &TemplateApplyResult{
-		Enabled:    settings.Enabled,
-		TemplateID: strings.TrimSpace(settings.SelectedID),
-	}
-
-	if !settings.Enabled {
-		return result, nil
-	}
-	if strings.TrimSpace(settings.SelectedID) == "" {
-		return nil, fmt.Errorf("템플릿 사용이 켜져 있지만 선택된 템플릿 ID가 없습니다")
-	}
-
-	item, err := s.ResolveSelectedTemplate()
-	if err != nil {
-		return nil, err
-	}
-
-	if req.DPI <= 0 {
-		req.DPI = 300
-	}
-
-	if req.ApplyPDF {
-		if err := s.ApplyTemplateToPDF(item, req.FooterOverride); err != nil {
-			result.PDFError = err.Error()
-		} else {
-			result.PDFApplied = true
-		}
-	}
-
-	if req.ApplyPNG {
-		if err := s.ApplyTemplateToPNG(item); err != nil {
-			result.PNGError = err.Error()
-		} else {
-			result.PNGApplied = true
-		}
-	}
-
-	if result.HasError() {
-		return result, fmt.Errorf("템플릿 적용 중 일부 실패가 발생했습니다")
-	}
-	return result, nil
-}
-
 func (s *TemplateService) LoadTemplateSettings() (*TemplateSettings, error) {
-	if s.Paths == nil {
-		return nil, fmt.Errorf("paths가 nil 입니다")
-	}
-	if s.DB == nil {
+	if s == nil || s.DB == nil {
 		return nil, fmt.Errorf("template db is nil")
 	}
 
@@ -221,11 +171,16 @@ WHERE setting_key IN (` + strings.Join(placeholders, ",") + `)
 	}
 	defer rows.Close()
 
-	settings := &TemplateSettings{SelectedCategory: TemplateCategoryAll}
+	result := &TemplateSettings{
+		Enabled:          false,
+		SelectedCategory: TemplateCategoryAll,
+		SelectedID:       "",
+	}
 
 	for rows.Next() {
 		var key string
 		var value sql.NullString
+
 		if err := rows.Scan(&key, &value); err != nil {
 			return nil, fmt.Errorf("template settings scan 실패: %w", err)
 		}
@@ -237,19 +192,87 @@ WHERE setting_key IN (` + strings.Join(placeholders, ",") + `)
 
 		switch key {
 		case templateSettingEnabledKey:
-			settings.Enabled = parseBoolText(v)
+			result.Enabled = parseBoolText(v)
 		case templateSettingSelectedKey:
-			settings.SelectedID = v
+			result.SelectedID = strings.TrimSpace(v)
 		case templateSettingCategoryKey:
-			settings.SelectedCategory = normalizeTemplateCategory(v)
+			result.SelectedCategory = normalizeTemplateCategory(v)
 		}
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("template settings 읽기 실패: %w", err)
+		return nil, fmt.Errorf("template settings rows 읽기 실패: %w", err)
 	}
 
-	return settings, nil
+	return normalizeTemplateSettings(result), nil
+}
+
+func (s *TemplateService) SaveTemplateSettings(req TemplateSettingsSaveRequest) error {
+	if s == nil || s.DB == nil {
+		return fmt.Errorf("template db is nil")
+	}
+
+	normalized := normalizeTemplateSettings(&TemplateSettings{
+		Enabled:          req.Enabled,
+		SelectedCategory: req.SelectedCategory,
+		SelectedID:       req.SelectedID,
+	})
+
+	if err := s.upsertTemplateSetting(templateSettingEnabledKey, templateBoolToText(normalized.Enabled), "boolean"); err != nil {
+		return err
+	}
+	if err := s.upsertTemplateSetting(templateSettingCategoryKey, normalized.SelectedCategory, "text"); err != nil {
+		return err
+	}
+	if err := s.upsertTemplateSetting(templateSettingSelectedKey, normalized.SelectedID, "text"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *TemplateService) upsertTemplateSetting(key, value, valueType string) error {
+	_, err := s.DB.Exec(`
+INSERT INTO app_settings (setting_key, setting_value, value_type, is_secret, setting_group, updated_at)
+VALUES (?, ?, ?, 0, 'template', datetime('now', 'localtime'))
+ON CONFLICT(setting_key) DO UPDATE SET
+	setting_value = excluded.setting_value,
+	value_type = excluded.value_type,
+	updated_at = excluded.updated_at
+`, key, value, valueType)
+	if err != nil {
+		return fmt.Errorf("template app_setting 저장 실패 (%s): %w", key, err)
+	}
+	return nil
+}
+
+func (s *TemplateService) ListTemplates() ([]TemplateListItem, error) {
+	if s == nil || s.Paths == nil {
+		return []TemplateListItem{}, nil
+	}
+
+	root := s.resolveTemplateRootDir()
+	dirs, err := s.scanTemplateDirectories(root)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]TemplateListItem, 0, len(dirs))
+	for _, dir := range dirs {
+		manifest, err := s.loadTemplateManifest(dir)
+		if err != nil {
+			manifest = nil
+		}
+
+		item, err := s.buildTemplateListItem(dir, manifest)
+		if err != nil || item == nil {
+			continue
+		}
+		items = append(items, *item)
+	}
+
+	sortTemplateListItems(items)
+	return items, nil
 }
 
 func (s *TemplateService) ResolveSelectedTemplate() (*TemplateItem, error) {
@@ -257,19 +280,26 @@ func (s *TemplateService) ResolveSelectedTemplate() (*TemplateItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(settings.SelectedID) == "" {
+
+	selectedID := strings.TrimSpace(settings.SelectedID)
+	if selectedID == "" {
 		return nil, fmt.Errorf("선택된 템플릿 ID가 없습니다")
 	}
-	return s.GetTemplateByID(settings.SelectedID)
+
+	return s.GetTemplateByID(selectedID)
 }
 
 func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, error) {
+	if s == nil || s.Paths == nil {
+		return nil, fmt.Errorf("template paths가 nil 입니다")
+	}
+
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return nil, fmt.Errorf("template id가 비어 있습니다")
 	}
 
-	dir := filepath.Join(s.templateRootDir(), templateID)
+	dir := filepath.Join(s.resolveTemplateRootDir(), templateID)
 	info, err := os.Stat(dir)
 	if err != nil {
 		return nil, fmt.Errorf("template directory를 찾을 수 없습니다: %s", dir)
@@ -278,53 +308,67 @@ func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, err
 		return nil, fmt.Errorf("template path가 디렉토리가 아닙니다: %s", dir)
 	}
 
-	item, err := s.loadTemplateItemFromDir(dir)
+	return s.loadTemplateItemFromDir(dir)
+}
+
+func (s *TemplateService) ApplySelectedTemplate(req *TemplateApplyRequest) (*TemplateApplyResult, error) {
+	if req == nil {
+		return nil, fmt.Errorf("template apply request가 비어 있습니다")
+	}
+	if s == nil || s.Paths == nil {
+		return nil, fmt.Errorf("template service가 초기화되지 않았습니다")
+	}
+
+	settings, err := s.LoadTemplateSettings()
 	if err != nil {
 		return nil, err
 	}
-	if item == nil {
-		return nil, fmt.Errorf("template item을 읽지 못했습니다: %s", templateID)
-	}
-	return item, nil
-}
 
-func (s *TemplateService) ListTemplates(category string) ([]TemplateItem, error) {
-	root := s.templateRootDir()
-	entries, err := os.ReadDir(root)
+	result := &TemplateApplyResult{
+		Enabled:    settings.Enabled,
+		TemplateID: strings.TrimSpace(settings.SelectedID),
+	}
+
+	if !settings.Enabled {
+		return result, nil
+	}
+	if result.TemplateID == "" {
+		return result, nil
+	}
+
+	item, err := s.ResolveSelectedTemplate()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []TemplateItem{}, nil
-		}
-		return nil, fmt.Errorf("template directory 목록 조회 실패: %w", err)
+		return nil, err
 	}
 
-	category = normalizeTemplateCategory(category)
-	items := make([]TemplateItem, 0)
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	if req.ApplyPDF {
+		if err := s.ApplyTemplateToPDF(item, req.FooterOverride); err != nil {
+			result.PDFError = err.Error()
+		} else {
+			result.PDFApplied = true
 		}
-
-		item, err := s.loadTemplateItemFromDir(filepath.Join(root, entry.Name()))
-		if err != nil || item == nil {
-			continue
-		}
-
-		if category != TemplateCategoryAll && item.Category != category {
-			continue
-		}
-		items = append(items, *item)
 	}
 
-	sort.Slice(items, func(i, j int) bool {
-		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
-	})
-	return items, nil
+	if req.ApplyPNG {
+		if err := s.ApplyTemplateToPNG(item); err != nil {
+			result.PNGError = err.Error()
+		} else {
+			result.PNGApplied = true
+		}
+	}
+
+	if result.HasError() {
+		return result, fmt.Errorf("템플릿 적용 중 일부 실패가 발생했습니다")
+	}
+	return result, nil
 }
 
 func (s *TemplateService) ApplyTemplateToPDF(item *TemplateItem, footerOverride *QTFooterConfig) error {
 	if item == nil {
 		return fmt.Errorf("template item이 nil 입니다")
+	}
+	if s.Paths == nil {
+		return fmt.Errorf("template paths가 nil 입니다")
 	}
 
 	html, err := s.readBaseHTML()
@@ -358,10 +402,7 @@ func (s *TemplateService) ApplyTemplateToPDF(item *TemplateItem, footerOverride 
 		return err
 	}
 
-	if err := templateReplaceOutputFile(outPath, s.Paths.TempPdf); err != nil {
-		return fmt.Errorf("templated pdf 교체 실패: %w", err)
-	}
-	return nil
+	return templateReplaceOutputFile(outPath, s.Paths.TempPdf)
 }
 
 func (s *TemplateService) ApplyTemplateToPNG(item *TemplateItem) error {
@@ -369,7 +410,7 @@ func (s *TemplateService) ApplyTemplateToPNG(item *TemplateItem) error {
 		return fmt.Errorf("template item이 nil 입니다")
 	}
 	if s.Paths == nil {
-		return fmt.Errorf("paths가 nil 입니다")
+		return fmt.Errorf("template paths가 nil 입니다")
 	}
 	if !FileExists(s.Paths.TempPng) {
 		return fmt.Errorf("temp.png가 없습니다: %s", s.Paths.TempPng)
@@ -387,14 +428,365 @@ func (s *TemplateService) ApplyTemplateToPNG(item *TemplateItem) error {
 		return err
 	}
 
-	if err := templateReplaceOutputFile(outPath, s.Paths.TempPng); err != nil {
-		return fmt.Errorf("templated png 교체 실패: %w", err)
+	return templateReplaceOutputFile(outPath, s.Paths.TempPng)
+}
+
+func normalizeTemplateSettings(v *TemplateSettings) *TemplateSettings {
+	if v == nil {
+		return &TemplateSettings{
+			Enabled:          false,
+			SelectedCategory: TemplateCategoryAll,
+			SelectedID:       "",
+		}
 	}
-	return nil
+
+	v.SelectedID = strings.TrimSpace(v.SelectedID)
+	v.SelectedCategory = normalizeTemplateCategory(v.SelectedCategory)
+	if v.SelectedCategory == "" {
+		v.SelectedCategory = TemplateCategoryAll
+	}
+	return v
+}
+
+func templateBoolToText(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}
+
+func (s *TemplateService) resolveTemplateRootDir() string {
+	tempDir := filepath.Dir(s.Paths.TempHtml)
+	varDir := filepath.Dir(tempDir)
+	return filepath.Join(varDir, "template")
+}
+
+func (s *TemplateService) scanTemplateDirectories(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("template directory 목록 조회 실패: %w", err)
+	}
+
+	dirs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dirs = append(dirs, filepath.Join(root, entry.Name()))
+	}
+
+	sort.Strings(dirs)
+	return dirs, nil
+}
+
+func (s *TemplateService) loadTemplateManifest(dir string) (*TemplateManifest, error) {
+	manifestPath := filepath.Join(dir, "manifest.json")
+	b, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var manifest TemplateManifest
+	if err := json.Unmarshal(b, &manifest); err != nil {
+		return nil, fmt.Errorf("manifest parse 실패 (%s): %w", manifestPath, err)
+	}
+	return &manifest, nil
+}
+
+func (s *TemplateService) buildTemplateListItem(dir string, manifest *TemplateManifest) (*TemplateListItem, error) {
+	item, err := s.loadTemplateItemFromDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	if item == nil {
+		return nil, fmt.Errorf("template item 생성 실패: %s", dir)
+	}
+
+	listItem := &TemplateListItem{
+		ID:          item.ID,
+		Name:        item.Name,
+		Category:    item.Category,
+		PreviewPath: item.PreviewPath,
+		HasPDFAsset: strings.TrimSpace(item.templateBackgroundPathForPDF()) != "",
+		HasPNGAsset: strings.TrimSpace(item.templateBackgroundPathForPNG()) != "",
+	}
+	listItem.IsValid = listItem.HasPDFAsset || listItem.HasPNGAsset
+	return listItem, nil
+}
+
+func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, error) {
+	manifest, _ := s.loadTemplateManifest(dir)
+
+	item := &TemplateItem{
+		ID:           filepath.Base(dir),
+		Name:         filepath.Base(dir),
+		Category:     TemplateCategoryAll,
+		Dir:          dir,
+		PNGPlacement: defaultTemplatePlacement(),
+	}
+
+	if manifest != nil {
+		if manifest.Enabled != nil && !*manifest.Enabled {
+			return nil, fmt.Errorf("disabled template: %s", filepath.Base(dir))
+		}
+
+		if strings.TrimSpace(manifest.ID) != "" {
+			item.ID = strings.TrimSpace(manifest.ID)
+		}
+		if strings.TrimSpace(manifest.Name) != "" {
+			item.Name = strings.TrimSpace(manifest.Name)
+		}
+
+		item.Category = normalizeTemplateCategory(manifest.Category)
+		item.CommonPath = resolveTemplateCommonImage(dir, manifest)
+		item.PDFPath = resolveTemplatePDFImage(dir, manifest)
+		item.PNGPath = resolveTemplatePNGImage(dir, manifest)
+
+		item.PreviewPath = resolveTemplatePreviewImage(dir, manifest)
+		item.PNGPlacement = normalizeTemplatePlacement(manifest.PNGPlacement)
+	}
+
+	// fallback: template.png 중심
+	if item.CommonPath == "" {
+		item.CommonPath = findFirstExistingFile(dir, []string{
+			"template.png", "template.jpg", "template.jpeg", "template.webp",
+			"background.png", "background.jpg", "background.jpeg", "background.webp",
+			"bg.png", "bg.jpg", "bg.jpeg", "bg.webp",
+			"skin.png", "skin.jpg", "skin.jpeg", "skin.webp",
+			"frame.png", "frame.jpg", "frame.jpeg", "frame.webp",
+		})
+	}
+
+	// PDF/PNG 자산은 공통 자산 우선
+	if item.PDFPath == "" {
+		item.PDFPath = item.CommonPath
+	}
+	if item.PNGPath == "" {
+		item.PNGPath = item.CommonPath
+	}
+
+	// preview도 공통 자산 우선
+	if item.PreviewPath == "" {
+		item.PreviewPath = item.CommonPath
+	}
+	if item.PreviewPath == "" {
+		item.PreviewPath = findFirstExistingFile(dir, []string{
+			"preview.png", "preview.jpg", "preview.jpeg", "preview.webp",
+			"template.png", "template.jpg", "template.jpeg", "template.webp",
+		})
+	}
+
+	item.PNGPlacement = normalizeTemplatePlacement(item.PNGPlacement)
+	return item, nil
+}
+
+func resolveTemplateCommonImage(dir string, manifest *TemplateManifest) string {
+	if manifest == nil {
+		return ""
+	}
+
+	// 1순위: 단일 공통 자산
+	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
+		return p
+	}
+
+	// 2순위: 구버전 background_image
+	if p := resolveTemplateAssetPath(dir, manifest.BackgroundImage); p != "" {
+		return p
+	}
+
+	// 3순위: 구버전 개별 자산 중 하나 fallback
+	if p := resolveTemplateAssetPath(dir, manifest.PDFBackgroundImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.PNGBackgroundImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.SkinImagePath); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.PreviewImage); p != "" {
+		return p
+	}
+
+	return ""
+}
+
+func resolveTemplatePreviewImage(dir string, manifest *TemplateManifest) string {
+	if manifest == nil {
+		return ""
+	}
+
+	// preview는 template_image 우선
+	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.PreviewImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.BackgroundImage); p != "" {
+		return p
+	}
+	return ""
+}
+
+func resolveTemplatePDFImage(dir string, manifest *TemplateManifest) string {
+	if manifest == nil {
+		return ""
+	}
+
+	// PDF는 단일 공통 자산 우선
+	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.PDFBackgroundImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.BackgroundImage); p != "" {
+		return p
+	}
+	return ""
+}
+
+func resolveTemplatePNGImage(dir string, manifest *TemplateManifest) string {
+	if manifest == nil {
+		return ""
+	}
+
+	// PNG는 단일 공통 자산 우선
+	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.PNGBackgroundImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.SkinImagePath); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.BackgroundImage); p != "" {
+		return p
+	}
+	return ""
+}
+
+func resolveTemplateAssetPath(dir, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	if filepath.IsAbs(value) {
+		if FileExists(value) {
+			return value
+		}
+		return ""
+	}
+
+	path := filepath.Clean(filepath.Join(dir, value))
+	if FileExists(path) {
+		return path
+	}
+	return ""
+}
+
+func findFirstExistingFile(dir string, names []string) string {
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		if FileExists(path) {
+			return path
+		}
+	}
+	return ""
+}
+
+func sortTemplateListItems(items []TemplateListItem) {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Category != items[j].Category {
+			return items[i].Category < items[j].Category
+		}
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
+	})
+}
+
+func normalizeTemplateCategory(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", TemplateCategoryAll:
+		return TemplateCategoryAll
+	case TemplateCategoryMonthly:
+		return TemplateCategoryMonthly
+	case TemplateCategorySeasonal:
+		return TemplateCategorySeasonal
+	case TemplateCategoryLiturgical:
+		return TemplateCategoryLiturgical
+	default:
+		return TemplateCategoryAll
+	}
+}
+
+func defaultTemplatePlacement() TemplatePlacement {
+	return TemplatePlacement{
+		FitMode: "contain",
+		AlignX:  "center",
+		AlignY:  "top",
+	}
+}
+
+func normalizeTemplatePlacement(p TemplatePlacement) TemplatePlacement {
+	if p.LeftPX < 0 {
+		p.LeftPX = 0
+	}
+	if p.TopPX < 0 {
+		p.TopPX = 0
+	}
+
+	p.FitMode = strings.ToLower(strings.TrimSpace(p.FitMode))
+	if p.FitMode != "cover" {
+		p.FitMode = "contain"
+	}
+
+	p.AlignX = strings.ToLower(strings.TrimSpace(p.AlignX))
+	switch p.AlignX {
+	case "left", "center", "right":
+	default:
+		p.AlignX = "center"
+	}
+
+	p.AlignY = strings.ToLower(strings.TrimSpace(p.AlignY))
+	switch p.AlignY {
+	case "top", "center", "bottom":
+	default:
+		p.AlignY = "top"
+	}
+
+	return p
+}
+
+func (t *TemplateItem) templateBackgroundPathForPDF() string {
+	if t == nil {
+		return ""
+	}
+	if strings.TrimSpace(t.PDFPath) != "" {
+		return t.PDFPath
+	}
+	return t.CommonPath
+}
+
+func (t *TemplateItem) templateBackgroundPathForPNG() string {
+	if t == nil {
+		return ""
+	}
+	if strings.TrimSpace(t.PNGPath) != "" {
+		return t.PNGPath
+	}
+	return t.CommonPath
 }
 
 func (s *TemplateService) wrapHTMLForTemplatePDF(content string, item *TemplateItem, footerOverride *QTFooterConfig) (string, error) {
 	cleaned := normalizeHTMLFragment(content)
+
 	resolvedFooter, err := s.resolveTemplateFooterConfig(footerOverride)
 	if err != nil {
 		return "", err
@@ -418,14 +810,12 @@ func (s *TemplateService) resolveTemplateFooterConfig(footerOverride *QTFooterCo
 	if footerOverride != nil && footerOverride.Mode != "" {
 		mode = footerOverride.Mode
 	}
-
 	return qrSvc.PrepareFooterAssets(mode, footerOverride)
 }
 
 func buildQTTemplateLayerLayout(bodyHTML, backgroundImagePath string, footerCfg *QTFooterConfig) string {
 	bodyHTML = strings.TrimSpace(bodyHTML)
 	bgDataURI := EncodeImageAsDataURI(backgroundImagePath)
-
 	if bgDataURI == "" {
 		return buildQTFixedPageLayout(bodyHTML, footerCfg)
 	}
@@ -487,12 +877,6 @@ func (s *TemplateService) readBaseHTML() (string, error) {
 	return cleaned, nil
 }
 
-func (s *TemplateService) templateRootDir() string {
-	tempDir := filepath.Dir(s.Paths.TempHtml)
-	varDir := filepath.Dir(tempDir)
-	return filepath.Join(varDir, "template")
-}
-
 func (s *TemplateService) buildTemplatedPDFPath() string {
 	dir := filepath.Dir(s.Paths.TempPdf)
 	return filepath.Join(dir, "temp_templated.pdf")
@@ -501,192 +885,6 @@ func (s *TemplateService) buildTemplatedPDFPath() string {
 func (s *TemplateService) buildTemplatedPNGPath() string {
 	dir := filepath.Dir(s.Paths.TempPng)
 	return filepath.Join(dir, "temp_templated.png")
-}
-
-func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, error) {
-	manifest, _ := loadTemplateManifest(dir)
-
-	item := &TemplateItem{
-		ID:           filepath.Base(dir),
-		Name:         filepath.Base(dir),
-		Category:     TemplateCategoryAll,
-		Dir:          dir,
-		PNGPlacement: defaultTemplatePlacement(),
-	}
-
-	if manifest != nil {
-		if strings.TrimSpace(manifest.ID) != "" {
-			item.ID = strings.TrimSpace(manifest.ID)
-		}
-		if strings.TrimSpace(manifest.Name) != "" {
-			item.Name = strings.TrimSpace(manifest.Name)
-		}
-		item.Category = normalizeTemplateCategory(manifest.Category)
-		item.PreviewImagePath = resolveTemplateAssetPath(dir, manifest.PreviewImage)
-		item.BackgroundImagePath = resolveTemplateAssetPath(dir, manifest.BackgroundImage)
-		item.PDFBackgroundPath = resolveTemplateAssetPath(dir, manifest.PDFBackgroundImage)
-		item.PNGBackgroundPath = resolveTemplateAssetPath(dir, manifest.PNGBackgroundImage)
-		if item.PNGBackgroundPath == "" {
-			item.PNGBackgroundPath = resolveTemplateAssetPath(dir, manifest.SkinImagePath)
-		}
-		item.PNGPlacement = normalizeTemplatePlacement(TemplatePlacement{
-			ForegroundLeftPX:   manifest.ForegroundLeftPX,
-			ForegroundTopPX:    manifest.ForegroundTopPX,
-			ForegroundWidthPX:  manifest.ForegroundWidthPX,
-			ForegroundHeightPX: manifest.ForegroundHeightPX,
-			FitMode:            manifest.FitMode,
-			AlignX:             manifest.AlignX,
-			AlignY:             manifest.AlignY,
-			DebugRect:          manifest.DebugRect,
-		})
-	}
-
-	if item.PreviewImagePath == "" {
-		item.PreviewImagePath = findFirstExistingFile(dir, []string{
-			"preview.png", "preview.jpg", "preview.jpeg", "preview.webp",
-		})
-	}
-	if item.BackgroundImagePath == "" {
-		item.BackgroundImagePath = findFirstExistingFile(dir, []string{
-			"template.png", "template.jpg", "template.jpeg", "template.webp",
-			"background.png", "background.jpg", "background.jpeg", "background.webp",
-			"bg.png", "bg.jpg", "bg.jpeg", "bg.webp",
-			"skin.png", "skin.jpg", "skin.jpeg", "skin.webp",
-			"frame.png", "frame.jpg", "frame.jpeg", "frame.webp",
-		})
-	}
-	if item.PDFBackgroundPath == "" {
-		item.PDFBackgroundPath = findFirstExistingFile(dir, []string{
-			"pdf.png", "pdf.jpg", "pdf.jpeg", "pdf.webp",
-			"pdf_background.png", "pdf_background.jpg", "pdf_background.jpeg", "pdf_background.webp",
-		})
-	}
-	if item.PNGBackgroundPath == "" {
-		item.PNGBackgroundPath = findFirstExistingFile(dir, []string{
-			"png.png", "png.jpg", "png.jpeg", "png.webp",
-			"png_background.png", "png_background.jpg", "png_background.jpeg", "png_background.webp",
-			"skin.png", "skin.jpg", "skin.jpeg", "skin.webp",
-			"template.png", "template.jpg", "template.jpeg", "template.webp",
-		})
-	}
-
-	item.PNGPlacement = normalizeTemplatePlacement(item.PNGPlacement)
-	return item, nil
-}
-
-func loadTemplateManifest(dir string) (*TemplateManifest, error) {
-	manifestPath := filepath.Join(dir, "manifest.json")
-	b, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var manifest TemplateManifest
-	if err := json.Unmarshal(b, &manifest); err != nil {
-		return nil, fmt.Errorf("manifest parse 실패 (%s): %w", manifestPath, err)
-	}
-	return &manifest, nil
-}
-
-func resolveTemplateAssetPath(dir, value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if filepath.IsAbs(value) {
-		if FileExists(value) {
-			return value
-		}
-		return ""
-	}
-	path := filepath.Clean(filepath.Join(dir, value))
-	if FileExists(path) {
-		return path
-	}
-	return ""
-}
-
-func findFirstExistingFile(dir string, names []string) string {
-	for _, name := range names {
-		path := filepath.Join(dir, name)
-		if FileExists(path) {
-			return path
-		}
-	}
-	return ""
-}
-
-func normalizeTemplateCategory(v string) string {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "", TemplateCategoryAll:
-		return TemplateCategoryAll
-	case TemplateCategoryMonthly:
-		return TemplateCategoryMonthly
-	case TemplateCategorySeasonal:
-		return TemplateCategorySeasonal
-	case TemplateCategoryLiturgical:
-		return TemplateCategoryLiturgical
-	default:
-		return TemplateCategoryAll
-	}
-}
-
-func defaultTemplatePlacement() TemplatePlacement {
-	return TemplatePlacement{
-		FitMode: "contain",
-		AlignX:  "center",
-		AlignY:  "top",
-	}
-}
-
-func normalizeTemplatePlacement(p TemplatePlacement) TemplatePlacement {
-	if p.ForegroundLeftPX < 0 {
-		p.ForegroundLeftPX = 0
-	}
-	if p.ForegroundTopPX < 0 {
-		p.ForegroundTopPX = 0
-	}
-
-	p.FitMode = strings.ToLower(strings.TrimSpace(p.FitMode))
-	if p.FitMode != "cover" {
-		p.FitMode = "contain"
-	}
-
-	p.AlignX = strings.ToLower(strings.TrimSpace(p.AlignX))
-	switch p.AlignX {
-	case "left", "center", "right":
-	default:
-		p.AlignX = "center"
-	}
-
-	p.AlignY = strings.ToLower(strings.TrimSpace(p.AlignY))
-	switch p.AlignY {
-	case "top", "center", "bottom":
-	default:
-		p.AlignY = "top"
-	}
-
-	return p
-}
-
-func (t *TemplateItem) templateBackgroundPathForPDF() string {
-	if t == nil {
-		return ""
-	}
-	if strings.TrimSpace(t.PDFBackgroundPath) != "" {
-		return t.PDFBackgroundPath
-	}
-	return t.BackgroundImagePath
-}
-
-func (t *TemplateItem) templateBackgroundPathForPNG() string {
-	if t == nil {
-		return ""
-	}
-	if strings.TrimSpace(t.PNGBackgroundPath) != "" {
-		return t.PNGBackgroundPath
-	}
-	return t.BackgroundImagePath
 }
 
 func templateComposePNGToPath(templatePath, foregroundPath, outputPath string, placement TemplatePlacement) error {
@@ -735,19 +933,20 @@ func templateComposePNGToPath(templatePath, foregroundPath, outputPath string, p
 	if err := png.Encode(out, canvas); err != nil {
 		return fmt.Errorf("failed to encode output png: %w", err)
 	}
+
 	return nil
 }
 
 func templateBuildTargetRect(canvasBounds image.Rectangle, placement TemplatePlacement) image.Rectangle {
-	if placement.ForegroundWidthPX <= 0 || placement.ForegroundHeightPX <= 0 {
+	if placement.WidthPX <= 0 || placement.HeightPX <= 0 {
 		return canvasBounds
 	}
 
 	rect := image.Rect(
-		placement.ForegroundLeftPX,
-		placement.ForegroundTopPX,
-		placement.ForegroundLeftPX+placement.ForegroundWidthPX,
-		placement.ForegroundTopPX+placement.ForegroundHeightPX,
+		placement.LeftPX,
+		placement.TopPX,
+		placement.LeftPX+placement.WidthPX,
+		placement.TopPX+placement.HeightPX,
 	)
 	return rect.Intersect(canvasBounds)
 }
@@ -761,7 +960,6 @@ func templateCalcPlacement(fgW, fgH int, target image.Rectangle, fitMode, alignX
 		scale := math.Max(float64(tw)/float64(fgW), float64(th)/float64(fgH))
 		scaledW := int(math.Round(float64(fgW) * scale))
 		scaledH := int(math.Round(float64(fgH) * scale))
-
 		dstX := templateCalcAlignedOffset(target.Min.X, tw, scaledW, alignX)
 		dstY := templateCalcAlignedOffset(target.Min.Y, th, scaledH, alignY)
 		return image.Rect(dstX, dstY, dstX+scaledW, dstY+scaledH), srcRect
@@ -770,7 +968,6 @@ func templateCalcPlacement(fgW, fgH int, target image.Rectangle, fitMode, alignX
 	scale := math.Min(float64(tw)/float64(fgW), float64(th)/float64(fgH))
 	scaledW := int(math.Round(float64(fgW) * scale))
 	scaledH := int(math.Round(float64(fgH) * scale))
-
 	dstX := templateCalcAlignedOffset(target.Min.X, tw, scaledW, alignX)
 	dstY := templateCalcAlignedOffset(target.Min.Y, th, scaledH, alignY)
 	return image.Rect(dstX, dstY, dstX+scaledW, dstY+scaledH), srcRect

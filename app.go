@@ -480,7 +480,7 @@ func (a *App) RunQTStep3(req service.QTStep3Request) (*service.QTStep3Result, er
 	service.LogInfo("step3: output generation started")
 
 	if a.db == nil {
-		err := fmt.Errorf("shared db is not initialized")
+		err := fmt.Errorf("db is not initialized")
 		service.LogError("step3: shared db is nil")
 		return nil, err
 	}
@@ -589,6 +589,50 @@ func (a *App) HasSecretValue(key string) (bool, error) {
 		return false, fmt.Errorf("settings service is not initialized")
 	}
 	return a.settingsSvc.HasSecretSetting(key)
+}
+
+func (a *App) LoadTemplateSettings() (*service.TemplateSettings, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("db is not initialized")
+	}
+
+	svc, err := service.NewTemplateServiceWithDB(a.db)
+	if err != nil {
+		return nil, err
+	}
+
+	return svc.LoadTemplateSettings()
+}
+
+func (a *App) SaveTemplateSettings(req service.TemplateSettingsSaveRequest) error {
+	if a.db == nil {
+		return fmt.Errorf("db is not initialized")
+	}
+
+	svc, err := service.NewTemplateServiceWithDB(a.db)
+	if err != nil {
+		return err
+	}
+
+	return svc.SaveTemplateSettings(req)
+}
+
+func (a *App) ListTemplates() ([]service.TemplateListItem, error) {
+	svc, err := service.NewTemplateServiceWithDB(a.db)
+	if err != nil {
+		return nil, err
+	}
+
+	return svc.ListTemplates()
+}
+
+func (a *App) RefreshTemplates() ([]service.TemplateListItem, error) {
+	svc, err := service.NewTemplateServiceWithDB(a.db)
+	if err != nil {
+		return nil, err
+	}
+
+	return svc.ListTemplates()
 }
 
 //

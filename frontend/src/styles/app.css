@@ -2047,6 +2047,7 @@ select option {
 /* =========================
    23. Template Settings
 ========================= */
+
 .settings-template-panel .card + .card {
   margin-top: 16px;
 }
@@ -2055,31 +2056,105 @@ select option {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
+  line-height: 1.35;
+  color: #111827;
 }
 
 .settings-check-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-height: 38px;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.settings-check-row input[type="checkbox"] {
+  margin: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .settings-field-label {
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.4;
+  color: #374151;
 }
 
-.settings-template-category-tabs {
+.settings-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.settings-template-category-radio-group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
+.settings-template-category-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.settings-template-category-chip input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-template-category-chip span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+  cursor: pointer;
+}
+
+.settings-template-category-chip:hover span {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.settings-template-category-chip.is-checked span,
+.settings-template-category-chip input[type="radio"]:checked + span {
+  background: #eef4ff;
+  border-color: #93c5fd;
+  color: #111827;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.14);
+}
+
+.settings-template-category-chip input[type="radio"]:disabled + span {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .settings-template-picker-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 14px;
   align-items: start;
 }
 
@@ -2087,7 +2162,7 @@ select option {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   overflow: hidden;
-  background: #fff;
+  background: #ffffff;
 }
 
 .settings-template-table {
@@ -2101,6 +2176,7 @@ select option {
   padding: 12px 10px;
   border-bottom: 1px solid #e5e7eb;
   font-size: 13px;
+  line-height: 1.45;
   text-align: left;
   vertical-align: middle;
 }
@@ -2108,6 +2184,7 @@ select option {
 .settings-template-table th {
   background: #f8fafc;
   font-weight: 700;
+  color: #374151;
 }
 
 .settings-template-table tbody tr {
@@ -2122,6 +2199,11 @@ select option {
   background: #eff6ff;
 }
 
+.settings-template-table tbody tr.is-disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .settings-template-radio-wrap {
   display: inline-flex;
   align-items: center;
@@ -2134,6 +2216,15 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
+  color: #111827;
+}
+
+.settings-template-table-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #6b7280;
 }
 
 .settings-template-pagination {
@@ -2149,8 +2240,27 @@ select option {
   height: 38px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  background: #fff;
+  background: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.settings-template-page-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.settings-field-label-row .settings-template-page-btn {
+  width: auto;
+  min-width: 124px;
+  padding: 0 14px;
 }
 
 .settings-template-page-btn:disabled {
@@ -2163,22 +2273,27 @@ select option {
   text-align: center;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.3;
+  color: #111827;
 }
 
 .settings-template-page-total {
   margin-left: 4px;
   color: #6b7280;
+  font-size: 12px;
   font-weight: 400;
 }
 
 .settings-template-preview-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  align-items: flex-start;
 }
 
 .settings-template-preview-large {
   width: 100%;
+  max-width: 240px;
   aspect-ratio: 3 / 4;
   border: 1px solid #dcdfe5;
   border-radius: 10px;
@@ -2193,23 +2308,92 @@ select option {
 }
 
 .settings-template-preview-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.4;
+  color: #111827;
 }
 
 .settings-template-preview-sub {
   margin-top: 4px;
   font-size: 12px;
+  line-height: 1.45;
   color: #6b7280;
 }
 
 .settings-template-preview-empty,
 .settings-template-empty {
-  padding: 16px;
+  padding: 14px;
   border: 1px dashed #d1d5db;
   border-radius: 10px;
-  color: #6b7280;
   background: #fafafa;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.body-note.is-error {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.body-note.is-success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.settings-template-icon-btn {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.settings-template-icon-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.settings-template-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .settings-template-picker-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-field-label-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .settings-field-label-row .settings-template-page-btn {
+    width: 100%;
+  }
+
+  .settings-template-pagination {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* =========================

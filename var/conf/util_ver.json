@@ -1,5 +1,5 @@
 {
-  "last_checked_at": "2026-04-15T16:43:53+09:00",
+  "last_checked_at": "2026-04-19T18:34:37+09:00",
   "last_check_mode": "video",
   "last_check_ok": true,
   "installed": {
@@ -9,7 +9,7 @@
     "yt-dlp": true
   },
   "versions": {
-    "yt-dlp": "2026.03.17"
+    "yt-dlp": "2026.02.04"
   },
   "model_installed": true
 }

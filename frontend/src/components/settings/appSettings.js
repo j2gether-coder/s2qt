@@ -76,7 +76,7 @@ function renderCurrentSettingsPanel() {
 function renderSettingsHeaderCard() {
   return `
     <section class="card card-plain">
-      <div class="step-badge">환경설정</div>
+      <div class="step-badge">환경 설정</div>
       <p class="body-note topgap-sm">${getSettingsIntroText()}</p>
     </section>
   `;
