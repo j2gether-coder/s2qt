@@ -2045,7 +2045,175 @@ select option {
 }
 
 /* =========================
-   23. Step3 Result Grid Override
+   23. Template Settings
+========================= */
+.settings-template-panel .card + .card {
+  margin-top: 16px;
+}
+
+.settings-block-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.settings-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.settings-field-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-template-category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-template-picker-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 16px;
+  align-items: start;
+}
+
+.settings-template-table-wrap {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.settings-template-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.settings-template-table th,
+.settings-template-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 13px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.settings-template-table th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.settings-template-table tbody tr {
+  cursor: pointer;
+}
+
+.settings-template-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.settings-template-table tbody tr.is-selected {
+  background: #eff6ff;
+}
+
+.settings-template-radio-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.settings-template-table-name-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.settings-template-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.settings-template-page-btn {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.settings-template-page-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.settings-template-page-status {
+  min-width: 90px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-template-page-total {
+  margin-left: 4px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.settings-template-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-template-preview-large {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border: 1px solid #dcdfe5;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.settings-template-preview-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-template-preview-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-template-preview-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.settings-template-preview-empty,
+.settings-template-empty {
+  padding: 16px;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  color: #6b7280;
+  background: #fafafa;
+}
+
+/* =========================
+   24. Step3 Result Grid Override
 ========================= */
 
 .qt-step3-result-grid {

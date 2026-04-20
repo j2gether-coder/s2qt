@@ -2,10 +2,12 @@ import { renderSettingsBasicTab, bindSettingsBasicTabEvents } from "./settingsBa
 import { renderSettingsExtraTab, bindSettingsExtraTabEvents } from "./settingsExtraTab";
 import { renderSettingsGuideTab, bindSettingsGuideTabEvents } from "./settingsGuideTab";
 import { renderSettingsMenuTab, bindSettingsMenuTabEvents } from "./settingsMenuTab";
+import { renderSettingTemplateTab, bindSettingTemplateTabEvents } from "./settingTemplate";
 
 const SETTINGS_TABS = [
   { id: "basic", label: "기본 정보" },
   { id: "extra", label: "부가 기능" },
+  { id: "template", label: "템플릿" },
   { id: "menu", label: "메뉴 설정" },
   { id: "guide", label: "안내" },
 ];
@@ -25,6 +27,8 @@ function getSettingsIntroText() {
   switch (currentSettingsTab) {
     case "extra":
       return "AI와 이메일 전송 등 부가 기능을 설정합니다.";
+    case "template":
+      return "PNG 산출물에 적용할 템플릿 사용 여부와 선택 상태를 설정합니다.";
     case "menu":
       return "사이드 메뉴에 표시할 이름과 표시 여부를 설정합니다.";
     case "guide":
@@ -57,6 +61,8 @@ function renderCurrentSettingsPanel() {
   switch (currentSettingsTab) {
     case "extra":
       return renderSettingsExtraTab();
+    case "template":
+      return renderSettingTemplateTab();
     case "menu":
       return renderSettingsMenuTab();
     case "guide":
@@ -114,6 +120,9 @@ export function bindAppSettingsEvents() {
   switch (currentSettingsTab) {
     case "extra":
       bindSettingsExtraTabEvents();
+      break;
+    case "template":
+      bindSettingTemplateTabEvents();
       break;
     case "menu":
       bindSettingsMenuTabEvents();
