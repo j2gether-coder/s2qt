@@ -479,7 +479,13 @@ func (a *App) OpenTempHTMLPreview() error {
 func (a *App) RunQTStep3(req service.QTStep3Request) (*service.QTStep3Result, error) {
 	service.LogInfo("step3: output generation started")
 
-	svc, err := service.NewQTStep3Service()
+	if a.db == nil {
+		err := fmt.Errorf("shared db is not initialized")
+		service.LogError("step3: shared db is nil")
+		return nil, err
+	}
+
+	svc, err := service.NewQTStep3ServiceWithDB(a.db)
 	if err != nil {
 		service.LogError("step3: service create failed: " + err.Error())
 		return nil, err
