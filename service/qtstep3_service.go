@@ -42,8 +42,19 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 		}
 	}
 
+	// 핵심: footer 자산 준비는 Step3 전체에서 1회만 수행
+	var footerCfg *QTFooterConfig
+	var footerErr error
+
+	if req.MakePDF || req.MakePNG {
+		footerCfg, footerErr = s.buildFooterConfig()
+		if footerErr != nil {
+			return nil, footerErr
+		}
+	}
+
 	if req.MakePDF {
-		if err := s.makePDF(); err != nil {
+		if err := s.makePDF(footerCfg); err != nil {
 			result.PDF = QTStep3FileResult{
 				Success: false,
 				Status:  "실패",
@@ -59,7 +70,7 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 	}
 
 	if req.MakePNG {
-		if err := s.makePNG(req.DPI); err != nil {
+		if err := s.makePNG(req.DPI, footerCfg); err != nil {
 			result.PNG = QTStep3FileResult{
 				Success: false,
 				Status:  "실패",
@@ -93,7 +104,7 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 	return result, nil
 }
 
-func (s *QTStep3Service) makePDF() error {
+func (s *QTStep3Service) makePDF(footerCfg *QTFooterConfig) error {
 	pdfSvc, err := NewPDFService()
 	if err != nil {
 		return err
@@ -104,22 +115,12 @@ func (s *QTStep3Service) makePDF() error {
 		return fmt.Errorf("temp.html 읽기 실패: %w", err)
 	}
 
-	footerCfg, err := s.buildFooterConfig()
-	if err != nil {
-		return err
-	}
-
 	_, err = pdfSvc.SaveHtmlAndMakePDFWithFooter(string(b), footerCfg)
 	return err
 }
 
-func (s *QTStep3Service) makePNG(dpi int) error {
+func (s *QTStep3Service) makePNG(dpi int, footerCfg *QTFooterConfig) error {
 	pngSvc, err := NewPNGService()
-	if err != nil {
-		return err
-	}
-
-	footerCfg, err := s.buildFooterConfig()
 	if err != nil {
 		return err
 	}
@@ -133,6 +134,7 @@ func (s *QTStep3Service) buildFooterConfig() (*QTFooterConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("step3 db open 실패: %w", err)
 	}
+	//defer db.Close()
 
 	footerSvc, err := NewFooterService(db)
 	if err != nil {

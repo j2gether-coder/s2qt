@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "skin_image_path": "var/template/template002.png",
+  "foreground_png_path": "var/temp/temp.png",
+  "output_png_path": "var/temp/temp_skin.png",
+  "output_pdf_path": "var/temp/temp_skin.pdf",
+
+  "foreground_left_px": 112,
+  "foreground_top_px": 124,
+  "foreground_width_px": 2254,
+  "foreground_height_px": 3254,
+
+  "fit_mode": "contain",
+  "align_x": "center",
+  "align_y": "top",
+
+  "debug_rect": false
+}

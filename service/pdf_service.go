@@ -756,23 +756,16 @@ func buildQTFooterBrandHTML(cfg *QTFooterConfig) string {
 	}
 
 	logoData := encodeImageAsDataURI(cfg.LogoPath)
-	churchName := strings.TrimSpace(cfg.ChurchName)
+	if logoData != "" {
+		return `<div class="qt-footer-brand"><img class="qt-footer-brand-image" src="` + logoData + `" alt="church logo" /></div>`
+	}
 
-	if logoData == "" && churchName == "" {
+	churchName := strings.TrimSpace(cfg.ChurchName)
+	if churchName == "" {
 		return ""
 	}
 
-	var parts []string
-	parts = append(parts, `<div class="qt-footer-brand">`)
-	if logoData != "" {
-		parts = append(parts, `<img class="qt-footer-logo" src="`+logoData+`" alt="church logo" />`)
-	}
-	if churchName != "" {
-		parts = append(parts, `<div class="qt-footer-church">`+churchName+`</div>`)
-	}
-	parts = append(parts, `</div>`)
-
-	return strings.Join(parts, "")
+	return `<div class="qt-footer-brand"><div class="qt-footer-church">` + churchName + `</div></div>`
 }
 
 func buildQTFooterQRHTML(cfg *QTFooterConfig) string {

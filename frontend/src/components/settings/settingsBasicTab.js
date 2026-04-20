@@ -409,7 +409,8 @@ function renderChurchCard() {
       <ul class="settings-guide-list topgap-xs">
         <li>교회명은 "교단명, 교회명" 형식으로 입력하는 것을 권장합니다.</li>
         <li>로고는 밝은 배경에서도 글자와 심볼이 잘 보이는 이미지를 권장합니다.</li>
-        <li>흰색 또는 매우 연한 색의 글자가 포함된 로고는 문서의 꼬리말에서 잘 보이지 않을 수 있습니다.</li>
+        <li>흰색 또는 매우 연한 색의 글자가 포함된 로고는 문서 하단에서 잘 보이지 않을 수 있습니다.</li>
+        <li>로고에 교회명 또는 브랜드명이 없으면, 교회명을 함께 표시하는 방식을 사용할 수 있습니다.</li>
       </ul>
 
       <div class="form-grid two-column-grid topgap-sm">

@@ -72,21 +72,36 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 		cfg.FooterText = "말씀을 묵상으로, 묵상을 삶으로"
 	}
 
-	// 1) brand_service.go 시도
-	if brandSvc, err := NewBrandService(s.DB); err == nil && brandSvc != nil {
-		if brandRes, err := brandSvc.PrepareBrandImageFromDB(); err == nil && brandRes != nil {
-			brandFile := strings.TrimSpace(brandRes.BrandFile)
-			if brandFile != "" && ifileExists(brandFile) {
-				cfg.BrandImagePath = brandFile
-			}
+	// 1) brand_service.go 우선
+	// - brand_image_included=false 인 경우 합성 실패를 숨기면 안 됨
+	brandSvc, err := NewBrandService(s.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	brandRes, brandErr := brandSvc.PrepareBrandImageFromDB()
+	if brandErr != nil {
+		if !settings.BrandImageIncluded {
+			return nil, fmt.Errorf("brand image prepare failed: %w", brandErr)
+		}
+	} else if brandRes != nil {
+		brandFile := strings.TrimSpace(brandRes.BrandFile)
+		if brandFile != "" && ifileExists(brandFile) {
+			cfg.BrandImagePath = brandFile
+			// 최종 합성 이미지가 준비되면 footer에서 교회명을 다시 그리지 않도록 비움
+			cfg.ChurchName = ""
+			cfg.LogoPath = ""
 		}
 	}
 
-	// 2) brand_service.go 결과가 없으면 fallback
+	// 2) brand_service.go 결과가 없을 때만 fallback
+	// - 단, brand_image_included=true 인 경우에만 원본 로고 fallback 허용
 	if strings.TrimSpace(cfg.BrandImagePath) == "" {
 		brandImagePath := s.resolveBrandImagePath(settings)
 		if brandImagePath != "" {
 			cfg.BrandImagePath = brandImagePath
+			cfg.ChurchName = ""
+			cfg.LogoPath = ""
 		}
 	}
 
@@ -184,14 +199,12 @@ func (s *FooterService) resolveBrandImagePath(settings *FooterSettings) string {
 		return ""
 	}
 
-	logoPath := resolveFooterImagePath(settings.LogoPath)
-	if settings.BrandImageIncluded {
-		if ifileExists(logoPath) {
-			return logoPath
-		}
+	// fallback은 완성형 로고인 경우에만 허용
+	if !settings.BrandImageIncluded {
 		return ""
 	}
 
+	logoPath := resolveFooterImagePath(settings.LogoPath)
 	if ifileExists(logoPath) {
 		return logoPath
 	}

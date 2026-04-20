@@ -32,11 +32,16 @@ func main() {
 		fmt.Printf("[ERROR] %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("[DONE] footer step2->step3 test completed")
+	fmt.Println("[DONE] footer + skin step2->step3 test completed")
 }
 
 func run() error {
 	input, err := loadFooterTestJSON("test/footer_test.json")
+	if err != nil {
+		return err
+	}
+
+	skinInput, err := loadSkinTestJSON("test/test_skin.json")
 	if err != nil {
 		return err
 	}
@@ -48,12 +53,10 @@ func run() error {
 		return fmt.Errorf("app paths load failed: %w", err)
 	}
 
-	// temp.json 선행 확인
 	if _, err := os.Stat(paths.TempJson); err != nil {
 		return fmt.Errorf("temp.json이 없습니다. Step1/Step2 선행 데이터가 필요합니다: %w", err)
 	}
 
-	// 테스트 원본 로고를 고정 경로(church_logo.png)로 준비
 	if err := prepareTestLogoFile(input.LogoPath, paths.SiteLogoFile); err != nil {
 		return fmt.Errorf("test logo prepare failed: %w", err)
 	}
@@ -62,6 +65,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("db open failed: %w", err)
 	}
+	defer db.Close()
 
 	if err := service.InitSQLite(db); err != nil {
 		return fmt.Errorf("db init failed: %w", err)
@@ -117,7 +121,14 @@ func run() error {
 	fmt.Printf("PNG  : success=%v, status=%s, file=%s, error=%s\n",
 		result.PNG.Success, result.PNG.Status, result.PNG.FilePath, result.PNG.Error)
 
-	checkFiles(
+	var skinOutputs []string
+	if skinInput.Enabled {
+		fmt.Println("=== Skin Test Start ===")
+		skinOutputs = runSkinTest(paths, db, skinInput)
+		fmt.Println("=== Skin Test Done ===")
+	}
+
+	checkList := []string{
 		paths.SiteLogoFile,
 		paths.SiteQRFile,
 		paths.DefaultQRFile,
@@ -125,7 +136,9 @@ func run() error {
 		paths.TempHtml,
 		paths.TempPdf,
 		paths.TempPng,
-	)
+	}
+	checkList = append(checkList, skinOutputs...)
+	checkFiles(checkList...)
 
 	return nil
 }
@@ -289,18 +302,28 @@ WHERE setting_key = ?
 }
 
 func restoreAppSettings(db *sql.DB, backups []appSettingBackup) {
+	fmt.Println("=== Restore Test DB Settings ===")
+
 	for _, b := range backups {
 		if b.Found {
-			_, _ = db.Exec(`
+			if _, err := db.Exec(`
 UPDATE app_settings
 SET setting_value = ?, updated_at = datetime('now', 'localtime')
 WHERE setting_key = ?
-`, b.Value, b.Key)
+`, b.Value, b.Key); err != nil {
+				fmt.Printf("[RESTORE-FAIL] %s : %v\n", b.Key, err)
+			} else {
+				fmt.Printf("[RESTORE-OK] %s -> original value restored\n", b.Key)
+			}
 		} else {
-			_, _ = db.Exec(`
+			if _, err := db.Exec(`
 DELETE FROM app_settings
 WHERE setting_key = ?
-`, b.Key)
+`, b.Key); err != nil {
+				fmt.Printf("[DELETE-FAIL] %s : %v\n", b.Key, err)
+			} else {
+				fmt.Printf("[DELETE-OK] %s -> inserted test row removed\n", b.Key)
+			}
 		}
 	}
 }
