@@ -112,21 +112,36 @@ function getPagedTemplates() {
   };
 }
 
-function buildTemplateSupportLabel(item) {
-  const supports = [];
-  if (item?.hasPdfAsset) supports.push("PDF");
-  if (item?.hasPngAsset) supports.push("PNG");
-  if (!supports.length) return "산출물 정보 없음";
-  return supports.join(" / ");
-}
-
-function buildTemplateCategoryLabel(categoryId) {
-  const found = TEMPLATE_CATEGORIES.find((item) => item.id === categoryId);
-  return found ? found.label : "기타";
-}
-
 function getTemplatePreviewDataURI(item) {
   return item?.previewDataURI || templateUiState.noImageDataURI || "";
+}
+
+function getCurrentPreviewTitle() {
+  const selected = getSelectedTemplate();
+  if (selected) {
+    return selected.name || selected.id;
+  }
+  return "NO IMAGE";
+}
+
+function getCurrentPreviewSubText() {
+  const selected = getSelectedTemplate();
+
+  if (!templateUiState.hasLoaded && templateUiState.statusType === "error") {
+    return "템플릿 설정 정보를 불러오지 못했습니다.";
+  }
+
+  if (selected) {
+    return templateUiState.enabled
+      ? "선택된 템플릿 미리보기"
+      : "현재는 미리보기만 확인 중입니다. Step3 적용은 꺼져 있습니다.";
+  }
+
+  if (!templateUiState.enabled) {
+    return "현재는 미리보기만 확인 중입니다. Step3 적용은 꺼져 있습니다.";
+  }
+
+  return "선택된 템플릿이 없습니다.";
 }
 
 async function fetchImageDataURI(path) {
@@ -162,39 +177,6 @@ async function ensureNoImagePreviewLoaded() {
   return true;
 }
 
-async function loadTemplatePreviewDataIfNeeded(item) {
-  if (!item || item.previewDataURI) {
-    return false;
-  }
-
-  const dataURI = await fetchImageDataURI(resolveTemplatePreviewPath(item.previewPath));
-  if (!dataURI) {
-    return false;
-  }
-
-  const target = getTemplateById(item.id);
-  if (!target) {
-    return false;
-  }
-
-  target.previewDataURI = dataURI;
-  return true;
-}
-
-async function loadPagedTemplatePreviewImagesIfNeeded() {
-  const { items } = getPagedTemplates();
-  let changed = false;
-
-  for (const item of items) {
-    const loaded = await loadTemplatePreviewDataIfNeeded(item);
-    if (loaded) {
-      changed = true;
-    }
-  }
-
-  return changed;
-}
-
 async function loadSelectedPreviewImageIfNeeded() {
   let changed = false;
 
@@ -203,34 +185,36 @@ async function loadSelectedPreviewImageIfNeeded() {
     changed = true;
   }
 
-  const loadedPaged = await loadPagedTemplatePreviewImagesIfNeeded();
-  if (loadedPaged) {
-    changed = true;
+  const app = getAppBindings();
+  const selected = getSelectedTemplate();
+
+  if (!selected) {
+    if (changed) {
+      rerenderTemplatePanelOnly();
+    }
+    return;
   }
 
-  const selected = getSelectedTemplate();
-  if (selected) {
-    const loadedSelected = await loadTemplatePreviewDataIfNeeded(selected);
-    if (loadedSelected) {
-      changed = true;
+  if (!selected.previewDataURI) {
+    try {
+      const previewPath = await app.GetTemplatePreview(selected.id);
+      const dataURI = await fetchImageDataURI(previewPath);
+
+      if (dataURI) {
+        const target = getTemplateById(selected.id);
+        if (target) {
+          target.previewDataURI = dataURI;
+          changed = true;
+        }
+      }
+    } catch (error) {
+      console.error("template preview load failed", error);
     }
   }
 
   if (changed) {
     rerenderTemplatePanelOnly();
   }
-}
-
-function renderStatusNote() {
-  if (!templateUiState.statusMessage) {
-    return "";
-  }
-
-  return `
-    <div class="body-note topgap-sm" style="${getStatusInlineStyle()}">
-      <p>${escapeHtml(templateUiState.statusMessage)}</p>
-    </div>
-  `;
 }
 
 function renderTemplateGuideCard() {
@@ -321,7 +305,6 @@ function renderTemplateTable() {
             .map((item) => {
               const isSelected = templateUiState.selectedId === item.id;
               const disabled = templateUiState.isLoading || !item.isValid;
-              const thumb = getTemplatePreviewDataURI(item);
 
               return `
                 <tr class="${isSelected ? "is-selected" : ""} ${!item.isValid ? "is-disabled" : ""}" data-template-row="${escapeHtml(item.id)}">
@@ -337,17 +320,7 @@ function renderTemplateTable() {
                     </label>
                   </td>
                   <td class="settings-template-table-name-cell">
-                    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-                      <div style="width:34px; height:46px; flex:0 0 34px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#f8fafc;">
-                        ${thumb ? `<img src="${thumb}" alt="${escapeHtml(item.name || item.id)} 썸네일" style="width:100%; height:100%; object-fit:cover; display:block;" />` : ``}
-                      </div>
-                      <div style="min-width:0;">
-                        <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                          ${escapeHtml(item.name || item.id)}
-                        </div>
-                        <div class="settings-template-table-sub">${escapeHtml(buildTemplateSupportLabel(item))}</div>
-                      </div>
-                    </div>
+                    ${escapeHtml(item.name || item.id)}
                   </td>
                 </tr>
               `;
@@ -402,55 +375,18 @@ function renderTemplatePreviewPanel() {
   }
 
   const selected = getSelectedTemplate();
-  const fallbackImage = templateUiState.noImageDataURI
-    ? `<img src="${templateUiState.noImageDataURI}" alt="no image preview" />`
+  const previewDataURI = selected ? getTemplatePreviewDataURI(selected) : templateUiState.noImageDataURI;
+
+  const previewContent = previewDataURI
+    ? `<img src="${previewDataURI}" alt="${escapeHtml(getCurrentPreviewTitle())} 미리보기" />`
     : `<div class="settings-template-preview-empty">no_image.png를 불러오는 중입니다.</div>`;
-
-  if (selected) {
-    const previewImage = getTemplatePreviewDataURI(selected)
-      ? `<img src="${getTemplatePreviewDataURI(selected)}" alt="${escapeHtml(selected.name)} 미리보기" />`
-      : fallbackImage;
-
-    return `
-      <div class="settings-template-preview-panel">
-        <div class="settings-template-preview-large">
-          ${previewImage}
-        </div>
-
-        <div class="settings-template-preview-detail">
-          <div class="settings-template-preview-title">${escapeHtml(selected.name || selected.id)}</div>
-          <div class="settings-template-preview-sub">
-            ${escapeHtml(buildTemplateCategoryLabel(selected.category))} / ${escapeHtml(buildTemplateSupportLabel(selected))}
-            ${templateUiState.enabled ? "" : " / 적용 꺼짐"}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  if (!templateUiState.enabled) {
-    return `
-      <div class="settings-template-preview-panel">
-        <div class="settings-template-preview-large">
-          ${fallbackImage}
-        </div>
-        <div class="settings-template-preview-detail">
-          <div class="settings-template-preview-title">NO IMAGE</div>
-          <div class="settings-template-preview-sub">현재는 미리보기만 확인 중입니다. Step3 적용은 꺼져 있습니다.</div>
-        </div>
-      </div>
-    `;
-  }
 
   return `
     <div class="settings-template-preview-panel">
       <div class="settings-template-preview-large">
-        ${fallbackImage}
+        ${previewContent}
       </div>
-      <div class="settings-template-preview-detail">
-        <div class="settings-template-preview-title">NO IMAGE</div>
-        <div class="settings-template-preview-sub">선택된 템플릿이 없습니다.</div>
-      </div>
+      <div class="settings-template-preview-sub">${escapeHtml(getCurrentPreviewSubText())}</div>
     </div>
   `;
 }
@@ -491,7 +427,12 @@ function renderTemplateSelectionCard() {
           </div>
 
           <div class="settings-template-picker-preview">
-            <div class="settings-field-label">미리보기</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+              <div class="settings-field-label" style="margin-bottom:0;">미리보기</div>
+              <div style="font-size:13px; font-weight:700; color:#111827; line-height:1.4; text-align:right;">
+                ${escapeHtml(getCurrentPreviewTitle())}
+              </div>
+            </div>
             ${renderTemplatePreviewPanel()}
           </div>
         </div>
@@ -544,7 +485,6 @@ function mapTemplates(items) {
         id: String(item?.id || "").trim(),
         name: String(item?.name || item?.id || "").trim(),
         category: normalizeCategory(item?.category),
-        previewPath: resolveTemplatePreviewPath(item?.previewPath),
         hasPdfAsset: !!item?.hasPdfAsset,
         hasPngAsset: !!item?.hasPngAsset,
         isValid: item?.isValid !== false,
@@ -672,7 +612,6 @@ async function updateTemplateCategory(category) {
   }
 
   rerenderTemplatePanelOnly();
-  void loadSelectedPreviewImageIfNeeded();
 }
 
 async function selectTemplate(templateId) {
@@ -730,7 +669,6 @@ export function bindSettingTemplateTabEvents() {
       }
 
       rerenderTemplatePanelOnly();
-      void loadSelectedPreviewImageIfNeeded();
     });
   });
 

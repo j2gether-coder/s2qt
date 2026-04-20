@@ -30,6 +30,8 @@ const (
 	templateSettingEnabledKey  = "template.enabled"
 	templateSettingSelectedKey = "template.selected_id"
 	templateSettingCategoryKey = "template.selected_category"
+
+	templateThumbFileName = "thumb.png"
 )
 
 type TemplateSettings struct {
@@ -91,6 +93,7 @@ type TemplateItem struct {
 	Category     string
 	Dir          string
 	PreviewPath  string
+	ThumbPath    string
 	CommonPath   string
 	PDFPath      string
 	PNGPath      string
@@ -246,6 +249,8 @@ ON CONFLICT(setting_key) DO UPDATE SET
 	return nil
 }
 
+// ListTemplates는 절대 이미지 디코드/썸네일 생성 없이,
+// var/template 직하 디렉터리와 manifest만 읽습니다.
 func (s *TemplateService) ListTemplates() ([]TemplateListItem, error) {
 	if s == nil || s.Paths == nil {
 		return []TemplateListItem{}, nil
@@ -309,6 +314,102 @@ func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, err
 	}
 
 	return s.loadTemplateItemFromDir(dir)
+}
+
+// GetTemplatePreview는 선택된 템플릿 1건에 대해서만 thumb를 보장합니다.
+// 목록 조회 단계에서는 절대 호출하지 않는 것이 원칙입니다.
+func (s *TemplateService) GetTemplatePreview(templateID string) (string, error) {
+	item, err := s.GetTemplateByID(templateID)
+	if err != nil {
+		return s.resolveNoImagePath(), nil
+	}
+
+	thumbPath, err := s.EnsureTemplateThumbnail(item)
+	if err != nil {
+		return s.resolveNoImagePath(), nil
+	}
+	if strings.TrimSpace(thumbPath) == "" {
+		return s.resolveNoImagePath(), nil
+	}
+	return thumbPath, nil
+}
+
+func (s *TemplateService) EnsureTemplateThumbnail(item *TemplateItem) (string, error) {
+	if item == nil {
+		return "", fmt.Errorf("template item이 nil 입니다")
+	}
+
+	thumbPath := s.buildTemplateThumbPath(item.Dir)
+	if FileExists(thumbPath) {
+		return thumbPath, nil
+	}
+
+	sourcePath := item.sourcePathForThumbnail()
+	if strings.TrimSpace(sourcePath) == "" {
+		return "", fmt.Errorf("썸네일 생성용 template image가 없습니다")
+	}
+
+	if err := s.generateTemplateThumbnail(sourcePath, thumbPath, 360, 510); err != nil {
+		return "", err
+	}
+	return thumbPath, nil
+}
+
+func (s *TemplateService) buildTemplateThumbPath(dir string) string {
+	return filepath.Join(dir, templateThumbFileName)
+}
+
+func (s *TemplateService) generateTemplateThumbnail(srcPath, dstPath string, maxWidth, maxHeight int) error {
+	img, err := templateDecodeImageFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("template image decode 실패: %w", err)
+	}
+
+	bounds := img.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+	if srcW <= 0 || srcH <= 0 {
+		return fmt.Errorf("template image 크기가 올바르지 않습니다")
+	}
+
+	if maxWidth <= 0 {
+		maxWidth = 360
+	}
+	if maxHeight <= 0 {
+		maxHeight = 510
+	}
+
+	scale := math.Min(float64(maxWidth)/float64(srcW), float64(maxHeight)/float64(srcH))
+	if scale > 1.0 {
+		scale = 1.0
+	}
+
+	dstW := int(math.Round(float64(srcW) * scale))
+	dstH := int(math.Round(float64(srcH) * scale))
+	if dstW < 1 {
+		dstW = 1
+	}
+	if dstH < 1 {
+		dstH = 1
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, xdraw.Over, nil)
+
+	if err := EnsureParentDir(dstPath); err != nil {
+		return err
+	}
+
+	f, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("thumb.png 생성 실패: %w", err)
+	}
+	defer f.Close()
+
+	if err := png.Encode(f, dst); err != nil {
+		return fmt.Errorf("thumb.png 인코딩 실패: %w", err)
+	}
+	return nil
 }
 
 func (s *TemplateService) ApplySelectedTemplate(req *TemplateApplyRequest) (*TemplateApplyResult, error) {
@@ -461,6 +562,11 @@ func (s *TemplateService) resolveTemplateRootDir() string {
 	return filepath.Join(varDir, "template")
 }
 
+func (s *TemplateService) resolveNoImagePath() string {
+	return filepath.Join(s.resolveTemplateRootDir(), "no_image.png")
+}
+
+// scanTemplateDirectories는 var/template 직하 1단계 디렉터리만 읽습니다.
 func (s *TemplateService) scanTemplateDirectories(root string) ([]string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -505,11 +611,12 @@ func (s *TemplateService) buildTemplateListItem(dir string, manifest *TemplateMa
 		return nil, fmt.Errorf("template item 생성 실패: %s", dir)
 	}
 
+	// 목록 단계에서는 thumb 생성 금지.
 	listItem := &TemplateListItem{
 		ID:          item.ID,
 		Name:        item.Name,
 		Category:    item.Category,
-		PreviewPath: item.PreviewPath,
+		PreviewPath: item.safePreviewPathForList(s.resolveNoImagePath()),
 		HasPDFAsset: strings.TrimSpace(item.templateBackgroundPathForPDF()) != "",
 		HasPNGAsset: strings.TrimSpace(item.templateBackgroundPathForPNG()) != "",
 	}
@@ -544,12 +651,11 @@ func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, er
 		item.CommonPath = resolveTemplateCommonImage(dir, manifest)
 		item.PDFPath = resolveTemplatePDFImage(dir, manifest)
 		item.PNGPath = resolveTemplatePNGImage(dir, manifest)
-
 		item.PreviewPath = resolveTemplatePreviewImage(dir, manifest)
+		item.ThumbPath = resolveTemplateThumbImage(dir)
 		item.PNGPlacement = normalizeTemplatePlacement(manifest.PNGPlacement)
 	}
 
-	// fallback: template.png 중심
 	if item.CommonPath == "" {
 		item.CommonPath = findFirstExistingFile(dir, []string{
 			"template.png", "template.jpg", "template.jpeg", "template.webp",
@@ -560,27 +666,32 @@ func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, er
 		})
 	}
 
-	// PDF/PNG 자산은 공통 자산 우선
 	if item.PDFPath == "" {
 		item.PDFPath = item.CommonPath
 	}
 	if item.PNGPath == "" {
 		item.PNGPath = item.CommonPath
 	}
-
-	// preview도 공통 자산 우선
+	if item.PreviewPath == "" {
+		item.PreviewPath = item.ThumbPath
+	}
 	if item.PreviewPath == "" {
 		item.PreviewPath = item.CommonPath
 	}
-	if item.PreviewPath == "" {
-		item.PreviewPath = findFirstExistingFile(dir, []string{
-			"preview.png", "preview.jpg", "preview.jpeg", "preview.webp",
-			"template.png", "template.jpg", "template.jpeg", "template.webp",
-		})
+	if item.ThumbPath == "" {
+		item.ThumbPath = resolveTemplateThumbImage(dir)
 	}
 
 	item.PNGPlacement = normalizeTemplatePlacement(item.PNGPlacement)
 	return item, nil
+}
+
+func resolveTemplateThumbImage(dir string) string {
+	path := filepath.Join(dir, templateThumbFileName)
+	if FileExists(path) {
+		return path
+	}
+	return ""
 }
 
 func resolveTemplateCommonImage(dir string, manifest *TemplateManifest) string {
@@ -588,17 +699,12 @@ func resolveTemplateCommonImage(dir string, manifest *TemplateManifest) string {
 		return ""
 	}
 
-	// 1순위: 단일 공통 자산
 	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
 		return p
 	}
-
-	// 2순위: 구버전 background_image
 	if p := resolveTemplateAssetPath(dir, manifest.BackgroundImage); p != "" {
 		return p
 	}
-
-	// 3순위: 구버전 개별 자산 중 하나 fallback
 	if p := resolveTemplateAssetPath(dir, manifest.PDFBackgroundImage); p != "" {
 		return p
 	}
@@ -611,7 +717,6 @@ func resolveTemplateCommonImage(dir string, manifest *TemplateManifest) string {
 	if p := resolveTemplateAssetPath(dir, manifest.PreviewImage); p != "" {
 		return p
 	}
-
 	return ""
 }
 
@@ -619,12 +724,13 @@ func resolveTemplatePreviewImage(dir string, manifest *TemplateManifest) string 
 	if manifest == nil {
 		return ""
 	}
-
-	// preview는 template_image 우선
-	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
+	if p := resolveTemplateThumbImage(dir); p != "" {
 		return p
 	}
 	if p := resolveTemplateAssetPath(dir, manifest.PreviewImage); p != "" {
+		return p
+	}
+	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
 		return p
 	}
 	if p := resolveTemplateAssetPath(dir, manifest.BackgroundImage); p != "" {
@@ -637,8 +743,6 @@ func resolveTemplatePDFImage(dir string, manifest *TemplateManifest) string {
 	if manifest == nil {
 		return ""
 	}
-
-	// PDF는 단일 공통 자산 우선
 	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
 		return p
 	}
@@ -655,8 +759,6 @@ func resolveTemplatePNGImage(dir string, manifest *TemplateManifest) string {
 	if manifest == nil {
 		return ""
 	}
-
-	// PNG는 단일 공통 자산 우선
 	if p := resolveTemplateAssetPath(dir, manifest.TemplateImage); p != "" {
 		return p
 	}
@@ -782,6 +884,32 @@ func (t *TemplateItem) templateBackgroundPathForPNG() string {
 		return t.PNGPath
 	}
 	return t.CommonPath
+}
+
+func (t *TemplateItem) sourcePathForThumbnail() string {
+	if t == nil {
+		return ""
+	}
+	if strings.TrimSpace(t.CommonPath) != "" {
+		return t.CommonPath
+	}
+	if strings.TrimSpace(t.PDFPath) != "" {
+		return t.PDFPath
+	}
+	if strings.TrimSpace(t.PNGPath) != "" {
+		return t.PNGPath
+	}
+	return ""
+}
+
+func (t *TemplateItem) safePreviewPathForList(noImagePath string) string {
+	if t == nil {
+		return noImagePath
+	}
+	if strings.TrimSpace(t.ThumbPath) != "" {
+		return t.ThumbPath
+	}
+	return noImagePath
 }
 
 func (s *TemplateService) wrapHTMLForTemplatePDF(content string, item *TemplateItem, footerOverride *QTFooterConfig) (string, error) {

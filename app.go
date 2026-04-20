@@ -785,3 +785,28 @@ func (a *App) TestSMTPSettings(pin string) (*service.SMTPTestResult, error) {
 	}
 	return a.smtpSvc.TestSendToSelf(pin)
 }
+
+func (a *App) GetTemplatePreview(templateID string) (string, error) {
+	service.LogInfo("template: preview requested")
+
+	if a.db == nil {
+		err := fmt.Errorf("db is not initialized")
+		service.LogError("template: preview failed: " + err.Error())
+		return "", err
+	}
+
+	svc, err := service.NewTemplateServiceWithDB(a.db)
+	if err != nil {
+		service.LogError("template: service create failed: " + err.Error())
+		return "", err
+	}
+
+	previewPath, err := svc.GetTemplatePreview(templateID)
+	if err != nil {
+		service.LogError("template: preview load failed: " + err.Error())
+		return "", err
+	}
+
+	service.LogInfo("template: preview completed")
+	return previewPath, nil
+}
