@@ -28,6 +28,20 @@ function getBasicInfo() {
   return appState?.source?.basicInfo || {};
 }
 
+function ensureQTTitlePrefix(title) {
+  const v = (title || '').trim();
+
+  if (!v) {
+    return '[QT]';
+  }
+
+  if (v.startsWith('[QT]')) {
+    return v;
+  }
+
+  return `[QT] ${v}`;
+}
+
 function resolveQtTitleByAudience(audienceId, metaTitle, llmTitle) {
   const safeMetaTitle = (metaTitle || '').trim();
   const safeLlmTitle = (llmTitle || '').trim();
@@ -72,11 +86,12 @@ function buildStep2Payload(audienceId) {
   const metaTitle = basicInfo.title || '';
   const llmTitle = getLoadedStep2TitleCandidate();
   const resolvedTitle = resolveQtTitleByAudience(audienceId, metaTitle, llmTitle);
+  const finalTitle = ensureQTTitlePrefix(resolvedTitle);
 
   return {
     audience: audienceId,
 
-    title: resolvedTitle,
+    title: finalTitle,
     bibleText: (basicInfo.bibleText || '').trim(),
     hymn: (basicInfo.hymn || loadedMeta.hymn || '').trim(),
     preacher: (basicInfo.preacher || loadedMeta.preacher || '').trim(),
@@ -109,8 +124,12 @@ function buildHistoryPayload(audienceId, step2Payload) {
   const basicInfo = getBasicInfo();
   const loadedMeta = getLoadedStep2Meta();
 
+  const historyTitle = ensureQTTitlePrefix(
+    step2Payload?.title || basicInfo.title || getLoadedStep2TitleCandidate() || ''
+  );
+
   return {
-    title: basicInfo.title || '',
+    title: historyTitle,
     bibleText: basicInfo.bibleText || '',
     hymn: (basicInfo.hymn || loadedMeta.hymn || '').trim(),
     preacher: (basicInfo.preacher || loadedMeta.preacher || '').trim(),
@@ -138,9 +157,11 @@ async function loadStep2Data(audienceId) {
     loadedTitle
   );
 
+  const finalTitle = ensureQTTitlePrefix(resolvedTitle || loadedTitle || '');
+
   const readonlyTitleEl = document.getElementById('qtReadonlyTitle');
   if (readonlyTitleEl) {
-    readonlyTitleEl.textContent = resolvedTitle || '-';
+    readonlyTitleEl.textContent = finalTitle || '-';
   }
 
   const readonlyBibleTextEl = document.getElementById('qtReadonlyBibleText');

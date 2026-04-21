@@ -212,7 +212,7 @@ body{
   width: 210mm;
   height: 297mm;
   margin: 0 !important;
-  padding: var(--qt-page-top, 10mm) 12mm var(--qt-safe-area, 36mm) 12mm !important;
+  padding: var(--qt-page-top, 10mm) 12mm 24mm 12mm !important;
   box-sizing: border-box;
   background: #ffffff;
   overflow: hidden;
@@ -230,6 +230,27 @@ body{
   max-width: 186mm;
   margin: 0 auto;
   padding: 0 !important;
+}
+
+:root{
+  --qt-png-footer-bottom: 0.0mm;
+  --qt-png-qr-bottom: 0.0mm;
+}
+
+.qt-footer{
+  bottom: var(--qt-png-footer-bottom, var(--qt-footer-bottom, 0.0mm)) !important;
+}
+
+.qt-page-qr{
+  bottom: var(--qt-png-qr-bottom, var(--qt-qr-bottom, 0.0mm)) !important;
+}
+
+.qt-subbox-line{
+  display: block;
+}
+
+.qt-subbox-line + .qt-subbox-line{
+  margin-top: 4px;
 }
 `
 }

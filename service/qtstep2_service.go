@@ -60,7 +60,7 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 
 	// metadata 복원
 	if doc.Metadata != nil {
-		out.Title = step2firstNonEmpty(getStringFromMap(doc.Metadata, "title"))
+		out.Title = ensureQTTitlePrefix(step2firstNonEmpty(getStringFromMap(doc.Metadata, "title")))
 		out.BibleText = getStringFromMap(doc.Metadata, "bible_text")
 		out.Hymn = getStringFromMap(doc.Metadata, "hymn")
 		out.Preacher = getStringFromMap(doc.Metadata, "preacher")
@@ -127,12 +127,25 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	return out, nil
 }
 
+func ensureQTTitlePrefix(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "[QT]"
+	}
+
+	if strings.HasPrefix(title, "[QT]") {
+		return title
+	}
+
+	return "[QT] " + title
+}
+
 func (s *QTStep2Service) Save(req *QTStep2Data) error {
 	if req == nil {
 		return fmt.Errorf("step2 data가 비어 있습니다")
 	}
 
-	finalTitle := step2firstNonEmpty(req.Title, "QT")
+	finalTitle := ensureQTTitlePrefix(step2firstNonEmpty(req.Title, "QT"))
 	finalBibleText := strings.TrimSpace(req.BibleText)
 
 	doc := QTSectionDoc{
@@ -219,20 +232,21 @@ func (s *QTStep2Service) BuildHTML(req *QTStep2Data) (string, error) {
 }
 
 func buildQTStep2HTML(req *QTStep2Data) string {
-	titleText := step2firstNonEmpty(req.Title, "QT")
+	titleText := ensureQTTitlePrefix(step2firstNonEmpty(req.Title, "QT"))
 	bibleText := strings.TrimSpace(req.BibleText)
 
 	subboxParts := make([]string, 0)
 	if bibleText != "" {
 		subboxParts = append(subboxParts, "본문 성구: "+escapeHTML(bibleText))
 	}
+
 	if strings.TrimSpace(req.Hymn) != "" {
 		subboxParts = append(subboxParts, "찬송: "+escapeHTML(strings.TrimSpace(req.Hymn)))
 	}
 
 	subbox := ""
 	if len(subboxParts) > 0 {
-		subbox = `<div class="qt-subbox">` + strings.Join(subboxParts, " &nbsp;|&nbsp; ") + `</div>`
+		subbox = `<div class="qt-subbox">` + strings.Join(subboxParts, "<br />") + `</div>`
 	}
 
 	prayerTitle := strings.TrimSpace(req.PrayerTitle)
