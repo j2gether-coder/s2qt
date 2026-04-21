@@ -64,7 +64,7 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 		BrandImagePath: "",
 		HomepageURL:    strings.TrimSpace(settings.HomepageURL),
 		QRImagePath:    "",
-		QRPosition:     "left-bottom",
+		QRPosition:     "right-bottom",
 		QRSizeMM:       27.0,
 	}
 
@@ -107,7 +107,7 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 			if ifileExists(qrOut) {
 				cfg.ShowQR = true
 				cfg.QRImagePath = qrOut
-				cfg.QRPosition = "left-bottom"
+				cfg.QRPosition = "right-bottom"
 				cfg.QRSizeMM = 27.0
 			}
 		}
@@ -118,7 +118,7 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 		if fallbackQR != "" {
 			cfg.ShowQR = true
 			cfg.QRImagePath = fallbackQR
-			cfg.QRPosition = "left-bottom"
+			cfg.QRPosition = "right-bottom"
 			cfg.QRSizeMM = 27.0
 		}
 	}
