@@ -49,6 +49,10 @@ type AppPaths struct {
 	TempDocx  string
 	TempPptx  string
 	TempPng   string
+
+	// Template files
+	Template        string
+	TemplateNoImage string
 }
 
 func GetAppPaths() (*AppPaths, error) {
@@ -66,19 +70,21 @@ func GetAppPaths() (*AppPaths, error) {
 	docDir := filepath.Join(varDir, "doc")
 	logDir := filepath.Join(varDir, "log")
 	imageDir := filepath.Join(varDir, "image")
+	templateDir := filepath.Join(varDir, "template")
 
 	p := &AppPaths{
-		Root:  root,
-		Bin:   binDir,
-		Var:   varDir,
-		Temp:  tempDir,
-		Conf:  confDir,
-		Data:  filepath.Join(varDir, "data"),
-		Doc:   docDir,
-		DB:    dbDir,
-		Log:   logDir,
-		Model: modelDir,
-		Image: imageDir,
+		Root:     root,
+		Bin:      binDir,
+		Var:      varDir,
+		Temp:     tempDir,
+		Conf:     confDir,
+		Data:     filepath.Join(varDir, "data"),
+		Doc:      docDir,
+		DB:       dbDir,
+		Log:      logDir,
+		Model:    modelDir,
+		Image:    imageDir,
+		Template: templateDir,
 
 		YtDlpExe:   filepath.Join(binDir, "yt-dlp.exe"),
 		FfmpegExe:  filepath.Join(binDir, "ffmpeg.exe"),
@@ -101,9 +107,10 @@ func GetAppPaths() (*AppPaths, error) {
 		TempPptx:  filepath.Join(tempDir, "temp.pptx"),
 		TempPng:   filepath.Join(tempDir, "temp.png"),
 
-		SiteLogoFile:  filepath.Join(imageDir, "site_logo.png"),
-		SiteQRFile:    filepath.Join(imageDir, "site_qr.png"),
-		DefaultQRFile: filepath.Join(imageDir, "s2qt_link.png"),
+		SiteLogoFile:    filepath.Join(imageDir, "site_logo.png"),
+		SiteQRFile:      filepath.Join(imageDir, "site_qr.png"),
+		DefaultQRFile:   filepath.Join(imageDir, "s2qt_link.png"),
+		TemplateNoImage: filepath.Join(templateDir, "no_image.png"),
 	}
 
 	return p, EnsureDirs(p)
@@ -188,6 +195,7 @@ func EnsureDirs(p *AppPaths) error {
 		p.Model,
 		p.Log,
 		p.Image,
+		p.Template,
 	}
 
 	for _, d := range dirs {

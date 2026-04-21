@@ -257,6 +257,10 @@ func (s *TemplateService) ListTemplates() ([]TemplateListItem, error) {
 	}
 
 	root := s.resolveTemplateRootDir()
+	if strings.TrimSpace(root) == "" {
+		return []TemplateListItem{}, nil
+	}
+
 	dirs, err := s.scanTemplateDirectories(root)
 	if err != nil {
 		return nil, err
@@ -266,7 +270,7 @@ func (s *TemplateService) ListTemplates() ([]TemplateListItem, error) {
 	for _, dir := range dirs {
 		manifest, err := s.loadTemplateManifest(dir)
 		if err != nil {
-			manifest = nil
+			continue
 		}
 
 		item, err := s.buildTemplateListItem(dir, manifest)
@@ -304,7 +308,12 @@ func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, err
 		return nil, fmt.Errorf("template id가 비어 있습니다")
 	}
 
-	dir := filepath.Join(s.resolveTemplateRootDir(), templateID)
+	root := s.resolveTemplateRootDir()
+	if strings.TrimSpace(root) == "" {
+		return nil, fmt.Errorf("template root가 비어 있습니다")
+	}
+
+	dir := filepath.Join(root, templateID)
 	info, err := os.Stat(dir)
 	if err != nil {
 		return nil, fmt.Errorf("template directory를 찾을 수 없습니다: %s", dir)
@@ -316,67 +325,58 @@ func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, err
 	return s.loadTemplateItemFromDir(dir)
 }
 
-// GetTemplatePreview는 선택된 템플릿 1건에 대해서만 thumb를 보장합니다.
-// 목록 조회 단계에서는 절대 호출하지 않는 것이 원칙입니다.
-func (s *TemplateService) GetTemplatePreview(templateID string) (string, error) {
-	item, err := s.GetTemplateByID(templateID)
-	if err != nil {
-		return s.resolveNoImagePath(), nil
-	}
-
-	thumbPath, err := s.EnsureTemplateThumbnail(item)
-	if err != nil {
-		return s.resolveNoImagePath(), nil
-	}
-	if strings.TrimSpace(thumbPath) == "" {
-		return s.resolveNoImagePath(), nil
-	}
-	return thumbPath, nil
-}
-
 func (s *TemplateService) EnsureTemplateThumbnail(item *TemplateItem) (string, error) {
 	if item == nil {
 		return "", fmt.Errorf("template item이 nil 입니다")
 	}
 
-	thumbPath := s.buildTemplateThumbPath(item.Dir)
-	if FileExists(thumbPath) {
-		return thumbPath, nil
+	srcPath := strings.TrimSpace(item.CommonPath)
+	if srcPath == "" {
+		srcPath = strings.TrimSpace(item.templateBackgroundPathForPNG())
+	}
+	if srcPath == "" {
+		srcPath = strings.TrimSpace(item.templateBackgroundPathForPDF())
+	}
+	if srcPath == "" {
+		return "", fmt.Errorf("template 원본 이미지가 없습니다")
+	}
+	if !FileExists(srcPath) {
+		return "", fmt.Errorf("template 원본 파일이 없습니다: %s", srcPath)
 	}
 
-	sourcePath := item.sourcePathForThumbnail()
-	if strings.TrimSpace(sourcePath) == "" {
-		return "", fmt.Errorf("썸네일 생성용 template image가 없습니다")
+	dstPath := s.buildTemplateThumbPath(item.Dir)
+	if FileExists(dstPath) {
+		return dstPath, nil
 	}
 
-	if err := s.generateTemplateThumbnail(sourcePath, thumbPath, 360, 510); err != nil {
+	if err := s.generateTemplateThumbnail(srcPath, dstPath, 360, 480); err != nil {
 		return "", err
 	}
-	return thumbPath, nil
+	return dstPath, nil
 }
 
 func (s *TemplateService) buildTemplateThumbPath(dir string) string {
-	return filepath.Join(dir, templateThumbFileName)
+	return filepath.Join(dir, "thumb.png")
 }
 
 func (s *TemplateService) generateTemplateThumbnail(srcPath, dstPath string, maxWidth, maxHeight int) error {
-	img, err := templateDecodeImageFile(srcPath)
-	if err != nil {
-		return fmt.Errorf("template image decode 실패: %w", err)
-	}
-
-	bounds := img.Bounds()
-	srcW := bounds.Dx()
-	srcH := bounds.Dy()
-	if srcW <= 0 || srcH <= 0 {
-		return fmt.Errorf("template image 크기가 올바르지 않습니다")
-	}
-
 	if maxWidth <= 0 {
 		maxWidth = 360
 	}
 	if maxHeight <= 0 {
-		maxHeight = 510
+		maxHeight = 480
+	}
+
+	srcImg, err := templateDecodeImageFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("template 이미지 디코드 실패: %w", err)
+	}
+
+	b := srcImg.Bounds()
+	srcW := b.Dx()
+	srcH := b.Dy()
+	if srcW <= 0 || srcH <= 0 {
+		return fmt.Errorf("유효하지 않은 template 이미지 크기: %dx%d", srcW, srcH)
 	}
 
 	scale := math.Min(float64(maxWidth)/float64(srcW), float64(maxHeight)/float64(srcH))
@@ -386,15 +386,15 @@ func (s *TemplateService) generateTemplateThumbnail(srcPath, dstPath string, max
 
 	dstW := int(math.Round(float64(srcW) * scale))
 	dstH := int(math.Round(float64(srcH) * scale))
-	if dstW < 1 {
+	if dstW <= 0 {
 		dstW = 1
 	}
-	if dstH < 1 {
+	if dstH <= 0 {
 		dstH = 1
 	}
 
-	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
-	xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, xdraw.Over, nil)
+	dstImg := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	xdraw.CatmullRom.Scale(dstImg, dstImg.Bounds(), srcImg, b, xdraw.Src, nil)
 
 	if err := EnsureParentDir(dstPath); err != nil {
 		return err
@@ -406,9 +406,10 @@ func (s *TemplateService) generateTemplateThumbnail(srcPath, dstPath string, max
 	}
 	defer f.Close()
 
-	if err := png.Encode(f, dst); err != nil {
-		return fmt.Errorf("thumb.png 인코딩 실패: %w", err)
+	if err := png.Encode(f, dstImg); err != nil {
+		return fmt.Errorf("thumb.png 저장 실패: %w", err)
 	}
+
 	return nil
 }
 
@@ -557,17 +558,26 @@ func templateBoolToText(v bool) string {
 }
 
 func (s *TemplateService) resolveTemplateRootDir() string {
-	tempDir := filepath.Dir(s.Paths.TempHtml)
-	varDir := filepath.Dir(tempDir)
-	return filepath.Join(varDir, "template")
+	if s == nil || s.Paths == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.Paths.Template)
 }
 
-func (s *TemplateService) resolveNoImagePath() string {
-	return filepath.Join(s.resolveTemplateRootDir(), "no_image.png")
+func (s *TemplateService) templateNoImagePath() string {
+	if s == nil || s.Paths == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.Paths.TemplateNoImage)
 }
 
 // scanTemplateDirectories는 var/template 직하 1단계 디렉터리만 읽습니다.
 func (s *TemplateService) scanTemplateDirectories(root string) ([]string, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return []string{}, nil
+	}
+
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -581,7 +591,16 @@ func (s *TemplateService) scanTemplateDirectories(root string) ([]string, error)
 		if !entry.IsDir() {
 			continue
 		}
-		dirs = append(dirs, filepath.Join(root, entry.Name()))
+
+		name := strings.TrimSpace(entry.Name())
+		if name == "" {
+			continue
+		}
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		dirs = append(dirs, filepath.Join(root, name))
 	}
 
 	sort.Strings(dirs)
@@ -603,29 +622,87 @@ func (s *TemplateService) loadTemplateManifest(dir string) (*TemplateManifest, e
 }
 
 func (s *TemplateService) buildTemplateListItem(dir string, manifest *TemplateManifest) (*TemplateListItem, error) {
-	item, err := s.loadTemplateItemFromDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	if item == nil {
-		return nil, fmt.Errorf("template item 생성 실패: %s", dir)
+	if manifest == nil {
+		return nil, fmt.Errorf("manifest is nil")
 	}
 
-	// 목록 단계에서는 thumb 생성 금지.
-	listItem := &TemplateListItem{
-		ID:          item.ID,
-		Name:        item.Name,
-		Category:    item.Category,
-		PreviewPath: item.safePreviewPathForList(s.resolveNoImagePath()),
-		HasPDFAsset: strings.TrimSpace(item.templateBackgroundPathForPDF()) != "",
-		HasPNGAsset: strings.TrimSpace(item.templateBackgroundPathForPNG()) != "",
+	if manifest.Enabled != nil && !*manifest.Enabled {
+		return nil, fmt.Errorf("disabled template")
 	}
-	listItem.IsValid = listItem.HasPDFAsset || listItem.HasPNGAsset
-	return listItem, nil
+
+	id := strings.TrimSpace(manifest.ID)
+	if id == "" {
+		id = filepath.Base(dir)
+	}
+
+	name := strings.TrimSpace(manifest.Name)
+	if name == "" {
+		name = id
+	}
+
+	category := normalizeTemplateCategory(manifest.Category)
+	templatePath := resolveTemplateCommonImage(dir, manifest)
+
+	return &TemplateListItem{
+		ID:          id,
+		Name:        name,
+		Category:    category,
+		PreviewPath: "",
+		HasPDFAsset: strings.TrimSpace(templatePath) != "",
+		HasPNGAsset: strings.TrimSpace(templatePath) != "",
+		IsValid:     strings.TrimSpace(templatePath) != "",
+	}, nil
+}
+
+func (s *TemplateService) GetTemplatePreview(templateID string) (string, error) {
+	if s == nil || s.Paths == nil {
+		return "", fmt.Errorf("template service가 초기화되지 않았습니다")
+	}
+
+	templateID = strings.TrimSpace(templateID)
+	if templateID == "" {
+		noImage := s.templateNoImagePath()
+		if noImage != "" && FileExists(noImage) {
+			return noImage, nil
+		}
+		return "", fmt.Errorf("template id가 비어 있습니다")
+	}
+
+	item, err := s.GetTemplateByID(templateID)
+	if err != nil {
+		noImage := s.templateNoImagePath()
+		if noImage != "" && FileExists(noImage) {
+			return noImage, nil
+		}
+		return "", err
+	}
+
+	thumbPath, err := s.EnsureTemplateThumbnail(item)
+	if err == nil && strings.TrimSpace(thumbPath) != "" && FileExists(thumbPath) {
+		return thumbPath, nil
+	}
+
+	noImage := s.templateNoImagePath()
+	if noImage != "" && FileExists(noImage) {
+		return noImage, nil
+	}
+
+	if item.CommonPath != "" && FileExists(item.CommonPath) {
+		return item.CommonPath, nil
+	}
+
+	return "", fmt.Errorf("미리보기 이미지를 찾을 수 없습니다: %s", templateID)
 }
 
 func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, error) {
-	manifest, _ := s.loadTemplateManifest(dir)
+	manifest, err := s.loadTemplateManifest(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	if manifest.Enabled != nil && !*manifest.Enabled {
+		return nil, fmt.Errorf("disabled template: %s", filepath.Base(dir))
+	}
 
 	item := &TemplateItem{
 		ID:           filepath.Base(dir),
@@ -635,34 +712,22 @@ func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, er
 		PNGPlacement: defaultTemplatePlacement(),
 	}
 
-	if manifest != nil {
-		if manifest.Enabled != nil && !*manifest.Enabled {
-			return nil, fmt.Errorf("disabled template: %s", filepath.Base(dir))
-		}
-
-		if strings.TrimSpace(manifest.ID) != "" {
-			item.ID = strings.TrimSpace(manifest.ID)
-		}
-		if strings.TrimSpace(manifest.Name) != "" {
-			item.Name = strings.TrimSpace(manifest.Name)
-		}
-
-		item.Category = normalizeTemplateCategory(manifest.Category)
-		item.CommonPath = resolveTemplateCommonImage(dir, manifest)
-		item.PDFPath = resolveTemplatePDFImage(dir, manifest)
-		item.PNGPath = resolveTemplatePNGImage(dir, manifest)
-		item.PreviewPath = resolveTemplatePreviewImage(dir, manifest)
-		item.ThumbPath = resolveTemplateThumbImage(dir)
-		item.PNGPlacement = normalizeTemplatePlacement(manifest.PNGPlacement)
+	if strings.TrimSpace(manifest.ID) != "" {
+		item.ID = strings.TrimSpace(manifest.ID)
 	}
+	if strings.TrimSpace(manifest.Name) != "" {
+		item.Name = strings.TrimSpace(manifest.Name)
+	}
+
+	item.Category = normalizeTemplateCategory(manifest.Category)
+	item.CommonPath = resolveTemplateCommonImage(dir, manifest)
+	item.PDFPath = resolveTemplatePDFImage(dir, manifest)
+	item.PNGPath = resolveTemplatePNGImage(dir, manifest)
+	item.PNGPlacement = normalizeTemplatePlacement(manifest.PNGPlacement)
 
 	if item.CommonPath == "" {
 		item.CommonPath = findFirstExistingFile(dir, []string{
 			"template.png", "template.jpg", "template.jpeg", "template.webp",
-			"background.png", "background.jpg", "background.jpeg", "background.webp",
-			"bg.png", "bg.jpg", "bg.jpeg", "bg.webp",
-			"skin.png", "skin.jpg", "skin.jpeg", "skin.webp",
-			"frame.png", "frame.jpg", "frame.jpeg", "frame.webp",
 		})
 	}
 
@@ -672,17 +737,7 @@ func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, er
 	if item.PNGPath == "" {
 		item.PNGPath = item.CommonPath
 	}
-	if item.PreviewPath == "" {
-		item.PreviewPath = item.ThumbPath
-	}
-	if item.PreviewPath == "" {
-		item.PreviewPath = item.CommonPath
-	}
-	if item.ThumbPath == "" {
-		item.ThumbPath = resolveTemplateThumbImage(dir)
-	}
 
-	item.PNGPlacement = normalizeTemplatePlacement(item.PNGPlacement)
 	return item, nil
 }
 

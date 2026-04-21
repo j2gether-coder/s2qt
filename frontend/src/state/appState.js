@@ -5,7 +5,7 @@ const DEFAULT_MENU_CONFIG = {
   teen: { visible: true, label: "중고등부 QT" },
   child: { visible: true, label: "어린이 QT" },
   history: { visible: true, label: "작업 내역" },
-  settings: { visible: true, label: "환경설정" },
+  settings: { visible: true, label: "환경 설정" },
 };
 
 export const appState = {

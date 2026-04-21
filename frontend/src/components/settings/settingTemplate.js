@@ -63,11 +63,6 @@ function getStatusInlineStyle() {
   return "margin-top:8px;";
 }
 
-function resolveTemplatePreviewPath(value = "") {
-  const path = String(value || "").trim();
-  return path || TEMPLATE_NO_IMAGE_PATH;
-}
-
 function getTemplateById(templateId) {
   return templateUiState.templates.find((item) => item.id === templateId) || null;
 }
@@ -125,23 +120,16 @@ function getCurrentPreviewTitle() {
 }
 
 function getCurrentPreviewSubText() {
-  const selected = getSelectedTemplate();
-
   if (!templateUiState.hasLoaded && templateUiState.statusType === "error") {
     return "템플릿 설정 정보를 불러오지 못했습니다.";
   }
 
-  if (selected) {
-    return templateUiState.enabled
-      ? "선택된 템플릿 미리보기"
-      : "현재는 미리보기만 확인 중입니다. Step3 적용은 꺼져 있습니다.";
+  const selected = getSelectedTemplate();
+  if (!selected) {
+    return "선택된 템플릿이 없습니다.";
   }
 
-  if (!templateUiState.enabled) {
-    return "현재는 미리보기만 확인 중입니다. Step3 적용은 꺼져 있습니다.";
-  }
-
-  return "선택된 템플릿이 없습니다.";
+  return "";
 }
 
 async function fetchImageDataURI(path) {
@@ -197,6 +185,10 @@ async function loadSelectedPreviewImageIfNeeded() {
 
   if (!selected.previewDataURI) {
     try {
+      if (!app?.GetTemplatePreview) {
+        throw new Error("GetTemplatePreview binding is not available");
+      }
+
       const previewPath = await app.GetTemplatePreview(selected.id);
       const dataURI = await fetchImageDataURI(previewPath);
 
@@ -217,6 +209,18 @@ async function loadSelectedPreviewImageIfNeeded() {
   }
 }
 
+function renderStatusNote() {
+  if (!templateUiState.statusMessage) {
+    return `<div style="min-height: 18px;"></div>`;
+  }
+
+  return `
+    <div class="body-note" style="${getStatusInlineStyle()}">
+      <p>${escapeHtml(templateUiState.statusMessage)}</p>
+    </div>
+  `;
+}
+
 function renderTemplateGuideCard() {
   return `
     <section class="card">
@@ -227,7 +231,6 @@ function renderTemplateGuideCard() {
           <p>템플릿은 환경설정에서 선택한 후 Step3 산출물 생성 시 반영됩니다.</p>
           <p>템플릿 파일은 var/template 아래에 배치되며, 현재 목록은 실제 파일 기준으로 표시됩니다.</p>
         </div>
-        ${renderStatusNote()}
       </div>
 
       <div class="settings-block topgap-md">
@@ -270,7 +273,7 @@ function renderTemplateEmptyMessage() {
   }
 
   if (!templateUiState.templates.length) {
-    return "등록된 템플릿이 없습니다. var/template에 템플릿을 배치한 후 목록 새로고침을 눌러 주세요.";
+    return "등록된 템플릿이 없습니다. var/template에 템플릿을 배치한 후 새로 고침을 눌러 주세요.";
   }
 
   return "선택한 분류에 템플릿이 없습니다.";
@@ -381,18 +384,24 @@ function renderTemplatePreviewPanel() {
     ? `<img src="${previewDataURI}" alt="${escapeHtml(getCurrentPreviewTitle())} 미리보기" />`
     : `<div class="settings-template-preview-empty">no_image.png를 불러오는 중입니다.</div>`;
 
+  const previewSubText = getCurrentPreviewSubText();
+
   return `
     <div class="settings-template-preview-panel">
       <div class="settings-template-preview-large">
         ${previewContent}
       </div>
-      <div class="settings-template-preview-sub">${escapeHtml(getCurrentPreviewSubText())}</div>
+      ${
+        previewSubText
+          ? `<div class="settings-template-preview-sub">${escapeHtml(previewSubText)}</div>`
+          : ``
+      }
     </div>
   `;
 }
 
 function renderTemplateSelectionCard() {
-  const refreshSymbol = templateUiState.isRefreshing ? "⏳" : "🔄";
+  const refreshLabel = templateUiState.isRefreshing ? "⏳ 새로 고침 중" : "🔄 새로 고침";
 
   return `
     <section class="card topgap-md">
@@ -404,10 +413,14 @@ function renderTemplateSelectionCard() {
         ${renderCategoryTabs()}
       </div>
 
+      <div class="settings-block topgap-sm">
+        ${renderStatusNote()}
+      </div>
+
       <div class="settings-block topgap-md">
         <div class="settings-template-picker-layout">
           <div class="settings-template-picker-list">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; align-items:center; margin-bottom:8px;">
               <div class="settings-field-label" style="margin-bottom:0;">템플릿 목록</div>
               <button
                 type="button"
@@ -415,10 +428,9 @@ function renderTemplateSelectionCard() {
                 id="templateRefreshBtn"
                 title="목록 새로고침"
                 aria-label="목록 새로고침"
-                style="width:38px; min-width:38px; padding:0;"
                 ${templateUiState.isLoading || templateUiState.isRefreshing ? "disabled" : ""}
               >
-                ${refreshSymbol}
+                ${refreshLabel}
               </button>
             </div>
 
@@ -429,7 +441,7 @@ function renderTemplateSelectionCard() {
           <div class="settings-template-picker-preview">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
               <div class="settings-field-label" style="margin-bottom:0;">미리보기</div>
-              <div style="font-size:13px; font-weight:700; color:#111827; line-height:1.4; text-align:right;">
+              <div style="font-size:13px; font-weight:400; color:#374151; line-height:1.4; text-align:right;">
                 ${escapeHtml(getCurrentPreviewTitle())}
               </div>
             </div>
@@ -553,6 +565,12 @@ async function ensureTemplateTabInitialized(force = false) {
   await templateLoadPromise;
 }
 
+function ensureTemplateTabInitializedIfNeeded() {
+  if (!templateUiState.hasLoaded && !templateLoadPromise) {
+    void ensureTemplateTabInitialized();
+  }
+}
+
 async function refreshTemplateList() {
   const app = getAppBindings();
   if (!app?.RefreshTemplates) {
@@ -585,7 +603,13 @@ async function refreshTemplateList() {
 }
 
 async function updateTemplateEnabled(enabled) {
+  const wasEnabled = templateUiState.enabled;
   templateUiState.enabled = !!enabled;
+
+  // 체크 해제 시 선택 라디오도 함께 해제
+  if (wasEnabled && !templateUiState.enabled) {
+    templateUiState.selectedId = "";
+  }
 
   try {
     await persistTemplateSettings();
@@ -596,7 +620,11 @@ async function updateTemplateEnabled(enabled) {
   }
 
   rerenderTemplatePanelOnly();
-  void loadSelectedPreviewImageIfNeeded();
+
+  // 다시 켠 경우에만 선택된 미리보기 재확인
+  if (templateUiState.enabled) {
+    void loadSelectedPreviewImageIfNeeded();
+  }
 }
 
 async function updateTemplateCategory(category) {
@@ -640,7 +668,7 @@ export function bindSettingTemplateTabEvents() {
   const radioButtons = document.querySelectorAll('input[name="templateSelect"]');
   const refreshBtn = document.querySelector("#templateRefreshBtn");
 
-  void ensureTemplateTabInitialized();
+  ensureTemplateTabInitializedIfNeeded();
 
   if (enabledEl) {
     enabledEl.addEventListener("change", () => {
