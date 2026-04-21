@@ -212,20 +212,24 @@ body{
   width: 210mm;
   height: 297mm;
   margin: 0 !important;
-  padding: 0 !important;
+  padding: var(--qt-page-top, 10mm) 12mm var(--qt-safe-area, 36mm) 12mm !important;
   box-sizing: border-box;
   background: #ffffff;
   overflow: hidden;
 }
 
 .qt-page-frame{
-  height: calc(297mm - var(--qt-safe-area, 36mm) - 10mm) !important;
+  position: relative;
+  width: 100%;
+  height: 100% !important;
+  overflow: hidden;
 }
 
 .qt-wrap{
   width: 100%;
   max-width: 186mm;
   margin: 0 auto;
+  padding: 0 !important;
 }
 `
 }

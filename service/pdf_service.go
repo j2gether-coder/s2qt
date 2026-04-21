@@ -101,7 +101,7 @@ html, body{
 body{
   position: relative !important;
   box-sizing: border-box !important;
-  padding: 10mm 12mm var(--qt-safe-area, 36mm) 12mm !important;
+  padding: var(--qt-page-top, 10mm) 12mm var(--qt-safe-area, 36mm) 12mm !important;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -129,8 +129,8 @@ body{
   position: fixed !important;
   left: 12mm !important;
   right: 12mm !important;
-  bottom: var(--qt-footer-bottom, 8mm) !important;
-  height: 14mm !important;
+  bottom: var(--qt-footer-bottom, 2mm) !important;
+  height: 12mm !important;
   color: #4b5563 !important;
   z-index: 20 !important;
   pointer-events: none;
@@ -139,32 +139,39 @@ body{
 .qt-footer-line{
   position: absolute !important;
   left: 0 !important;
-  right: calc(var(--qt-qr-reserved, 34mm) + 4mm) !important;
+  right: 0 !important;
   top: 0 !important;
   height: 0 !important;
-  border-top: 1px solid #d1d5db !important;
+  border-top: 2px solid var(--qt-green) !important;
+}
+
+.qt-footer-text{
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 2.5mm !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
 }
 
 .qt-footer-brand{
   position: absolute !important;
   left: 0 !important;
-  top: 3.5mm !important;
-  max-width: 58mm !important;
+  right: 0 !important;
+  top: 6.8mm !important;
   display: flex !important;
   align-items: center !important;
-  gap: 2.5mm !important;
-}
-
-.qt-footer-logo{
-  width: 8mm !important;
-  height: 8mm !important;
-  object-fit: contain !important;
-  flex: 0 0 auto !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 1.5mm !important;
+  max-width: none !important;
 }
 
 .qt-footer-brand-image{
-  max-width: 58mm !important;
-  max-height: 8mm !important;
+  max-width: 40mm !important;
+  max-height: 4mm !important;
   width: auto !important;
   height: auto !important;
   object-fit: contain !important;
@@ -172,28 +179,18 @@ body{
 }
 
 .qt-footer-church{
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  line-height: 1.2 !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  line-height: 1.1 !important;
+  text-align: center !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
-.qt-footer-text{
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  top: 4mm !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  line-height: 1.2 !important;
-  text-align: center !important;
-}
-
 .qt-page-qr{
   position: fixed !important;
-  bottom: var(--qt-qr-bottom, 9mm) !important;
+  bottom: var(--qt-qr-bottom, 2mm) !important;
   width: var(--qt-qr-size, 27mm) !important;
   height: var(--qt-qr-size, 27mm) !important;
   max-width: var(--qt-qr-size, 27mm) !important;
@@ -204,12 +201,12 @@ body{
   pointer-events: none;
 }
 
-.qt-page-qr.right-bottom{
-  right: 12mm !important;
-}
-
 .qt-page-qr.left-bottom{
   left: 12mm !important;
+}
+
+.qt-page-qr.right-bottom{
+  right: 12mm !important;
 }
 
 h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
@@ -705,11 +702,12 @@ func mergeQTFooterRuntimeStyle(base string, footerCfg *QTFooterConfig) string {
 
 	runtime := fmt.Sprintf(`
 :root{
+  --qt-page-top: 10mm;
   --qt-safe-area: %.2fmm;
   --qt-qr-size: %.2fmm;
   --qt-qr-reserved: %.2fmm;
-  --qt-footer-bottom: 8mm;
-  --qt-qr-bottom: 9mm;
+  --qt-footer-bottom: 2mm;
+  --qt-qr-bottom: 2mm;
 }
 `, footerCfg.SafeAreaMM, footerCfg.QRSizeMM, qrReserved)
 

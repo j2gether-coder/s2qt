@@ -51,8 +51,24 @@ function setLoadedStep2TitleCandidate(value) {
   appState.qtStep2LoadedTitle = (value || '').trim();
 }
 
+function getLoadedStep2Meta() {
+  return appState?.qtStep2LoadedMeta || {};
+}
+
+function setLoadedStep2Meta(meta = {}) {
+  appState.qtStep2LoadedMeta = {
+    hymn: (meta.hymn || '').trim(),
+    preacher: (meta.preacher || '').trim(),
+    churchName: (meta.churchName || '').trim(),
+    sermonDate: (meta.sermonDate || '').trim(),
+    sourceURL: (meta.sourceURL || '').trim(),
+  };
+}
+
 function buildStep2Payload(audienceId) {
   const basicInfo = getBasicInfo();
+  const loadedMeta = getLoadedStep2Meta();
+
   const metaTitle = basicInfo.title || '';
   const llmTitle = getLoadedStep2TitleCandidate();
   const resolvedTitle = resolveQtTitleByAudience(audienceId, metaTitle, llmTitle);
@@ -61,12 +77,12 @@ function buildStep2Payload(audienceId) {
     audience: audienceId,
 
     title: resolvedTitle,
-    bibleText: basicInfo.bibleText || '',
-    hymn: basicInfo.hymn || '',
-    preacher: basicInfo.preacher || '',
-    churchName: basicInfo.churchName || '',
-    sermonDate: basicInfo.sermonDate || '',
-    sourceURL: appState?.source?.sourceRef?.url || '',
+    bibleText: (basicInfo.bibleText || '').trim(),
+    hymn: (basicInfo.hymn || loadedMeta.hymn || '').trim(),
+    preacher: (basicInfo.preacher || loadedMeta.preacher || '').trim(),
+    churchName: (basicInfo.churchName || loadedMeta.churchName || '').trim(),
+    sermonDate: (basicInfo.sermonDate || loadedMeta.sermonDate || '').trim(),
+    sourceURL: (appState?.source?.sourceRef?.url || loadedMeta.sourceURL || '').trim(),
 
     summaryTitle: getValue('summaryTitle'),
     summaryBody: getValue('summaryBody'),
@@ -91,14 +107,15 @@ function buildStep2Payload(audienceId) {
 
 function buildHistoryPayload(audienceId, step2Payload) {
   const basicInfo = getBasicInfo();
+  const loadedMeta = getLoadedStep2Meta();
 
   return {
     title: basicInfo.title || '',
     bibleText: basicInfo.bibleText || '',
-    hymn: basicInfo.hymn || '',
-    preacher: basicInfo.preacher || '',
-    churchName: basicInfo.churchName || '',
-    sermonDate: basicInfo.sermonDate || '',
+    hymn: (basicInfo.hymn || loadedMeta.hymn || '').trim(),
+    preacher: (basicInfo.preacher || loadedMeta.preacher || '').trim(),
+    churchName: (basicInfo.churchName || loadedMeta.churchName || '').trim(),
+    sermonDate: (basicInfo.sermonDate || loadedMeta.sermonDate || '').trim(),
     audience: audienceId,
     qtResultJson: JSON.stringify(step2Payload),
   };
@@ -130,6 +147,14 @@ async function loadStep2Data(audienceId) {
   if (readonlyBibleTextEl) {
     readonlyBibleTextEl.textContent = basicInfo.bibleText || '-';
   }
+
+  setLoadedStep2Meta({
+    hymn: data?.hymn || '',
+    preacher: data?.preacher || '',
+    churchName: data?.churchName || '',
+    sermonDate: data?.sermonDate || '',
+    sourceURL: data?.sourceURL || '',
+  });
 
   setValue('summaryTitle', data?.summaryTitle);
   setValue('summaryBody', data?.summaryBody);

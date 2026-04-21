@@ -64,7 +64,7 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 		BrandImagePath: "",
 		HomepageURL:    strings.TrimSpace(settings.HomepageURL),
 		QRImagePath:    "",
-		QRPosition:     "right-bottom",
+		QRPosition:     "left-bottom",
 		QRSizeMM:       27.0,
 	}
 
@@ -72,40 +72,33 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 		cfg.FooterText = "말씀을 묵상으로, 묵상을 삶으로"
 	}
 
-	// 1) brand_service.go 우선
-	// - brand_image_included=false 인 경우 합성 실패를 숨기면 안 됨
-	brandSvc, err := NewBrandService(s.DB)
-	if err != nil {
-		return nil, err
-	}
+	// 1) 실제 로고 파일이 있을 때만 brand_service.go 시도
+	logoConfigured := strings.TrimSpace(cfg.LogoPath) != "" && ifileExists(cfg.LogoPath)
 
-	brandRes, brandErr := brandSvc.PrepareBrandImageFromDB()
-	if brandErr != nil {
-		if !settings.BrandImageIncluded {
-			return nil, fmt.Errorf("brand image prepare failed: %w", brandErr)
+	if logoConfigured {
+		brandSvc, err := NewBrandService(s.DB)
+		if err == nil && brandSvc != nil {
+			brandRes, brandErr := brandSvc.PrepareBrandImageFromDB()
+			if brandErr == nil && brandRes != nil {
+				brandFile := strings.TrimSpace(brandRes.BrandFile)
+				if brandFile != "" && ifileExists(brandFile) {
+					cfg.BrandImagePath = brandFile
+					cfg.ChurchName = ""
+					cfg.LogoPath = ""
+				}
+			}
 		}
-	} else if brandRes != nil {
-		brandFile := strings.TrimSpace(brandRes.BrandFile)
-		if brandFile != "" && ifileExists(brandFile) {
-			cfg.BrandImagePath = brandFile
-			// 최종 합성 이미지가 준비되면 footer에서 교회명을 다시 그리지 않도록 비움
-			cfg.ChurchName = ""
-			cfg.LogoPath = ""
-		}
-	}
 
-	// 2) brand_service.go 결과가 없을 때만 fallback
-	// - 단, brand_image_included=true 인 경우에만 원본 로고 fallback 허용
-	if strings.TrimSpace(cfg.BrandImagePath) == "" {
-		brandImagePath := s.resolveBrandImagePath(settings)
-		if brandImagePath != "" {
-			cfg.BrandImagePath = brandImagePath
-			cfg.ChurchName = ""
-			cfg.LogoPath = ""
+		if strings.TrimSpace(cfg.BrandImagePath) == "" {
+			brandImagePath := s.resolveBrandImagePath(settings)
+			if brandImagePath != "" {
+				cfg.BrandImagePath = brandImagePath
+				cfg.ChurchName = ""
+				cfg.LogoPath = ""
+			}
 		}
 	}
 
-	// 3) 홈페이지 URL이 있으면 church_qr.png 생성, 없으면 생략
 	homepageURL := strings.TrimSpace(settings.HomepageURL)
 	if homepageURL != "" {
 		qrOut := s.defaultQRImagePath()
@@ -114,10 +107,19 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 			if ifileExists(qrOut) {
 				cfg.ShowQR = true
 				cfg.QRImagePath = qrOut
+				cfg.QRPosition = "left-bottom"
+				cfg.QRSizeMM = 27.0
 			}
-		} else {
-			cfg.ShowQR = false
-			cfg.QRImagePath = ""
+		}
+	}
+
+	if strings.TrimSpace(cfg.QRImagePath) == "" {
+		fallbackQR := s.resolveDefaultQRFallbackPath()
+		if fallbackQR != "" {
+			cfg.ShowQR = true
+			cfg.QRImagePath = fallbackQR
+			cfg.QRPosition = "left-bottom"
+			cfg.QRSizeMM = 27.0
 		}
 	}
 
@@ -270,4 +272,38 @@ func ifileExists(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func (s *FooterService) resolveDefaultBrandFallbackPath() string {
+	if s == nil || s.Paths == nil {
+		return ""
+	}
+
+	if strings.TrimSpace(s.Paths.DefaultQRFile) != "" && ifileExists(s.Paths.DefaultQRFile) {
+		return s.Paths.DefaultQRFile
+	}
+
+	fallback := resolveFooterImagePath("var/image/s2qt_link.png")
+	if ifileExists(fallback) {
+		return fallback
+	}
+
+	return ""
+}
+
+func (s *FooterService) resolveDefaultQRFallbackPath() string {
+	if s == nil || s.Paths == nil {
+		return ""
+	}
+
+	if strings.TrimSpace(s.Paths.DefaultQRFile) != "" && ifileExists(s.Paths.DefaultQRFile) {
+		return s.Paths.DefaultQRFile
+	}
+
+	fallback := resolveFooterImagePath("var/image/s2qt_link.png")
+	if ifileExists(fallback) {
+		return fallback
+	}
+
+	return ""
 }

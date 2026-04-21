@@ -287,9 +287,11 @@ func normalizeResolvedFooterConfig(cfg QTFooterConfig) QTFooterConfig {
 	cfg.HomepageURL = strings.TrimSpace(cfg.HomepageURL)
 	cfg.QRImagePath = strings.TrimSpace(cfg.QRImagePath)
 
-	if cfg.HomepageURL == "" {
+	if cfg.HomepageURL == "" && cfg.QRImagePath == "" {
 		cfg.ShowQR = false
 		cfg.QRImagePath = ""
+	} else if cfg.QRImagePath != "" {
+		cfg.ShowQR = true
 	}
 
 	if !cfg.ShowFooter && cfg.FooterText == "" && cfg.ChurchName == "" && cfg.LogoPath == "" && cfg.BrandImagePath == "" {
@@ -479,9 +481,14 @@ func (s *QRService) PrepareFooterAssets(mode QTFooterMode, override *QTFooterCon
 			qrText = "https://s2gt.blogspot.com/"
 		}
 
+		// 핵심:
+		// 1) HomepageURL이 없어도 QRImagePath가 이미 있으면 fallback QR 유지
+		// 2) 둘 다 없을 때만 QR 비활성화
 		if qrText == "" {
-			resolved.ShowQR = false
-			resolved.QRImagePath = ""
+			if strings.TrimSpace(resolved.QRImagePath) == "" {
+				resolved.ShowQR = false
+				resolved.QRImagePath = ""
+			}
 		} else {
 			result, err := s.WriteQRCode(normalizeURLIfNeeded(qrText), resolved.QRImagePath, &fileCfg.QRDefaults)
 			if err != nil {
