@@ -176,14 +176,9 @@ export function renderSettingsGuideTab() {
   `;
 }
 
-function rerenderGuideTab() {
-  const workspaceRoot = document.querySelector(".main-workspace");
-  if (!workspaceRoot) return;
-
-  import("./appSettings").then(({ renderAppSettings, bindAppSettingsEvents }) => {
-    workspaceRoot.innerHTML = renderAppSettings();
-    bindAppSettingsEvents();
-  });
+async function rerenderGuideTab() {
+  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
+  rerenderCurrentSettingsPanel();
 }
 
 async function loadGuideSection(sectionId) {

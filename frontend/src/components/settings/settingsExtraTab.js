@@ -101,14 +101,9 @@ async function loadExtraSettings() {
   };
 }
 
-function rerenderExtraTab() {
-  const workspaceRoot = document.querySelector(".main-workspace");
-  if (!workspaceRoot) return;
-
-  import("./appSettings").then(({ renderAppSettings, bindAppSettingsEvents }) => {
-    workspaceRoot.innerHTML = renderAppSettings();
-    bindAppSettingsEvents();
-  });
+async function rerenderExtraTab() {
+  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
+  rerenderCurrentSettingsPanel();
 }
 
 function getAiModeLabel(mode) {

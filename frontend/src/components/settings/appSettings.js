@@ -75,10 +75,10 @@ function renderCurrentSettingsPanel() {
 
 function renderSettingsHeaderCard() {
   return `
-    <section class="card card-plain">
-      <div class="step-badge">환경 설정</div>
-      <p class="body-note topgap-sm">${getSettingsIntroText()}</p>
-    </section>
+    <div class="workspace-header-row">
+      <h2 class="workspace-header-title">환경 설정</h2>
+    </div>
+    <p class="workspace-meta-note">${getSettingsIntroText()}</p>
   `;
 }
 
@@ -87,11 +87,13 @@ export function renderAppSettings() {
     <section class="workspace-step-panel settings-workspace-panel">
       ${renderSettingsHeaderCard()}
 
-      <section class="card">
-        ${renderSettingsTabs()}
-      </section>
+      ${renderSettingsTabs()}
 
-      <div class="workspace-content settings-content">
+      <div
+        class="workspace-content settings-content"
+        id="settingsContentRoot"
+        data-settings-tab="${currentSettingsTab}"
+      >
         ${renderCurrentSettingsPanel()}
       </div>
     </section>
@@ -106,17 +108,7 @@ function rerenderSettingsWorkspace() {
   bindAppSettingsEvents();
 }
 
-export function bindAppSettingsEvents() {
-  const tabButtons = document.querySelectorAll("[data-settings-tab]");
-
-  tabButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const tabId = button.dataset.settingsTab || "basic";
-      setCurrentSettingsTab(tabId);
-      rerenderSettingsWorkspace();
-    });
-  });
-
+export function bindCurrentSettingsPanelEvents() {
   switch (currentSettingsTab) {
     case "extra":
       bindSettingsExtraTabEvents();
@@ -135,4 +127,27 @@ export function bindAppSettingsEvents() {
       bindSettingsBasicTabEvents();
       break;
   }
+}
+
+export function rerenderCurrentSettingsPanel() {
+  const contentRoot = document.querySelector("#settingsContentRoot");
+  if (!contentRoot) return;
+
+  contentRoot.setAttribute("data-settings-tab", currentSettingsTab);
+  contentRoot.innerHTML = renderCurrentSettingsPanel();
+  bindCurrentSettingsPanelEvents();
+}
+
+export function bindAppSettingsEvents() {
+  const tabButtons = document.querySelectorAll("[data-settings-tab]");
+
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const tabId = button.dataset.settingsTab || "basic";
+      setCurrentSettingsTab(tabId);
+      rerenderSettingsWorkspace();
+    });
+  });
+
+  bindCurrentSettingsPanelEvents();
 }

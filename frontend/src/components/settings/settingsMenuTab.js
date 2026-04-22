@@ -66,14 +66,9 @@ async function loadMenuSettings() {
   };
 }
 
-function rerenderMenuTab() {
-  const workspaceRoot = document.querySelector(".main-workspace");
-  if (!workspaceRoot) return;
-
-  import("./appSettings").then(({ renderAppSettings, bindAppSettingsEvents }) => {
-    workspaceRoot.innerHTML = renderAppSettings();
-    bindAppSettingsEvents();
-  });
+async function rerenderMenuTab() {
+  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
+  rerenderCurrentSettingsPanel();
 }
 
 function getCurrentMenuItem(itemId) {

@@ -201,14 +201,9 @@ async function loadBasicSettings() {
   };
 }
 
-function rerenderBasicTab() {
-  const workspaceRoot = document.querySelector(".main-workspace");
-  if (!workspaceRoot) return;
-
-  import("./appSettings").then(({ renderAppSettings, bindAppSettingsEvents }) => {
-    workspaceRoot.innerHTML = renderAppSettings();
-    bindAppSettingsEvents();
-  });
+async function rerenderBasicTab() {
+  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
+  rerenderCurrentSettingsPanel();
 }
 
 function renderBasicSecurityNoticeCard() {

@@ -719,9 +719,20 @@ func (a *App) ResetPinLockout(confirmed bool) error {
 	return nil
 }
 
-//
 // History bindings
-//
+func (a *App) CountHistory(query service.HistoryListQuery) (int, error) {
+	if a == nil || a.historySvc == nil {
+		return 0, fmt.Errorf("history service is nil")
+	}
+	return a.historySvc.CountHistory(query)
+}
+
+func (a *App) ListHistoryPaged(query service.HistoryListQuery) ([]service.HistoryMaster, error) {
+	if a == nil || a.historySvc == nil {
+		return nil, fmt.Errorf("history service is nil")
+	}
+	return a.historySvc.ListHistoryPaged(query)
+}
 
 func (a *App) SaveHistory(req service.SaveHistoryRequest) (int64, error) {
 	if a.historySvc == nil {

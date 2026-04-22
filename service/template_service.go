@@ -23,7 +23,6 @@ import (
 
 const (
 	TemplateCategoryAll        = "all"
-	TemplateCategoryMonthly    = "monthly"
 	TemplateCategorySeasonal   = "seasonal"
 	TemplateCategoryLiturgical = "liturgical"
 
@@ -58,10 +57,13 @@ type TemplatePlacement struct {
 }
 
 type TemplateManifest struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Category string `json:"category"`
-	Enabled  *bool  `json:"enabled,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Category    string   `json:"category"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	SearchTerms []string `json:"search_terms,omitempty"`
+	Enabled     *bool    `json:"enabled,omitempty"`
 
 	// 권장: 단일 공통 자산
 	TemplateImage string `json:"template_image,omitempty"`
@@ -77,10 +79,13 @@ type TemplateManifest struct {
 }
 
 type TemplateListItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Category    string `json:"category"`
-	PreviewPath string `json:"previewPath"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Category    string   `json:"category"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	SearchTerms []string `json:"searchTerms,omitempty"`
+	PreviewPath string   `json:"previewPath"`
 
 	HasPDFAsset bool `json:"hasPdfAsset"`
 	HasPNGAsset bool `json:"hasPngAsset"`
@@ -647,11 +652,30 @@ func (s *TemplateService) buildTemplateListItem(dir string, manifest *TemplateMa
 		ID:          id,
 		Name:        name,
 		Category:    category,
+		Description: strings.TrimSpace(manifest.Description),
+		Tags:        normalizeStringSlice(manifest.Tags),
+		SearchTerms: normalizeStringSlice(manifest.SearchTerms),
 		PreviewPath: "",
 		HasPDFAsset: strings.TrimSpace(templatePath) != "",
 		HasPNGAsset: strings.TrimSpace(templatePath) != "",
 		IsValid:     strings.TrimSpace(templatePath) != "",
 	}, nil
+}
+
+func normalizeStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+
+	result := make([]string, 0, len(values))
+	for _, v := range values {
+		s := strings.TrimSpace(v)
+		if s == "" {
+			continue
+		}
+		result = append(result, s)
+	}
+	return result
 }
 
 func (s *TemplateService) GetTemplatePreview(templateID string) (string, error) {
@@ -872,12 +896,10 @@ func normalizeTemplateCategory(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "", TemplateCategoryAll:
 		return TemplateCategoryAll
-	case TemplateCategoryMonthly:
-		return TemplateCategoryMonthly
-	case TemplateCategorySeasonal:
-		return TemplateCategorySeasonal
+
 	case TemplateCategoryLiturgical:
 		return TemplateCategoryLiturgical
+
 	default:
 		return TemplateCategoryAll
 	}

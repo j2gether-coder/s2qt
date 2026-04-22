@@ -22,6 +22,15 @@ type HistoryMaster struct {
 	UpdatedAt  string `json:"updatedAt"`
 }
 
+type HistoryListQuery struct {
+	Keyword  string `json:"keyword"`
+	Audience string `json:"audience"`
+	SortKey  string `json:"sortKey"`
+	SortDir  string `json:"sortDir"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+}
+
 type HistoryQTJSON struct {
 	ID           int64  `json:"id"`
 	HistoryID    int64  `json:"historyId"`
@@ -167,6 +176,171 @@ ORDER BY created_at DESC, id DESC
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (s *HistoryService) CountHistory(query HistoryListQuery) (int, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("history service db is nil")
+	}
+
+	q := normalizeHistoryListQuery(query)
+	whereSQL, args := buildHistoryListWhere(q)
+
+	sqlText := `
+SELECT COUNT(*)
+FROM history_master hm
+` + whereSQL
+
+	var total int
+	if err := s.db.QueryRow(sqlText, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("failed to count history: %w", err)
+	}
+
+	return total, nil
+}
+
+func (s *HistoryService) ListHistoryPaged(query HistoryListQuery) ([]HistoryMaster, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("history service db is nil")
+	}
+
+	q := normalizeHistoryListQuery(query)
+	whereSQL, args := buildHistoryListWhere(q)
+
+	sortColumn := resolveHistorySortColumn(q.SortKey)
+	sortDir := resolveHistorySortDir(q.SortDir)
+	offset := (q.Page - 1) * q.PageSize
+
+	sqlText := `
+SELECT
+  hm.id,
+  hm.title,
+  hm.bible_text,
+  hm.hymn,
+  hm.preacher,
+  hm.church_name,
+  hm.sermon_date,
+  hm.created_at,
+  hm.updated_at
+FROM history_master hm
+` + whereSQL + `
+ORDER BY ` + sortColumn + ` ` + sortDir + `, hm.id DESC
+LIMIT ? OFFSET ?
+`
+
+	args = append(args, q.PageSize, offset)
+
+	rows, err := s.db.Query(sqlText, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query paged history list: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]HistoryMaster, 0, q.PageSize)
+	for rows.Next() {
+		var item HistoryMaster
+		if err := rows.Scan(
+			&item.ID,
+			&item.Title,
+			&item.BibleText,
+			&item.Hymn,
+			&item.Preacher,
+			&item.ChurchName,
+			&item.SermonDate,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan paged history row: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed while reading paged history rows: %w", err)
+	}
+
+	return items, nil
+}
+
+func normalizeHistoryListQuery(q HistoryListQuery) HistoryListQuery {
+	q.Keyword = strings.TrimSpace(q.Keyword)
+	q.Audience = strings.TrimSpace(q.Audience)
+	q.SortKey = strings.TrimSpace(q.SortKey)
+	q.SortDir = strings.TrimSpace(q.SortDir)
+
+	if q.Audience == "" {
+		q.Audience = "all"
+	}
+	if q.Page < 1 {
+		q.Page = 1
+	}
+	if q.PageSize <= 0 {
+		q.PageSize = 10
+	}
+
+	switch q.SortKey {
+	case "createdAt", "title", "bibleText":
+	default:
+		q.SortKey = "createdAt"
+	}
+
+	switch strings.ToLower(q.SortDir) {
+	case "asc", "desc":
+		q.SortDir = strings.ToLower(q.SortDir)
+	default:
+		q.SortDir = "desc"
+	}
+
+	return q
+}
+
+func buildHistoryListWhere(q HistoryListQuery) (string, []any) {
+	clauses := make([]string, 0, 2)
+	args := make([]any, 0, 3)
+
+	if q.Keyword != "" {
+		pattern := "%" + q.Keyword + "%"
+		clauses = append(clauses, `(hm.title LIKE ? OR hm.bible_text LIKE ?)`)
+		args = append(args, pattern, pattern)
+	}
+
+	if q.Audience != "" && q.Audience != "all" {
+		clauses = append(clauses, `
+EXISTS (
+  SELECT 1
+  FROM history_qt_json hq
+  WHERE hq.history_id = hm.id
+    AND hq.audience = ?
+)
+`)
+		args = append(args, q.Audience)
+	}
+
+	if len(clauses) == 0 {
+		return "", args
+	}
+
+	return "WHERE " + strings.Join(clauses, " AND "), args
+}
+
+func resolveHistorySortColumn(sortKey string) string {
+	switch sortKey {
+	case "title":
+		return "hm.title"
+	case "bibleText":
+		return "hm.bible_text"
+	case "createdAt":
+		fallthrough
+	default:
+		return "hm.created_at"
+	}
+}
+
+func resolveHistorySortDir(sortDir string) string {
+	if strings.EqualFold(strings.TrimSpace(sortDir), "asc") {
+		return "ASC"
+	}
+	return "DESC"
 }
 
 func (s *HistoryService) GetHistory(historyID int64) (HistoryMaster, error) {

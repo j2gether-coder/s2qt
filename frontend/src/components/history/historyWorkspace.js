@@ -1,5 +1,6 @@
 import {
-  ListHistory,
+  CountHistory,
+  ListHistoryPaged,
   GetHistoryQTJSON,
   DeleteHistory,
   PrepareReworkFromHistory,
@@ -17,6 +18,8 @@ const DEFAULT_HISTORY_FILTERS = {
   sortDir: "desc",
 };
 
+const DEFAULT_HISTORY_PAGE_SIZE = 10;
+
 let historyState = {
   loaded: false,
   loading: false,
@@ -25,6 +28,10 @@ let historyState = {
   selectedIds: [],
   audienceMap: {},
   filters: { ...DEFAULT_HISTORY_FILTERS },
+  currentPage: 1,
+  pageSize: DEFAULT_HISTORY_PAGE_SIZE,
+  totalCount: 0,
+  totalPages: 1,
 };
 
 function safeValue(value) {
@@ -92,11 +99,41 @@ async function loadAudienceAvailability(historyId) {
   return available;
 }
 
+function buildHistoryQuery() {
+  return {
+    keyword: safeValue(historyState.filters.keyword).trim(),
+    audience: safeValue(historyState.filters.audience).trim() || "all",
+    sortKey: safeValue(historyState.filters.sortKey).trim() || "createdAt",
+    sortDir: safeValue(historyState.filters.sortDir).trim() || "desc",
+    page: historyState.currentPage,
+    pageSize: historyState.pageSize,
+  };
+}
+
 async function loadHistoryData() {
   historyState.loading = true;
 
   try {
-    const list = await ListHistory();
+    const baseQuery = buildHistoryQuery();
+
+    const totalCount = await CountHistory(baseQuery);
+    historyState.totalCount = Number(totalCount || 0);
+    historyState.totalPages = Math.max(1, Math.ceil(historyState.totalCount / historyState.pageSize));
+
+    if (historyState.currentPage > historyState.totalPages) {
+      historyState.currentPage = historyState.totalPages;
+    }
+    if (historyState.currentPage < 1) {
+      historyState.currentPage = 1;
+    }
+
+    const pagedQuery = {
+      ...baseQuery,
+      page: historyState.currentPage,
+      pageSize: historyState.pageSize,
+    };
+
+    const list = await ListHistoryPaged(pagedQuery);
     historyState.items = Array.isArray(list) ? list : [];
     historyState.audienceMap = {};
 
@@ -116,6 +153,9 @@ function resetHistoryResults() {
   historyState.items = [];
   historyState.selectedIds = [];
   historyState.audienceMap = {};
+  historyState.currentPage = 1;
+  historyState.totalCount = 0;
+  historyState.totalPages = 1;
 }
 
 function getAvailableAudienceLabels(historyId) {
@@ -124,41 +164,7 @@ function getAvailableAudienceLabels(historyId) {
 }
 
 function getFilteredItems() {
-  const keyword = safeValue(historyState.filters.keyword).trim().toLowerCase();
-  const audienceFilter = historyState.filters.audience;
-  const sortKey = historyState.filters.sortKey;
-  const sortDir = historyState.filters.sortDir;
-
-  let items = [...historyState.items];
-
-  if (keyword) {
-    items = items.filter((item) => {
-      const title = safeValue(item.title).toLowerCase();
-      const bibleText = safeValue(item.bibleText).toLowerCase();
-      return title.includes(keyword) || bibleText.includes(keyword);
-    });
-  }
-
-  if (audienceFilter !== "all") {
-    items = items.filter((item) => {
-      const audienceIds = historyState.audienceMap[item.id] || [];
-      return audienceIds.includes(audienceFilter);
-    });
-  }
-
-  items.sort((a, b) => {
-    const aValue = safeValue(a?.[sortKey]);
-    const bValue = safeValue(b?.[sortKey]);
-
-    const compared =
-      sortKey === "createdAt"
-        ? aValue.localeCompare(bValue)
-        : aValue.localeCompare(bValue, "ko");
-
-    return sortDir === "asc" ? compared : -compared;
-  });
-
-  return items;
+  return Array.isArray(historyState.items) ? historyState.items : [];
 }
 
 function renderSearchCard() {
@@ -284,9 +290,44 @@ function renderTableBodyContent(items) {
     .join("");
 }
 
+function renderHistoryPagination() {
+  const canGoPrev = historyState.searched && historyState.currentPage > 1 && !historyState.loading;
+  const canGoNext =
+    historyState.searched &&
+    historyState.currentPage < historyState.totalPages &&
+    !historyState.loading;
+
+  return `
+    <div class="history-pagination topgap-sm">
+      <button
+        type="button"
+        class="history-page-btn"
+        id="history-prev-page-btn"
+        ${canGoPrev ? "" : "disabled"}
+      >
+        이전
+      </button>
+
+      <div class="history-page-status">
+        ${historyState.currentPage} / ${historyState.totalPages}
+        <span class="history-page-total">(${historyState.totalCount}개)</span>
+      </div>
+
+      <button
+        type="button"
+        class="history-page-btn"
+        id="history-next-page-btn"
+        ${canGoNext ? "" : "disabled"}
+      >
+        다음
+      </button>
+    </div>
+  `;
+}
+
 function renderTableCard() {
   const items = getFilteredItems();
-  const totalCount = historyState.searched ? historyState.items.length : 0;
+  const totalCount = historyState.searched ? historyState.totalCount : 0;
   const visibleCount = historyState.searched ? items.length : 0;
   const selectedCount = historyState.selectedIds.length;
   const canRework = historyState.searched && selectedCount === 1;
@@ -356,6 +397,8 @@ function renderTableCard() {
           </tbody>
         </table>
       </div>
+
+      ${renderHistoryPagination()}
     </section>
   `;
 }
@@ -363,11 +406,12 @@ function renderTableCard() {
 export function renderHistoryWorkspace() {
   return `
     <section class="workspace-step-panel">
-      <section class="card card-plain">
-        <div class="step-badge">작업 내역</div>
-        <p class="body-note topgap-sm">저장된 작업을 검색하고 다시 이어서 작업할 수 있습니다.</p>
-        <div id="${HISTORY_MESSAGE_ID}" class="ui-inline-message hidden"></div>
-      </section>
+      <div class="workspace-header-row">
+        <h2 class="workspace-header-title">작업 내역</h2>
+      </div>
+      <p class="workspace-meta-note">저장된 작업을 검색하고 다시 이어서 작업할 수 있습니다.</p>
+
+      <div id="${HISTORY_MESSAGE_ID}" class="ui-inline-message hidden"></div>
 
       ${renderSearchCard()}
       ${renderTableCard()}
@@ -400,6 +444,7 @@ async function handleSearchSubmit() {
 
   try {
     applySearchFiltersFromDom();
+    historyState.currentPage = 1;
     historyState.selectedIds = [];
     await loadHistoryData();
     historyState.searched = true;
@@ -490,6 +535,49 @@ async function handleDeleteSelected() {
   }
 }
 
+async function handlePageMove(direction) {
+  if (!historyState.searched || historyState.loading) return;
+
+  const nextPage =
+    direction === "prev"
+      ? historyState.currentPage - 1
+      : historyState.currentPage + 1;
+
+  if (nextPage < 1 || nextPage > historyState.totalPages) {
+    return;
+  }
+
+  clearInlineMessage(HISTORY_MESSAGE_ID);
+
+  try {
+    historyState.currentPage = nextPage;
+    historyState.selectedIds = [];
+    await loadHistoryData();
+    historyState.searched = true;
+    await rerenderHistoryWorkspace();
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "페이지 이동 중 오류가 발생했습니다.", "error");
+  }
+}
+
+function bindPaginationEvents() {
+  const prevBtn = document.getElementById("history-prev-page-btn");
+  const nextBtn = document.getElementById("history-next-page-btn");
+
+  if (prevBtn) {
+    prevBtn.addEventListener("click", async () => {
+      await handlePageMove("prev");
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener("click", async () => {
+      await handlePageMove("next");
+    });
+  }
+}
+
 function bindFilterEvents() {
   const keywordInput = document.getElementById("history-keyword-input");
   const searchBtn = document.getElementById("history-search-btn");
@@ -572,4 +660,5 @@ export async function bindHistoryWorkspaceEvents() {
   bindFilterEvents();
   bindSelectionEvents();
   bindActionEvents();
+  bindPaginationEvents();
 }

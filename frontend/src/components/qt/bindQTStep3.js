@@ -105,7 +105,7 @@ function applyOne(resultKey, item) {
 
 function buildStep3Payload() {
   return {
-    makeHtml: getChecked('makeHtmlChk'),
+    makeHtml: true, // 화면에서는 숨기지만, 기존 서비스 영향 없도록 유지
     makePdf: getChecked('makePdfChk'),
     makePng: getChecked('makePngChk'),
     dpi: 300,
@@ -121,12 +121,6 @@ function renderStepStatusFromState(audienceId) {
 }
 
 function markSelectedOutputsRunning() {
-  if (getChecked('makeHtmlChk')) {
-    setText('htmlFileStatus', '생성중...');
-  } else {
-    setText('htmlFileStatus', '선택안함');
-  }
-
   if (getChecked('makePdfChk')) {
     setText('pdfFileStatus', '생성중...');
   } else {

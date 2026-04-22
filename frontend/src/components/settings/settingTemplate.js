@@ -1,6 +1,9 @@
+import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
+
+const TEMPLATE_MESSAGE_ID = "template-settings-message";
+
 const TEMPLATE_CATEGORIES = [
   { id: "all", label: "전체" },
-  { id: "monthly", label: "월별" },
   { id: "seasonal", label: "계절별" },
   { id: "liturgical", label: "절기별" },
 ];
@@ -13,6 +16,7 @@ let templateLoadPromise = null;
 let templateUiState = {
   enabled: false,
   selectedCategory: "all",
+  searchText: "",
   selectedId: "",
   selectedPage: 1,
   templates: [],
@@ -20,8 +24,7 @@ let templateUiState = {
   isLoading: false,
   isRefreshing: false,
   hasLoaded: false,
-  statusMessage: "",
-  statusType: "info", // info | error | success
+  isSearchComposing: false,
 };
 
 function getAppBindings() {
@@ -41,26 +44,6 @@ function normalizeCategory(value) {
   const v = String(value || "").trim();
   const found = TEMPLATE_CATEGORIES.find((item) => item.id === v);
   return found ? found.id : "all";
-}
-
-function setStatusMessage(message = "", type = "info") {
-  templateUiState.statusMessage = String(message || "").trim();
-  templateUiState.statusType = type || "info";
-}
-
-function clearStatusMessage() {
-  templateUiState.statusMessage = "";
-  templateUiState.statusType = "info";
-}
-
-function getStatusInlineStyle() {
-  if (templateUiState.statusType === "error") {
-    return "margin-top:8px; padding:10px 12px; border:1px solid #fecaca; background:#fef2f2; color:#991b1b; border-radius:8px;";
-  }
-  if (templateUiState.statusType === "success") {
-    return "margin-top:8px; padding:10px 12px; border:1px solid #bbf7d0; background:#f0fdf4; color:#166534; border-radius:8px;";
-  }
-  return "margin-top:8px;";
 }
 
 function getTemplateById(templateId) {
@@ -83,13 +66,31 @@ function ensureSelectedTemplateIsValid() {
 }
 
 function getFilteredTemplates() {
-  if (templateUiState.selectedCategory === "all") {
-    return templateUiState.templates;
-  }
+  const q = String(templateUiState.searchText || "").trim().toLowerCase();
 
-  return templateUiState.templates.filter(
-    (item) => item.category === templateUiState.selectedCategory
-  );
+  return templateUiState.templates.filter((item) => {
+    if (
+      templateUiState.selectedCategory !== "all" &&
+      item.category !== templateUiState.selectedCategory
+    ) {
+      return false;
+    }
+
+    if (!q) {
+      return true;
+    }
+
+    const target = [
+      item.name || "",
+      item.description || "",
+      ...(Array.isArray(item.tags) ? item.tags : []),
+      ...(Array.isArray(item.searchTerms) ? item.searchTerms : []),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return target.includes(q);
+  });
 }
 
 function getPagedTemplates() {
@@ -120,10 +121,6 @@ function getCurrentPreviewTitle() {
 }
 
 function getCurrentPreviewSubText() {
-  if (!templateUiState.hasLoaded && templateUiState.statusType === "error") {
-    return "템플릿 설정 정보를 불러오지 못했습니다.";
-  }
-
   const selected = getSelectedTemplate();
   if (!selected) {
     return "선택된 템플릿이 없습니다.";
@@ -178,7 +175,7 @@ async function loadSelectedPreviewImageIfNeeded() {
 
   if (!selected) {
     if (changed) {
-      rerenderTemplatePanelOnly();
+      rerenderTemplatePickerCardOnly();
     }
     return;
   }
@@ -205,20 +202,8 @@ async function loadSelectedPreviewImageIfNeeded() {
   }
 
   if (changed) {
-    rerenderTemplatePanelOnly();
+    rerenderTemplatePickerCardOnly();
   }
-}
-
-function renderStatusNote() {
-  if (!templateUiState.statusMessage) {
-    return `<div style="min-height: 18px;"></div>`;
-  }
-
-  return `
-    <div class="body-note" style="${getStatusInlineStyle()}">
-      <p>${escapeHtml(templateUiState.statusMessage)}</p>
-    </div>
-  `;
 }
 
 function renderTemplateGuideCard() {
@@ -231,6 +216,7 @@ function renderTemplateGuideCard() {
           <p>템플릿은 환경설정에서 선택한 후 Step3 산출물 생성 시 반영됩니다.</p>
           <p>템플릿 파일은 var/template 아래에 배치되며, 현재 목록은 실제 파일 기준으로 표시됩니다.</p>
         </div>
+        <div id="${TEMPLATE_MESSAGE_ID}" class="ui-inline-message hidden"></div>
       </div>
 
       <div class="settings-block topgap-md">
@@ -367,16 +353,6 @@ function renderPagination() {
 }
 
 function renderTemplatePreviewPanel() {
-  if (!templateUiState.hasLoaded && templateUiState.statusType === "error") {
-    return `
-      <div class="settings-template-preview-panel">
-        <div class="settings-template-preview-empty">
-          템플릿 설정 정보를 불러오지 못했습니다.
-        </div>
-      </div>
-    `;
-  }
-
   const selected = getSelectedTemplate();
   const previewDataURI = selected ? getTemplatePreviewDataURI(selected) : templateUiState.noImageDataURI;
 
@@ -400,9 +376,7 @@ function renderTemplatePreviewPanel() {
   `;
 }
 
-function renderTemplateSelectionCard() {
-  const refreshLabel = templateUiState.isRefreshing ? "⏳ 새로 고침 중" : "🔄 새로 고침";
-
+function renderTemplateFilterCard() {
   return `
     <section class="card topgap-md">
       <div class="settings-block">
@@ -410,11 +384,40 @@ function renderTemplateSelectionCard() {
       </div>
 
       <div class="settings-block topgap-md">
-        ${renderCategoryTabs()}
+        <div class="settings-template-filter-row">
+          <div class="settings-template-filter-label">분류</div>
+          <div class="settings-template-filter-control">
+            ${renderCategoryTabs()}
+          </div>
+        </div>
       </div>
 
-      <div class="settings-block topgap-sm">
-        ${renderStatusNote()}
+      <div class="settings-block topgap-md">
+        <div class="settings-template-search-block">
+          <input
+            type="text"
+            id="templateSearchText"
+            class="input settings-template-search-input"
+            placeholder="검색어를 입력하세요"
+            value="${escapeHtml(templateUiState.searchText || "")}"
+            ${templateUiState.isLoading ? "disabled" : ""}
+          />
+          <div class="settings-template-search-help">
+            예) 편지지, 봄, seasonal, liturgical, 부활절, 성탄절 등
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderTemplatePickerCard() {
+  const refreshLabel = templateUiState.isRefreshing ? "⏳ 새로 고침 중" : "🔄 새로 고침";
+
+  return `
+    <section class="card topgap-md" id="templatePickerCard">
+      <div class="settings-block">
+        <h3 class="settings-block-title">템플릿 목록 / 미리보기</h3>
       </div>
 
       <div class="settings-block topgap-md">
@@ -455,18 +458,19 @@ function renderTemplateSelectionCard() {
 
 export function renderSettingTemplateTab() {
   return `
-    <section class="settings-template-panel">
+    <section class="settings-template-panel" id="settingsTemplateRoot">
       ${renderTemplateGuideCard()}
-      ${renderTemplateSelectionCard()}
+      ${renderTemplateFilterCard()}
+      ${renderTemplatePickerCard()}
     </section>
   `;
 }
 
 function rerenderTemplatePanelOnly() {
-  const settingsContent = document.querySelector(".settings-content");
-  if (!settingsContent) return;
+  const root = document.querySelector("#settingsTemplateRoot");
+  if (!root) return;
 
-  settingsContent.innerHTML = renderSettingTemplateTab();
+  root.outerHTML = renderSettingTemplateTab();
   bindSettingTemplateTabEvents();
 }
 
@@ -497,6 +501,13 @@ function mapTemplates(items) {
         id: String(item?.id || "").trim(),
         name: String(item?.name || item?.id || "").trim(),
         category: normalizeCategory(item?.category),
+        description: String(item?.description || "").trim(),
+        tags: Array.isArray(item?.tags)
+          ? item.tags.map((v) => String(v || "").trim()).filter(Boolean)
+          : [],
+        searchTerms: Array.isArray(item?.searchTerms)
+          ? item.searchTerms.map((v) => String(v || "").trim()).filter(Boolean)
+          : [],
         hasPdfAsset: !!item?.hasPdfAsset,
         hasPngAsset: !!item?.hasPngAsset,
         isValid: item?.isValid !== false,
@@ -535,7 +546,7 @@ async function ensureTemplateTabInitialized(force = false) {
   }
 
   templateUiState.isLoading = true;
-  clearStatusMessage();
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
   rerenderTemplatePanelOnly();
 
   templateLoadPromise = (async () => {
@@ -544,12 +555,15 @@ async function ensureTemplateTabInitialized(force = false) {
     try {
       await loadTemplateState();
       templateUiState.hasLoaded = true;
-      clearStatusMessage();
       initSucceeded = true;
     } catch (error) {
       console.error("template settings init failed", error);
       templateUiState.hasLoaded = false;
-      setStatusMessage("템플릿 설정 정보를 불러오지 못했습니다.", "error");
+      setInlineMessage(
+        TEMPLATE_MESSAGE_ID,
+        "템플릿 설정 정보를 불러오지 못했습니다.",
+        "error"
+      );
     } finally {
       templateUiState.isLoading = false;
       rerenderTemplatePanelOnly();
@@ -574,13 +588,17 @@ function ensureTemplateTabInitializedIfNeeded() {
 async function refreshTemplateList() {
   const app = getAppBindings();
   if (!app?.RefreshTemplates) {
-    setStatusMessage("템플릿 목록 새로고침 기능을 사용할 수 없습니다.", "error");
+    setInlineMessage(
+      TEMPLATE_MESSAGE_ID,
+      "템플릿 목록 새로고침 기능을 사용할 수 없습니다.",
+      "error"
+    );
     rerenderTemplatePanelOnly();
     return;
   }
 
   templateUiState.isRefreshing = true;
-  clearStatusMessage();
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
   rerenderTemplatePanelOnly();
 
   try {
@@ -591,10 +609,14 @@ async function refreshTemplateList() {
     ensureSelectedTemplateIsValid();
     await persistTemplateSettings();
 
-    setStatusMessage("템플릿 목록을 새로고침했습니다.", "success");
+    showToast("템플릿 목록을 새로고침했습니다.", "success");
   } catch (error) {
     console.error("template refresh failed", error);
-    setStatusMessage("템플릿 목록을 새로고침하지 못했습니다.", "error");
+    setInlineMessage(
+      TEMPLATE_MESSAGE_ID,
+      "템플릿 목록을 새로고침하지 못했습니다.",
+      "error"
+    );
   } finally {
     templateUiState.isRefreshing = false;
     rerenderTemplatePanelOnly();
@@ -606,22 +628,25 @@ async function updateTemplateEnabled(enabled) {
   const wasEnabled = templateUiState.enabled;
   templateUiState.enabled = !!enabled;
 
-  // 체크 해제 시 선택 라디오도 함께 해제
   if (wasEnabled && !templateUiState.enabled) {
     templateUiState.selectedId = "";
   }
 
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
+
   try {
     await persistTemplateSettings();
-    clearStatusMessage();
   } catch (error) {
     console.error("template enabled save failed", error);
-    setStatusMessage("템플릿 사용 설정 저장에 실패했습니다.", "error");
+    setInlineMessage(
+      TEMPLATE_MESSAGE_ID,
+      "템플릿 사용 설정 저장에 실패했습니다.",
+      "error"
+    );
   }
 
   rerenderTemplatePanelOnly();
 
-  // 다시 켠 경우에만 선택된 미리보기 재확인
   if (templateUiState.enabled) {
     void loadSelectedPreviewImageIfNeeded();
   }
@@ -631,12 +656,17 @@ async function updateTemplateCategory(category) {
   templateUiState.selectedCategory = normalizeCategory(category);
   templateUiState.selectedPage = 1;
 
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
+
   try {
     await persistTemplateSettings();
-    clearStatusMessage();
   } catch (error) {
     console.error("template category save failed", error);
-    setStatusMessage("템플릿 분류 저장에 실패했습니다.", "error");
+    setInlineMessage(
+      TEMPLATE_MESSAGE_ID,
+      "템플릿 분류 저장에 실패했습니다.",
+      "error"
+    );
   }
 
   rerenderTemplatePanelOnly();
@@ -647,28 +677,44 @@ async function selectTemplate(templateId) {
   if (!found || !found.isValid) return;
 
   templateUiState.selectedId = found.id;
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
 
   try {
     await persistTemplateSettings();
-    clearStatusMessage();
   } catch (error) {
     console.error("template select save failed", error);
-    setStatusMessage("선택한 템플릿 저장에 실패했습니다.", "error");
+    setInlineMessage(
+      TEMPLATE_MESSAGE_ID,
+      "선택한 템플릿 저장에 실패했습니다.",
+      "error"
+    );
   }
 
   rerenderTemplatePanelOnly();
   void loadSelectedPreviewImageIfNeeded();
 }
 
-export function bindSettingTemplateTabEvents() {
+function rerenderTemplatePickerCardOnly() {
+  const pickerCard = document.querySelector("#templatePickerCard");
+  if (!pickerCard) {
+    rerenderTemplatePanelOnly();
+    return;
+  }
+
+  pickerCard.outerHTML = renderTemplatePickerCard();
+  bindTemplatePickerEvents();
+}
+
+function applyTemplateSearchText(value) {
+  templateUiState.searchText = String(value || "");
+  templateUiState.selectedPage = 1;
+  rerenderTemplatePickerCardOnly();
+}
+
+function bindTemplateFilterEvents() {
   const enabledEl = document.querySelector("#templateEnabled");
   const categoryRadios = document.querySelectorAll('input[name="templateCategory"]');
-  const pageButtons = document.querySelectorAll("[data-template-page]");
-  const rowButtons = document.querySelectorAll("[data-template-row]");
-  const radioButtons = document.querySelectorAll('input[name="templateSelect"]');
-  const refreshBtn = document.querySelector("#templateRefreshBtn");
-
-  ensureTemplateTabInitializedIfNeeded();
+  const searchInput = document.querySelector("#templateSearchText");
 
   if (enabledEl) {
     enabledEl.addEventListener("change", () => {
@@ -683,6 +729,29 @@ export function bindSettingTemplateTabEvents() {
     });
   });
 
+  if (searchInput) {
+    searchInput.addEventListener("compositionstart", () => {
+      templateUiState.isSearchComposing = true;
+    });
+
+    searchInput.addEventListener("compositionend", (event) => {
+      templateUiState.isSearchComposing = false;
+      applyTemplateSearchText(event.target?.value || "");
+    });
+
+    searchInput.addEventListener("input", (event) => {
+      if (templateUiState.isSearchComposing || event.isComposing) return;
+      applyTemplateSearchText(event.target?.value || "");
+    });
+  }
+}
+
+function bindTemplatePickerEvents() {
+  const pageButtons = document.querySelectorAll("[data-template-page]");
+  const rowButtons = document.querySelectorAll("[data-template-row]");
+  const radioButtons = document.querySelectorAll('input[name="templateSelect"]');
+  const refreshBtn = document.querySelector("#templateRefreshBtn");
+
   pageButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (templateUiState.isLoading) return;
@@ -696,7 +765,7 @@ export function bindSettingTemplateTabEvents() {
         templateUiState.selectedPage = currentPage + 1;
       }
 
-      rerenderTemplatePanelOnly();
+      rerenderTemplatePickerCardOnly();
     });
   });
 
@@ -725,4 +794,10 @@ export function bindSettingTemplateTabEvents() {
       void refreshTemplateList();
     });
   }
+}
+
+export function bindSettingTemplateTabEvents() {
+  ensureTemplateTabInitializedIfNeeded();
+  bindTemplateFilterEvents();
+  bindTemplatePickerEvents();
 }

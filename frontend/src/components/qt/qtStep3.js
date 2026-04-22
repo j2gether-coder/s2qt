@@ -90,11 +90,6 @@ export function renderQTStep3(audienceId, appState) {
 
         <div class="output-check-line topgap">
           <label>
-            <input type="checkbox" id="makeHtmlChk" checked />
-            <span>HTML</span>
-          </label>
-
-          <label>
             <input type="checkbox" id="makePdfChk" checked />
             <span>PDF</span>
           </label>
@@ -110,8 +105,7 @@ export function renderQTStep3(audienceId, appState) {
         </div>
       </section>
 
-      <section class="output-result-grid output-result-grid-3col qt-step3-result-grid">
-        ${renderOutputItem('HTML', output.htmlFile || '', output.htmlFile ? '완료' : '대기', 'htmlOpenBtnWrap', 'htmlSaveBtnWrap', 'htmlFileStatus', 'html')}
+      <section class="output-result-grid qt-step3-result-grid">
         ${renderOutputItem('PDF', output.pdfFile || '', output.pdfFile ? '완료' : '대기', 'pdfOpenBtnWrap', 'pdfSaveBtnWrap', 'pdfFileStatus', 'pdf')}
         ${renderOutputItem('PNG', output.pngFile || '', output.pngFile ? '완료' : '대기', 'pngOpenBtnWrap', 'pngSaveBtnWrap', 'pngFileStatus', 'png')}
       </section>
