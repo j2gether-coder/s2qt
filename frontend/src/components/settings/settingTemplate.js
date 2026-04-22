@@ -13,6 +13,8 @@ const TEMPLATE_NO_IMAGE_PATH = "var/template/no_image.png";
 
 let templateLoadPromise = null;
 
+let templatePreviewRequestToken = 0;
+
 let templateUiState = {
   enabled: false,
   selectedCategory: "all",
@@ -56,6 +58,15 @@ function getSelectedTemplate() {
 
 function isValidSelectedTemplate() {
   return !!getSelectedTemplate();
+}
+
+function ensureSelectedTemplateInCurrentPage() {
+  const { items } = getPagedTemplates();
+  const currentPageIds = new Set(items.map((item) => item.id));
+
+  if (templateUiState.selectedId && !currentPageIds.has(templateUiState.selectedId)) {
+    templateUiState.selectedId = "";
+  }
 }
 
 function ensureSelectedTemplateIsValid() {
@@ -180,17 +191,30 @@ async function loadSelectedPreviewImageIfNeeded() {
     return;
   }
 
+  const requestToken = ++templatePreviewRequestToken;
+  const requestSelectedId = selected.id;
+
   if (!selected.previewDataURI) {
     try {
       if (!app?.GetTemplatePreview) {
         throw new Error("GetTemplatePreview binding is not available");
       }
 
-      const previewPath = await app.GetTemplatePreview(selected.id);
+      const previewPath = await app.GetTemplatePreview(requestSelectedId);
       const dataURI = await fetchImageDataURI(previewPath);
 
+      // 늦게 도착한 이전 요청 무시
+      if (requestToken !== templatePreviewRequestToken) {
+        return;
+      }
+
+      // 이미 다른 템플릿이 선택되었으면 무시
+      if (templateUiState.selectedId !== requestSelectedId) {
+        return;
+      }
+
       if (dataURI) {
-        const target = getTemplateById(selected.id);
+        const target = getTemplateById(requestSelectedId);
         if (target) {
           target.previewDataURI = dataURI;
           changed = true;
@@ -201,7 +225,7 @@ async function loadSelectedPreviewImageIfNeeded() {
     }
   }
 
-  if (changed) {
+  if (changed && templateUiState.selectedId === requestSelectedId) {
     rerenderTemplatePickerCardOnly();
   }
 }
@@ -679,6 +703,11 @@ async function selectTemplate(templateId) {
   templateUiState.selectedId = found.id;
   clearInlineMessage(TEMPLATE_MESSAGE_ID);
 
+  // 1) 화면 먼저 반영
+  rerenderTemplatePickerCardOnly();
+  void loadSelectedPreviewImageIfNeeded();
+
+  // 2) 설정 저장은 뒤에서 수행
   try {
     await persistTemplateSettings();
   } catch (error) {
@@ -689,9 +718,6 @@ async function selectTemplate(templateId) {
       "error"
     );
   }
-
-  rerenderTemplatePanelOnly();
-  void loadSelectedPreviewImageIfNeeded();
 }
 
 function rerenderTemplatePickerCardOnly() {
@@ -765,7 +791,9 @@ function bindTemplatePickerEvents() {
         templateUiState.selectedPage = currentPage + 1;
       }
 
+      ensureSelectedTemplateInCurrentPage();
       rerenderTemplatePickerCardOnly();
+      void loadSelectedPreviewImageIfNeeded();
     });
   });
 

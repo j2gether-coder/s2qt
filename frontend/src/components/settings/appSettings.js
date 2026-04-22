@@ -92,7 +92,6 @@ export function renderAppSettings() {
       <div
         class="workspace-content settings-content"
         id="settingsContentRoot"
-        data-settings-tab="${currentSettingsTab}"
       >
         ${renderCurrentSettingsPanel()}
       </div>
@@ -129,17 +128,8 @@ export function bindCurrentSettingsPanelEvents() {
   }
 }
 
-export function rerenderCurrentSettingsPanel() {
-  const contentRoot = document.querySelector("#settingsContentRoot");
-  if (!contentRoot) return;
-
-  contentRoot.setAttribute("data-settings-tab", currentSettingsTab);
-  contentRoot.innerHTML = renderCurrentSettingsPanel();
-  bindCurrentSettingsPanelEvents();
-}
-
 export function bindAppSettingsEvents() {
-  const tabButtons = document.querySelectorAll("[data-settings-tab]");
+  const tabButtons = document.querySelectorAll("button[data-settings-tab]");
 
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -149,5 +139,13 @@ export function bindAppSettingsEvents() {
     });
   });
 
+  bindCurrentSettingsPanelEvents();
+}
+
+export function rerenderCurrentSettingsPanel() {
+  const contentRoot = document.querySelector("#settingsContentRoot");
+  if (!contentRoot) return;
+
+  contentRoot.innerHTML = renderCurrentSettingsPanel();
   bindCurrentSettingsPanelEvents();
 }
