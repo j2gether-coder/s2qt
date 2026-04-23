@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 
 	"s2qt/util"
 )
@@ -61,12 +62,13 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	// metadata 복원
 	if doc.Metadata != nil {
 		out.Title = ensureQTTitlePrefix(step2firstNonEmpty(getStringFromMap(doc.Metadata, "title")))
-		out.BibleText = getStringFromMap(doc.Metadata, "bible_text")
+		out.BibleText = normalizeBibleReference(getStringFromMap(doc.Metadata, "bible_text"))
 		out.Hymn = getStringFromMap(doc.Metadata, "hymn")
 		out.Preacher = getStringFromMap(doc.Metadata, "preacher")
 		out.ChurchName = getStringFromMap(doc.Metadata, "church_name")
 		out.SermonDate = getStringFromMap(doc.Metadata, "sermon_date")
 		out.SourceURL = getStringFromMap(doc.Metadata, "source_url")
+		out.SupportScriptures = normalizeBibleRefSlice(getStringSliceFromMap(doc.Metadata, "support_scriptures"))
 	}
 
 	for _, sec := range doc.Sections {
@@ -146,7 +148,8 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 	}
 
 	finalTitle := ensureQTTitlePrefix(step2firstNonEmpty(req.Title, "QT"))
-	finalBibleText := strings.TrimSpace(req.BibleText)
+	finalBibleText := normalizeBibleReference(req.BibleText)
+	finalSupportScriptures := normalizeBibleRefSlice(req.SupportScriptures)
 
 	doc := QTSectionDoc{
 		Version:  "1.0",
@@ -154,13 +157,14 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		Audience: strings.TrimSpace(req.Audience),
 		Template: "qt_classic",
 		Metadata: map[string]any{
-			"title":       finalTitle,
-			"bible_text":  finalBibleText,
-			"hymn":        strings.TrimSpace(req.Hymn),
-			"preacher":    strings.TrimSpace(req.Preacher),
-			"church_name": strings.TrimSpace(req.ChurchName),
-			"sermon_date": strings.TrimSpace(req.SermonDate),
-			"source_url":  strings.TrimSpace(req.SourceURL),
+			"title":              finalTitle,
+			"bible_text":         finalBibleText,
+			"hymn":               strings.TrimSpace(req.Hymn),
+			"support_scriptures": finalSupportScriptures,
+			"preacher":           strings.TrimSpace(req.Preacher),
+			"church_name":        strings.TrimSpace(req.ChurchName),
+			"sermon_date":        strings.TrimSpace(req.SermonDate),
+			"source_url":         strings.TrimSpace(req.SourceURL),
 		},
 		Sections: []QTSectionData{
 			{
@@ -233,7 +237,8 @@ func (s *QTStep2Service) BuildHTML(req *QTStep2Data) (string, error) {
 
 func buildQTStep2HTML(req *QTStep2Data) string {
 	titleText := ensureQTTitlePrefix(step2firstNonEmpty(req.Title, "QT"))
-	bibleText := strings.TrimSpace(req.BibleText)
+	bibleText := normalizeBibleReference(req.BibleText)
+	supportScriptures := normalizeBibleRefSlice(req.SupportScriptures)
 
 	subboxParts := make([]string, 0)
 	if bibleText != "" {
@@ -242,6 +247,13 @@ func buildQTStep2HTML(req *QTStep2Data) string {
 
 	if strings.TrimSpace(req.Hymn) != "" {
 		subboxParts = append(subboxParts, "찬송: "+escapeHTML(strings.TrimSpace(req.Hymn)))
+	}
+
+	if len(supportScriptures) > 0 {
+		subboxParts = append(
+			subboxParts,
+			"관련 성구: "+escapeHTML(strings.Join(supportScriptures, ", ")),
+		)
 	}
 
 	subbox := ""
@@ -322,6 +334,57 @@ func getStringFromMap(m map[string]any, key string) string {
 	}
 }
 
+func getStringSliceFromMap(m map[string]any, key string) []string {
+	if m == nil {
+		return []string{}
+	}
+
+	v, ok := m[key]
+	if !ok || v == nil {
+		return []string{}
+	}
+
+	switch x := v.(type) {
+	case []string:
+		return cleanStringSlice(x)
+
+	case []any:
+		out := make([]string, 0, len(x))
+		for _, item := range x {
+			out = append(out, strings.TrimSpace(fmt.Sprint(item)))
+		}
+		return cleanStringSlice(out)
+
+	case string:
+		parts := strings.FieldsFunc(x, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r'
+		})
+		return cleanStringSlice(parts)
+
+	default:
+		return []string{}
+	}
+}
+
+func cleanStringSlice(items []string) []string {
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{})
+
+	for _, item := range items {
+		s := strings.TrimSpace(item)
+		if s == "" {
+			continue
+		}
+		if _, exists := seen[s]; exists {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+
+	return out
+}
+
 func escapeHTML(s string) string {
 	r := strings.NewReplacer(
 		"&", "&amp;",
@@ -335,4 +398,151 @@ func escapeHTML(s string) string {
 
 func nl2br(s string) string {
 	return strings.ReplaceAll(s, "\n", "<br />")
+}
+
+func normalizeBibleReference(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+
+	bookPart, restPart := splitBibleBookAndRest(s)
+	if bookPart == "" {
+		return s
+	}
+
+	normalizedBook := normalizeBibleBookName(bookPart)
+	if normalizedBook == "" {
+		normalizedBook = strings.TrimSpace(bookPart)
+	}
+
+	restPart = strings.TrimSpace(restPart)
+	if restPart == "" {
+		return normalizedBook
+	}
+
+	return normalizedBook + " " + restPart
+}
+
+func normalizeBibleRefSlice(items []string) []string {
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{})
+
+	for _, item := range items {
+		s := normalizeBibleReference(item)
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, exists := seen[s]; exists {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+
+	return out
+}
+
+func splitBibleBookAndRest(s string) (string, string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+
+	for i, r := range s {
+		if unicode.IsDigit(r) {
+			return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i:])
+		}
+	}
+
+	return s, ""
+}
+
+func normalizeBibleBookName(book string) string {
+	key := strings.ToLower(strings.TrimSpace(book))
+	key = strings.ReplaceAll(key, " ", "")
+
+	if v, ok := bibleBookNameMap[key]; ok {
+		return v
+	}
+	return strings.TrimSpace(book)
+}
+
+var bibleBookNameMap = map[string]string{
+	"창": "창세기", "창세": "창세기", "창세기": "창세기",
+	"출": "출애굽기", "출애굽": "출애굽기", "출애굽기": "출애굽기",
+	"레": "레위기", "레위": "레위기", "레위기": "레위기",
+	"민": "민수기", "민수": "민수기", "민수기": "민수기",
+	"신": "신명기", "신명": "신명기", "신명기": "신명기",
+
+	"수": "여호수아", "수아": "여호수아", "여호수아": "여호수아",
+	"삿": "사사기", "사사": "사사기", "사사기": "사사기",
+	"룻": "룻기", "룻기": "룻기",
+
+	"삼상": "사무엘상", "사무엘상": "사무엘상",
+	"삼하": "사무엘하", "사무엘하": "사무엘하",
+	"왕상": "열왕기상", "열왕기상": "열왕기상",
+	"왕하": "열왕기하", "열왕기하": "열왕기하",
+	"대상": "역대상", "역대상": "역대상",
+	"대하": "역대하", "역대하": "역대하",
+	"스": "에스라", "에스라": "에스라",
+	"느": "느헤미야", "느헤미야": "느헤미야",
+	"에": "에스더", "에스더": "에스더",
+
+	"욥": "욥기", "욥기": "욥기",
+	"시": "시편", "시편": "시편",
+	"잠": "잠언", "잠언": "잠언",
+	"전": "전도서", "전도서": "전도서",
+	"아": "아가", "아가": "아가",
+
+	"사": "이사야", "이사야": "이사야",
+	"렘": "예레미야", "예레미야": "예레미야",
+	"애": "예레미야애가", "예레미야애가": "예레미야애가",
+	"겔": "에스겔", "에스겔": "에스겔",
+	"단": "다니엘", "다니엘": "다니엘",
+
+	"호": "호세아", "호세아": "호세아",
+	"욜": "요엘", "요엘": "요엘",
+	"암": "아모스", "아모스": "아모스",
+	"옵": "오바댜", "오바댜": "오바댜",
+	"욘": "요나", "요나": "요나",
+	"미": "미가", "미가": "미가",
+	"나": "나훔", "나훔": "나훔",
+	"합": "하박국", "하박국": "하박국",
+	"습": "스바냐", "스바냐": "스바냐",
+	"학": "학개", "학개": "학개",
+	"슥": "스가랴", "스가랴": "스가랴",
+	"말": "말라기", "말라기": "말라기",
+
+	"마": "마태복음", "마태": "마태복음", "마태복음": "마태복음",
+	"막": "마가복음", "마가": "마가복음", "마가복음": "마가복음",
+	"눅": "누가복음", "누가": "누가복음", "누가복음": "누가복음",
+	"요": "요한복음", "요한": "요한복음", "요한복음": "요한복음",
+	"행": "사도행전", "사도행전": "사도행전",
+
+	"롬": "로마서", "로마서": "로마서",
+	"고전": "고린도전서", "고린도전서": "고린도전서",
+	"고후": "고린도후서", "고린도후서": "고린도후서",
+	"갈": "갈라디아서", "갈라디아서": "갈라디아서",
+	"엡": "에베소서", "에베소서": "에베소서",
+	"빌": "빌립보서", "빌립보서": "빌립보서",
+	"골": "골로새서", "골로새서": "골로새서",
+
+	"살전": "데살로니가전서", "데살로니가전서": "데살로니가전서",
+	"살후": "데살로니가후서", "데살로니가후서": "데살로니가후서",
+	"딤전": "디모데전서", "디모데전서": "디모데전서",
+	"딤후": "디모데후서", "디모데후서": "디모데후서",
+	"딛": "디도서", "디도서": "디도서",
+	"몬": "빌레몬서", "빌레몬서": "빌레몬서",
+
+	"히": "히브리서", "히브리서": "히브리서",
+	"약": "야고보서", "야고보서": "야고보서",
+	"벧전": "베드로전서", "베드로전서": "베드로전서",
+	"벧후": "베드로후서", "베드로후서": "베드로후서",
+	"요일": "요한일서", "요한일서": "요한일서",
+	"요이": "요한이서", "요한이서": "요한이서",
+	"요삼": "요한삼서", "요한삼서": "요한삼서",
+	"유": "유다서", "유다서": "유다서",
+	"계": "요한계시록", "요한계시록": "요한계시록",
 }

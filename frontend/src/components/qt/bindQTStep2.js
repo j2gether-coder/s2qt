@@ -24,6 +24,24 @@ function getValue(id) {
   return document.getElementById(id)?.value || '';
 }
 
+function toSupportScripturesArray(text) {
+  return String(text || '')
+    .split(/[,\r\n]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function toSupportScripturesTextarea(value) {
+  if (!Array.isArray(value)) {
+    return '';
+  }
+
+  return value
+    .map((v) => String(v || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 function getBasicInfo() {
   return appState?.source?.basicInfo || {};
 }
@@ -98,6 +116,7 @@ function buildStep2Payload(audienceId) {
     churchName: (basicInfo.churchName || loadedMeta.churchName || '').trim(),
     sermonDate: (basicInfo.sermonDate || loadedMeta.sermonDate || '').trim(),
     sourceURL: (appState?.source?.sourceRef?.url || loadedMeta.sourceURL || '').trim(),
+    support_scriptures: toSupportScripturesArray(getValue('supportScriptures')),
 
     summaryTitle: getValue('summaryTitle'),
     summaryBody: getValue('summaryBody'),
@@ -176,6 +195,8 @@ async function loadStep2Data(audienceId) {
     sermonDate: data?.sermonDate || '',
     sourceURL: data?.sourceURL || '',
   });
+
+  setValue('supportScriptures', toSupportScripturesTextarea(data?.support_scriptures));
 
   setValue('summaryTitle', data?.summaryTitle);
   setValue('summaryBody', data?.summaryBody);

@@ -95,6 +95,8 @@ type QTStep2Data struct {
 	SermonDate string `json:"sermonDate"`
 	SourceURL  string `json:"sourceURL"`
 
+	SupportScriptures []string `json:"support_scriptures"`
+
 	SummaryTitle string `json:"summaryTitle"`
 	SummaryBody  string `json:"summaryBody"`
 

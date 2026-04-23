@@ -37,6 +37,9 @@ const defaultQTPromptBase = `너는 교회 QT 작성 도우미이다.
 - 본문 성구는 사용자가 입력한 값을 그대로 사용할 것
 - 찬송은 사용자가 입력한 값이 있으면 사용할 것
 - 찬송이 비어 있으면 설교 주제와 본문 성구를 참고하여 1곡만 추천해도 된다
+- 관련 성구는 metadata.support_scriptures 배열에 반영할 것
+- 관련 성구는 본문 성구 외, 말씀 이해를 돕는 관련 성구만 넣을 것
+- 관련 성구가 없으면 metadata.support_scriptures 값은 반드시 빈 배열 [] 로 할 것
 - 설교자, 교회명, 설교일, 원본 URL은 JSON의 metadata에 반영하되, 본문 내용 자체를 왜곡하지 말 것
 
 공통 작성 원칙:
@@ -57,12 +60,24 @@ const defaultQTPromptBase = `너는 교회 QT 작성 도우미이다.
 추천 찬송 규칙:
 - 메타 정보에 찬송이 있으면 그 값을 hymn에 그대로 넣을 것
 - 메타 정보에 찬송이 비어 있으면 설교 주제와 입력된 본문 성구를 참고하여 적절한 찬송 1곡을 hymn에 넣을 것
-- 전혀 적절한 찬송을 고르기 어렵다면 hymn 값은 "-"로 할 것`
+- 전혀 적절한 찬송을 고르기 어렵다면 hymn 값은 "-"로 할 것
+
+관련 성구 규칙:
+- 관련 성구의 내부 필드명은 반드시 support_scriptures 로 할 것
+- support_scriptures 는 반드시 문자열 배열로 작성할 것
+- 본문 성구 자체를 support_scriptures 에 다시 넣지 말 것
+- 관련 성구는 0~3개 정도로 간결하게 제시할 것
+- 각 항목은 성경 구절 참조 형태로 자연스럽게 작성할 것
+  예) "이사야 40:31", "로마서 8:28"
+- 설명문을 붙이지 말고 성구 표기만 배열에 넣을 것
+- 적절한 관련 성구가 없으면 빈 배열 [] 로 둘 것`
 
 const defaultQTPromptJSONSchema = `공통 구조 규칙:
 - version은 항상 "1.0"
 - doc_type은 항상 "qt"
 - metadata.title은 audience 규칙을 따른 최종 제목이어야 한다.
+- metadata.support_scriptures 는 반드시 문자열 배열이어야 한다
+- metadata.support_scriptures 가 없으면 반드시 빈 배열 [] 로 둘 것
 - sections는 반드시 4개로 고정할 것: summary, message, reflection, prayer
 - message 섹션은 message_title 3개와 paragraph 3개를 반드시 포함할 것
 - reflection 섹션의 list.items는 반드시 3개 항목으로 작성할 것
@@ -76,6 +91,7 @@ const defaultQTPromptJSONSchema = `공통 구조 규칙:
 - prayer 섹션에는 paragraph 블록 1개만 둘 것
 - 빈 문자열 대신 가능한 한 자연스러운 내용을 채울 것
 - JSON 출력 후 추가 문장을 절대 덧붙이지 말 것
+- metadata.support_scriptures 는 문자열 단일값이 아니라 배열이어야 한다
 
 출력 JSON 스키마:
 {
@@ -87,6 +103,7 @@ const defaultQTPromptJSONSchema = `공통 구조 규칙:
     "title": "[QT] audience 규칙에 따라 결정된 제목",
     "bible_text": "{{bible_text}}",
     "hymn": "",
+    "support_scriptures": [],
     "preacher": "{{preacher}}",
     "church_name": "{{church_name}}",
     "sermon_date": "{{sermon_date}}",

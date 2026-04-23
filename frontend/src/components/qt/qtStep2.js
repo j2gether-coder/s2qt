@@ -50,6 +50,19 @@ export function renderQTStep2(audienceId, appState) {
 
         <div class="section-edit-group topgap">
           <div class="section-edit-card">
+            <label class="form-label">관련 성구</label>
+            <div class="hint topgap-sm">
+              본문 성구 외, 말씀 이해를 돕는 관련 성구를 입력합니다. 콤마(,)로 구분하여 입력하세요.
+            </div>
+            <input
+              id="supportScriptures"
+              type="text"
+              class="topgap-sm"
+              placeholder="콤마(,)로 구분하여 입력해 주세요. 예) 이사야 40:31, 로마서 8:28"
+             />
+          </div>
+
+          <div class="section-edit-card">
             <label class="form-label">말씀의 창</label>
             <input id="summaryTitle" type="text" />
             <textarea id="summaryBody" class="textarea-3rows"></textarea>
