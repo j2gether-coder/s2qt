@@ -60,19 +60,11 @@ function isValidSelectedTemplate() {
   return !!getSelectedTemplate();
 }
 
-function ensureSelectedTemplateInCurrentPage() {
-  const { items } = getPagedTemplates();
-  const currentPageIds = new Set(items.map((item) => item.id));
-
-  if (templateUiState.selectedId && !currentPageIds.has(templateUiState.selectedId)) {
-    templateUiState.selectedId = "";
-  }
-}
-
 function ensureSelectedTemplateIsValid() {
   if (!templateUiState.selectedId) return;
+
   if (!isValidSelectedTemplate()) {
-    templateUiState.selectedId = "";
+    clearTemplateSelection();
   }
 }
 
@@ -322,9 +314,9 @@ function renderTemplateTable() {
               return `
                 <tr class="${isSelected ? "is-selected" : ""} ${!item.isValid ? "is-disabled" : ""}" data-template-row="${escapeHtml(item.id)}">
                   <td>
-                    <label class="settings-template-radio-wrap">
+                    <label class="settings-template-check-wrap">
                       <input
-                        type="radio"
+                        type="checkbox"
                         name="templateSelect"
                         value="${escapeHtml(item.id)}"
                         ${isSelected ? "checked" : ""}
@@ -343,6 +335,61 @@ function renderTemplateTable() {
       </table>
     </div>
   `;
+}
+
+function clearTemplateSelection() {
+  templateUiState.selectedId = "";
+}
+
+function ensureSelectedTemplateInCurrentPage() {
+  const { items } = getPagedTemplates();
+  const currentPageIds = new Set(items.map((item) => item.id));
+
+  if (templateUiState.selectedId && !currentPageIds.has(templateUiState.selectedId)) {
+    clearTemplateSelection();
+  }
+}
+
+async function toggleTemplateSelection(templateId) {
+  const found = getTemplateById(templateId);
+  if (!found || !found.isValid) return;
+
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
+
+  // 언체크
+  if (templateUiState.selectedId === found.id) {
+    templatePreviewRequestToken++;
+    clearTemplateSelection();
+    rerenderTemplatePickerCardOnly();
+
+    try {
+      await persistTemplateSettings();
+    } catch (error) {
+      console.error("template unselect save failed", error);
+      setInlineMessage(
+        TEMPLATE_MESSAGE_ID,
+        "템플릿 선택 해제 저장에 실패했습니다.",
+        "error"
+      );
+    }
+    return;
+  }
+
+  // 체크
+  templateUiState.selectedId = found.id;
+  rerenderTemplatePickerCardOnly();
+  void loadSelectedPreviewImageIfNeeded();
+
+  try {
+    await persistTemplateSettings();
+  } catch (error) {
+    console.error("template select save failed", error);
+    setInlineMessage(
+      TEMPLATE_MESSAGE_ID,
+      "선택한 템플릿 저장에 실패했습니다.",
+      "error"
+    );
+  }
 }
 
 function renderPagination() {
@@ -559,8 +606,14 @@ async function loadTemplateState() {
 }
 
 async function ensureTemplateTabInitialized(force = false) {
+  if (!templateUiState.enabled) {
+    return;
+  }
+
   if (templateUiState.hasLoaded && !force) {
-    void loadSelectedPreviewImageIfNeeded();
+    if (templateUiState.selectedId) {
+      void loadSelectedPreviewImageIfNeeded();
+    }
     return;
   }
 
@@ -571,7 +624,7 @@ async function ensureTemplateTabInitialized(force = false) {
 
   templateUiState.isLoading = true;
   clearInlineMessage(TEMPLATE_MESSAGE_ID);
-  rerenderTemplatePanelOnly();
+  rerenderTemplatePickerCardOnly();
 
   templateLoadPromise = (async () => {
     let initSucceeded = false;
@@ -590,9 +643,9 @@ async function ensureTemplateTabInitialized(force = false) {
       );
     } finally {
       templateUiState.isLoading = false;
-      rerenderTemplatePanelOnly();
+      rerenderTemplatePickerCardOnly();
 
-      if (initSucceeded) {
+      if (initSucceeded && templateUiState.selectedId) {
         void loadSelectedPreviewImageIfNeeded();
       }
 
@@ -617,13 +670,14 @@ async function refreshTemplateList() {
       "템플릿 목록 새로고침 기능을 사용할 수 없습니다.",
       "error"
     );
-    rerenderTemplatePanelOnly();
     return;
   }
 
   templateUiState.isRefreshing = true;
   clearInlineMessage(TEMPLATE_MESSAGE_ID);
-  rerenderTemplatePanelOnly();
+  rerenderTemplatePickerCardOnly();
+
+  const previousSelectedId = templateUiState.selectedId;
 
   try {
     const items = await app.RefreshTemplates();
@@ -631,9 +685,17 @@ async function refreshTemplateList() {
     templateUiState.selectedPage = 1;
 
     ensureSelectedTemplateIsValid();
-    await persistTemplateSettings();
 
-    showToast("템플릿 목록을 새로고침했습니다.", "success");
+    // 선택이 사라졌으면 preview도 비움
+    if (previousSelectedId && templateUiState.selectedId !== previousSelectedId) {
+      templatePreviewRequestToken++;
+    }
+
+    rerenderTemplatePickerCardOnly();
+
+    if (templateUiState.selectedId) {
+      void loadSelectedPreviewImageIfNeeded();
+    }
   } catch (error) {
     console.error("template refresh failed", error);
     setInlineMessage(
@@ -643,36 +705,57 @@ async function refreshTemplateList() {
     );
   } finally {
     templateUiState.isRefreshing = false;
-    rerenderTemplatePanelOnly();
-    void loadSelectedPreviewImageIfNeeded();
+    rerenderTemplatePickerCardOnly();
   }
 }
 
 async function updateTemplateEnabled(enabled) {
-  const wasEnabled = templateUiState.enabled;
   templateUiState.enabled = !!enabled;
+  clearInlineMessage(TEMPLATE_MESSAGE_ID);
 
-  if (wasEnabled && !templateUiState.enabled) {
-    templateUiState.selectedId = "";
+  // 템플릿 사용 OFF
+  if (!templateUiState.enabled) {
+    templatePreviewRequestToken++;
+    clearTemplateSelection();
+    templateUiState.templates = [];
+    templateUiState.selectedPage = 1;
+    templateUiState.hasLoaded = false;
+    templateUiState.isLoading = false;
+    templateUiState.isRefreshing = false;
+
+    rerenderTemplatePanelOnly();
+
+    try {
+      await persistTemplateSettings();
+    } catch (error) {
+      console.error("template enabled save failed", error);
+      setInlineMessage(
+        TEMPLATE_MESSAGE_ID,
+        "템플릿 사용 설정 저장에 실패했습니다.",
+        "error"
+      );
+    }
+    return;
   }
 
-  clearInlineMessage(TEMPLATE_MESSAGE_ID);
+  // 템플릿 사용 ON
+  clearTemplateSelection();
+  templateUiState.templates = [];
+  templateUiState.selectedPage = 1;
+  templateUiState.hasLoaded = false;
+
+  rerenderTemplatePanelOnly();
 
   try {
     await persistTemplateSettings();
+    await ensureTemplateTabInitialized(true);
   } catch (error) {
     console.error("template enabled save failed", error);
     setInlineMessage(
       TEMPLATE_MESSAGE_ID,
-      "템플릿 사용 설정 저장에 실패했습니다.",
+      "템플릿 사용 설정 저장 또는 목록 불러오기에 실패했습니다.",
       "error"
     );
-  }
-
-  rerenderTemplatePanelOnly();
-
-  if (templateUiState.enabled) {
-    void loadSelectedPreviewImageIfNeeded();
   }
 }
 
@@ -775,7 +858,7 @@ function bindTemplateFilterEvents() {
 function bindTemplatePickerEvents() {
   const pageButtons = document.querySelectorAll("[data-template-page]");
   const rowButtons = document.querySelectorAll("[data-template-row]");
-  const radioButtons = document.querySelectorAll('input[name="templateSelect"]');
+  const checkButtons = document.querySelectorAll('input[name="templateSelect"]');
   const refreshBtn = document.querySelector("#templateRefreshBtn");
 
   pageButtons.forEach((button) => {
@@ -793,7 +876,6 @@ function bindTemplatePickerEvents() {
 
       ensureSelectedTemplateInCurrentPage();
       rerenderTemplatePickerCardOnly();
-      void loadSelectedPreviewImageIfNeeded();
     });
   });
 
@@ -802,18 +884,19 @@ function bindTemplatePickerEvents() {
       const input = row.querySelector('input[name="templateSelect"]');
       if (!input || input.disabled) return;
 
-      if (event.target?.tagName !== "INPUT") {
-        input.checked = true;
+      // input 자체 클릭이면 아래 change에서 처리
+      if (event.target?.tagName === "INPUT") {
+        return;
       }
 
-      void selectTemplate(row.dataset.templateRow || "");
+      void toggleTemplateSelection(row.dataset.templateRow || "");
     });
   });
 
-  radioButtons.forEach((radio) => {
-    radio.addEventListener("change", () => {
-      if (radio.disabled) return;
-      void selectTemplate(radio.value || "");
+  checkButtons.forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      if (checkbox.disabled) return;
+      void toggleTemplateSelection(checkbox.value || "");
     });
   });
 

@@ -2262,7 +2262,7 @@ textarea.input {
   cursor: default;
 }
 
-.settings-template-radio-wrap {
+.settings-template-check-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2375,6 +2375,28 @@ textarea.input {
   color: #6b7280;
   font-size: 12px;
   line-height: 1.6;
+}
+
+.settings-check-row input[type="checkbox"],
+.settings-template-check-wrap input[type="checkbox"] {
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.settings-check-row input[type="checkbox"]:disabled,
+.settings-template-check-wrap input[type="checkbox"]:disabled {
+  accent-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.settings-template-check-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
 @media (max-width: 720px) {

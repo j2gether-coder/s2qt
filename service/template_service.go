@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/image/draw"
 	xdraw "golang.org/x/image/draw"
 
 	_ "image/jpeg"
@@ -121,6 +122,11 @@ type TemplateApplyResult struct {
 	PNGError   string `json:"pngError"`
 }
 
+type TemplateService struct {
+	DB    *sql.DB
+	Paths *util.AppPaths
+}
+
 func (r *TemplateApplyResult) HasError() bool {
 	if r == nil {
 		return false
@@ -128,9 +134,25 @@ func (r *TemplateApplyResult) HasError() bool {
 	return strings.TrimSpace(r.PDFError) != "" || strings.TrimSpace(r.PNGError) != ""
 }
 
-type TemplateService struct {
-	DB    *sql.DB
-	Paths *util.AppPaths
+func validateTemplateID(templateID string) error {
+	templateID = strings.TrimSpace(templateID)
+	if templateID == "" {
+		return fmt.Errorf("template id가 비어 있습니다")
+	}
+
+	if templateID != filepath.Base(templateID) {
+		return fmt.Errorf("template id 형식이 올바르지 않습니다")
+	}
+
+	if strings.Contains(templateID, "..") {
+		return fmt.Errorf("template id 형식이 올바르지 않습니다")
+	}
+
+	if !strings.HasPrefix(templateID, "tpl_") {
+		return fmt.Errorf("template id 형식이 올바르지 않습니다")
+	}
+
+	return nil
 }
 
 func NewTemplateServiceWithDB(db *sql.DB) (*TemplateService, error) {
@@ -309,8 +331,8 @@ func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, err
 	}
 
 	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
-		return nil, fmt.Errorf("template id가 비어 있습니다")
+	if err := validateTemplateID(templateID); err != nil {
+		return nil, err
 	}
 
 	root := s.resolveTemplateRootDir()
@@ -328,94 +350,6 @@ func (s *TemplateService) GetTemplateByID(templateID string) (*TemplateItem, err
 	}
 
 	return s.loadTemplateItemFromDir(dir)
-}
-
-func (s *TemplateService) EnsureTemplateThumbnail(item *TemplateItem) (string, error) {
-	if item == nil {
-		return "", fmt.Errorf("template item이 nil 입니다")
-	}
-
-	srcPath := strings.TrimSpace(item.CommonPath)
-	if srcPath == "" {
-		srcPath = strings.TrimSpace(item.templateBackgroundPathForPNG())
-	}
-	if srcPath == "" {
-		srcPath = strings.TrimSpace(item.templateBackgroundPathForPDF())
-	}
-	if srcPath == "" {
-		return "", fmt.Errorf("template 원본 이미지가 없습니다")
-	}
-	if !FileExists(srcPath) {
-		return "", fmt.Errorf("template 원본 파일이 없습니다: %s", srcPath)
-	}
-
-	dstPath := s.buildTemplateThumbPath(item.Dir)
-	if FileExists(dstPath) {
-		return dstPath, nil
-	}
-
-	if err := s.generateTemplateThumbnail(srcPath, dstPath, 360, 480); err != nil {
-		return "", err
-	}
-	return dstPath, nil
-}
-
-func (s *TemplateService) buildTemplateThumbPath(dir string) string {
-	return filepath.Join(dir, "thumb.png")
-}
-
-func (s *TemplateService) generateTemplateThumbnail(srcPath, dstPath string, maxWidth, maxHeight int) error {
-	if maxWidth <= 0 {
-		maxWidth = 360
-	}
-	if maxHeight <= 0 {
-		maxHeight = 480
-	}
-
-	srcImg, err := templateDecodeImageFile(srcPath)
-	if err != nil {
-		return fmt.Errorf("template 이미지 디코드 실패: %w", err)
-	}
-
-	b := srcImg.Bounds()
-	srcW := b.Dx()
-	srcH := b.Dy()
-	if srcW <= 0 || srcH <= 0 {
-		return fmt.Errorf("유효하지 않은 template 이미지 크기: %dx%d", srcW, srcH)
-	}
-
-	scale := math.Min(float64(maxWidth)/float64(srcW), float64(maxHeight)/float64(srcH))
-	if scale > 1.0 {
-		scale = 1.0
-	}
-
-	dstW := int(math.Round(float64(srcW) * scale))
-	dstH := int(math.Round(float64(srcH) * scale))
-	if dstW <= 0 {
-		dstW = 1
-	}
-	if dstH <= 0 {
-		dstH = 1
-	}
-
-	dstImg := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
-	xdraw.CatmullRom.Scale(dstImg, dstImg.Bounds(), srcImg, b, xdraw.Src, nil)
-
-	if err := EnsureParentDir(dstPath); err != nil {
-		return err
-	}
-
-	f, err := os.Create(dstPath)
-	if err != nil {
-		return fmt.Errorf("thumb.png 생성 실패: %w", err)
-	}
-	defer f.Close()
-
-	if err := png.Encode(f, dstImg); err != nil {
-		return fmt.Errorf("thumb.png 저장 실패: %w", err)
-	}
-
-	return nil
 }
 
 func (s *TemplateService) ApplySelectedTemplate(req *TemplateApplyRequest) (*TemplateApplyResult, error) {
@@ -683,39 +617,124 @@ func (s *TemplateService) GetTemplatePreview(templateID string) (string, error) 
 		return "", fmt.Errorf("template service가 초기화되지 않았습니다")
 	}
 
-	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
-		noImage := s.templateNoImagePath()
-		if noImage != "" && FileExists(noImage) {
-			return noImage, nil
-		}
-		return "", fmt.Errorf("template id가 비어 있습니다")
-	}
-
 	item, err := s.GetTemplateByID(templateID)
 	if err != nil {
-		noImage := s.templateNoImagePath()
-		if noImage != "" && FileExists(noImage) {
-			return noImage, nil
-		}
-		return "", err
+		return s.templateNoImagePath(), nil
 	}
 
 	thumbPath, err := s.EnsureTemplateThumbnail(item)
-	if err == nil && strings.TrimSpace(thumbPath) != "" && FileExists(thumbPath) {
+	if err != nil {
+		return s.templateNoImagePath(), nil
+	}
+	if strings.TrimSpace(thumbPath) == "" {
+		return s.templateNoImagePath(), nil
+	}
+
+	return thumbPath, nil
+}
+
+func (s *TemplateService) EnsureTemplateThumbnail(item *TemplateItem) (string, error) {
+	if item == nil {
+		return "", fmt.Errorf("template item이 nil 입니다")
+	}
+
+	thumbPath := s.buildTemplateThumbPath(item.Dir)
+	if FileExists(thumbPath) {
 		return thumbPath, nil
 	}
 
-	noImage := s.templateNoImagePath()
-	if noImage != "" && FileExists(noImage) {
-		return noImage, nil
+	sourcePath := s.resolveTemplateThumbnailSource(item)
+	if strings.TrimSpace(sourcePath) == "" {
+		return "", fmt.Errorf("썸네일 생성용 template image가 없습니다")
 	}
 
-	if item.CommonPath != "" && FileExists(item.CommonPath) {
-		return item.CommonPath, nil
+	if err := s.generateTemplateThumbnail(sourcePath, thumbPath, 360, 510); err != nil {
+		return "", err
 	}
 
-	return "", fmt.Errorf("미리보기 이미지를 찾을 수 없습니다: %s", templateID)
+	return thumbPath, nil
+}
+
+func (s *TemplateService) buildTemplateThumbPath(dir string) string {
+	return filepath.Join(dir, templateThumbFileName)
+}
+
+func (s *TemplateService) resolveTemplateThumbnailSource(item *TemplateItem) string {
+	if item == nil {
+		return ""
+	}
+
+	if strings.TrimSpace(item.PreviewPath) != "" && FileExists(item.PreviewPath) {
+		return item.PreviewPath
+	}
+
+	if strings.TrimSpace(item.CommonPath) != "" && FileExists(item.CommonPath) {
+		return item.CommonPath
+	}
+
+	if strings.TrimSpace(item.PDFPath) != "" && FileExists(item.PDFPath) {
+		return item.PDFPath
+	}
+
+	if strings.TrimSpace(item.PNGPath) != "" && FileExists(item.PNGPath) {
+		return item.PNGPath
+	}
+
+	return ""
+}
+
+func (s *TemplateService) generateTemplateThumbnail(srcPath, dstPath string, maxWidth, maxHeight int) error {
+	img, err := templateDecodeImageFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("template image decode 실패: %w", err)
+	}
+
+	bounds := img.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+	if srcW <= 0 || srcH <= 0 {
+		return fmt.Errorf("template image 크기가 올바르지 않습니다")
+	}
+
+	if maxWidth <= 0 {
+		maxWidth = 360
+	}
+	if maxHeight <= 0 {
+		maxHeight = 510
+	}
+
+	scale := math.Min(float64(maxWidth)/float64(srcW), float64(maxHeight)/float64(srcH))
+	if scale > 1.0 {
+		scale = 1.0
+	}
+
+	dstW := int(math.Round(float64(srcW) * scale))
+	dstH := int(math.Round(float64(srcH) * scale))
+	if dstW <= 0 {
+		dstW = srcW
+	}
+	if dstH <= 0 {
+		dstH = srcH
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
+
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+		return fmt.Errorf("thumb 디렉터리 생성 실패: %w", err)
+	}
+
+	f, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("thumb 파일 생성 실패: %w", err)
+	}
+	defer f.Close()
+
+	if err := png.Encode(f, dst); err != nil {
+		return fmt.Errorf("thumb png 저장 실패: %w", err)
+	}
+
+	return nil
 }
 
 func (s *TemplateService) loadTemplateItemFromDir(dir string) (*TemplateItem, error) {
