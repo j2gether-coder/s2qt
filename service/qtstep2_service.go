@@ -63,7 +63,7 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	if doc.Metadata != nil {
 		out.Title = ensureQTTitlePrefix(step2firstNonEmpty(getStringFromMap(doc.Metadata, "title")))
 		out.BibleText = normalizeBibleReference(getStringFromMap(doc.Metadata, "bible_text"))
-		out.Hymn = getStringFromMap(doc.Metadata, "hymn")
+		out.Hymn = normalizeHymnText(getStringFromMap(doc.Metadata, "hymn"))
 		out.Preacher = getStringFromMap(doc.Metadata, "preacher")
 		out.ChurchName = getStringFromMap(doc.Metadata, "church_name")
 		out.SermonDate = getStringFromMap(doc.Metadata, "sermon_date")
@@ -159,7 +159,7 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		Metadata: map[string]any{
 			"title":              finalTitle,
 			"bible_text":         finalBibleText,
-			"hymn":               strings.TrimSpace(req.Hymn),
+			"hymn":               normalizeHymnText(req.Hymn),
 			"support_scriptures": finalSupportScriptures,
 			"preacher":           strings.TrimSpace(req.Preacher),
 			"church_name":        strings.TrimSpace(req.ChurchName),
@@ -245,8 +245,9 @@ func buildQTStep2HTML(req *QTStep2Data) string {
 		subboxParts = append(subboxParts, "본문 성구: "+escapeHTML(bibleText))
 	}
 
-	if strings.TrimSpace(req.Hymn) != "" {
-		subboxParts = append(subboxParts, "찬송: "+escapeHTML(strings.TrimSpace(req.Hymn)))
+	hymnText := normalizeHymnText(req.Hymn)
+	if hymnText != "" {
+		subboxParts = append(subboxParts, "찬송: "+escapeHTML(hymnText))
 	}
 
 	if len(supportScriptures) > 0 {
@@ -545,4 +546,27 @@ var bibleBookNameMap = map[string]string{
 	"요삼": "요한삼서", "요한삼서": "요한삼서",
 	"유": "유다서", "유다서": "유다서",
 	"계": "요한계시록", "요한계시록": "요한계시록",
+}
+
+func normalizeHymnText(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+
+	prefixes := []string{
+		"찬송가:",
+		"찬송:",
+		"찬송가 :",
+		"찬송 :",
+	}
+
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimSpace(strings.TrimPrefix(s, p))
+			break
+		}
+	}
+
+	return strings.TrimSpace(s)
 }

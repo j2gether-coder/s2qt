@@ -873,11 +873,29 @@ func (s *PDFService) makePDFWithEdge(htmlPath, pdfPath string) error {
 		return fmt.Errorf("PDF 변환 실패: %v\n%s", err, string(out))
 	}
 
-	if err := waitForFile(absPDF, 5*time.Second); err != nil {
+	if err := waitForGeneratedFile(absPDF, 15*time.Second, "PDF"); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func waitForGeneratedFile(path string, timeout time.Duration, kind string) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		info, err := os.Stat(path)
+		if err == nil && info.Size() > 0 {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = "파일"
+	}
+	return fmt.Errorf("%s 파일이 생성되지 않았습니다: %s", kind, path)
 }
 
 func waitForFile(path string, timeout time.Duration) error {

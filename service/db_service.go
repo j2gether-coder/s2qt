@@ -16,6 +16,10 @@ var dbInstance *sql.DB
 // OpenSQLite opens or returns the singleton SQLite connection.
 func OpenSQLite(dbPath string) (*sql.DB, error) {
 	if dbInstance != nil {
+		// 혹시 이미 열린 DB라도 테이블 보장을 다시 수행
+		if err := InitSQLite(dbInstance); err != nil {
+			return nil, fmt.Errorf("failed to init sqlite: %w", err)
+		}
 		return dbInstance, nil
 	}
 
@@ -45,6 +49,12 @@ func OpenSQLite(dbPath string) (*sql.DB, error) {
 	if err := enablePragmas(db); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+
+	// 핵심: DB 오픈 직후 테이블/기본 설정 자동 보장
+	if err := InitSQLite(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to init sqlite: %w", err)
 	}
 
 	dbInstance = db

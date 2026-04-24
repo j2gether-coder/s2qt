@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"s2qt/util"
 )
@@ -78,7 +79,12 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		return nil, fmt.Errorf("html 파일을 찾을 수 없습니다: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(pngPath), 0o755); err != nil {
+	absPNG, err := filepath.Abs(pngPath)
+	if err != nil {
+		return nil, fmt.Errorf("png 절대경로 변환 실패: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(absPNG), 0o755); err != nil {
 		return nil, fmt.Errorf("출력 폴더 생성 실패: %w", err)
 	}
 
@@ -92,7 +98,7 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		return nil, fmt.Errorf("html 파일 URL 변환 실패: %w", err)
 	}
 
-	_ = os.Remove(pngPath)
+	_ = os.Remove(absPNG)
 
 	args := []string{
 		"--headless=new",
@@ -100,7 +106,7 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		"--hide-scrollbars",
 		"--force-device-scale-factor=" + strconv.FormatFloat(deviceScaleFactor, 'f', 4, 64),
 		fmt.Sprintf("--window-size=%d,%d", viewportWidth, viewportHeight),
-		fmt.Sprintf("--screenshot=%s", pngPath),
+		fmt.Sprintf("--screenshot=%s", absPNG),
 		fileURL,
 	}
 
@@ -110,12 +116,11 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		return nil, fmt.Errorf("PNG 생성 실패: %w / output=%s", err, string(output))
 	}
 
-	if _, err := os.Stat(pngPath); err != nil {
-		return nil, fmt.Errorf("PNG 파일 생성 확인 실패: %w", err)
+	if err := waitForGeneratedPNG(absPNG, 15*time.Second); err != nil {
+		return nil, err
 	}
 
-	// 생성된 PNG의 가장자리와 연결된 흰 배경만 투명화
-	if err := transparentizePNGBackground(pngPath, 248); err != nil {
+	if err := transparentizePNGBackground(absPNG, 248); err != nil {
 		return nil, fmt.Errorf("PNG 배경 투명화 실패: %w", err)
 	}
 
@@ -123,11 +128,25 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		Success:  true,
 		Message:  "PNG 생성이 완료되었습니다.",
 		HTMLFile: htmlPath,
-		PNGFile:  pngPath,
+		PNGFile:  absPNG,
 		DPI:      dpi,
 		WidthPx:  widthPx,
 		HeightPx: heightPx,
 	}, nil
+}
+
+func waitForGeneratedPNG(path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		info, err := os.Stat(path)
+		if err == nil && info.Size() > 0 {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	return fmt.Errorf("PNG 파일 생성 확인 실패: %s", path)
 }
 
 func (s *PNGService) buildPNGSourceFromHTMLFile(htmlPath string, footerOverride *QTFooterConfig) (string, error) {

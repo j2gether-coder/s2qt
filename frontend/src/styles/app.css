@@ -135,6 +135,7 @@ textarea {
   flex-direction: column;
   margin: 0;
   padding: 0;
+  flex: 1;
 }
 
 .side-nav-item {
@@ -178,6 +179,22 @@ textarea {
   bottom: 0;
   width: 4px;
   background: #60a5fa;
+}
+
+.side-nav-bottom {
+  padding: 12px 10px 14px 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.side-nav-qr {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  display: block;
+  opacity: 0.95;
 }
 
 /* =========================

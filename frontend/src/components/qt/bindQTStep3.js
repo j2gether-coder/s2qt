@@ -249,9 +249,30 @@ async function runStep3(audienceId) {
     bindOpenButtons();
     bindSaveAsButtons(audienceId);
 
-    setAudienceStepStatus(audienceId, 'step3', 'done');
+    const summary = collectStep3OutputMessages(req, result);
+
+    if (summary.allSucceeded) {
+      setAudienceStepStatus(audienceId, 'step3', 'done');
+      renderStepStatusFromState(audienceId);
+      showToast('Step3 산출물 생성을 완료했습니다.', 'success');
+      return;
+    }
+
+    if (summary.anyFailed) {
+      setAudienceStepStatus(audienceId, 'step3', summary.anySucceeded ? 'done' : 'error');
+      renderStepStatusFromState(audienceId);
+
+      setInlineMessage(
+        "qt-step3-message",
+        summary.errors.join('\n'),
+        summary.anySucceeded ? "warning" : "error"
+      );
+      return;
+    }
+
+    setAudienceStepStatus(audienceId, 'step3', 'error');
     renderStepStatusFromState(audienceId);
-    showToast('Step3 산출물 생성을 완료했습니다.', 'success');
+    setInlineMessage("qt-step3-message", '선택한 산출물 생성 결과를 확인할 수 없습니다.', "error");
   } catch (error) {
     console.error(error);
     setAudienceStepStatus(audienceId, 'step3', 'error');
@@ -307,4 +328,41 @@ export function bindQTStep3Events(audienceId) {
       await finishStep3Flow();
     };
   }
+}
+
+function collectStep3OutputMessages(req, result) {
+  const errors = [];
+  const succeeded = [];
+  const selected = [];
+
+  if (req?.makePdf) {
+    selected.push('PDF');
+    if (result?.pdf?.success) {
+      succeeded.push('PDF');
+    } else if (result?.pdf?.error) {
+      errors.push(`PDF: ${result.pdf.error}`);
+    } else {
+      errors.push('PDF: 산출물 생성에 실패했습니다.');
+    }
+  }
+
+  if (req?.makePng) {
+    selected.push('PNG');
+    if (result?.png?.success) {
+      succeeded.push('PNG');
+    } else if (result?.png?.error) {
+      errors.push(`PNG: ${result.png.error}`);
+    } else {
+      errors.push('PNG: 산출물 생성에 실패했습니다.');
+    }
+  }
+
+  return {
+    selected,
+    succeeded,
+    errors,
+    allSucceeded: selected.length > 0 && succeeded.length === selected.length,
+    anySucceeded: succeeded.length > 0,
+    anyFailed: errors.length > 0,
+  };
 }

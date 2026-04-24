@@ -4,6 +4,7 @@ import {
   getMenuLabel,
   isMenuVisible,
 } from "../state/appState";
+import { GetSideNavQRDataURI } from "../../wailsjs/go/main/App";
 
 const MENU_ORDER = [
   { id: "qt_prepare" },
@@ -42,8 +43,44 @@ export function renderSideNav() {
           )
           .join("")}
       </nav>
+
+      <div class="side-nav-bottom" id="sideNavQrWrap" hidden>
+        <img
+          class="side-nav-qr"
+          id="sideNavQrImg"
+          alt="S2QT 안내 QR"
+        />
+      </div>
     </aside>
   `;
+}
+
+async function loadSideNavQR() {
+  const wrap = document.getElementById("sideNavQrWrap");
+  const img = document.getElementById("sideNavQrImg");
+
+  if (!wrap || !img) return;
+
+  try {
+    if (appState.sideNavQRDataURI) {
+      img.src = appState.sideNavQRDataURI;
+      wrap.hidden = false;
+      return;
+    }
+
+    const dataURI = await GetSideNavQRDataURI();
+    if (!dataURI || !String(dataURI).trim()) {
+      wrap.hidden = true;
+      return;
+    }
+
+    appState.sideNavQRDataURI = dataURI;
+    img.src = dataURI;
+    wrap.hidden = false;
+  } catch (error) {
+    console.error(error);
+    wrap.hidden = true;
+  }
 }
 
 export function bindSideNavEvents(onMenuChange) {
@@ -59,4 +96,6 @@ export function bindSideNavEvents(onMenuChange) {
       }
     });
   });
+
+  void loadSideNavQR();
 }

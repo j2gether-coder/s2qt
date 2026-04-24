@@ -66,27 +66,28 @@ type ReworkPrepareResponse struct {
 }
 
 type flatQTStep2Data struct {
-	Audience        string `json:"audience"`
-	Title           string `json:"title"`
-	BibleText       string `json:"bibleText"`
-	Hymn            string `json:"hymn"`
-	Preacher        string `json:"preacher"`
-	ChurchName      string `json:"churchName"`
-	SermonDate      string `json:"sermonDate"`
-	SourceURL       string `json:"sourceURL"`
-	SummaryTitle    string `json:"summaryTitle"`
-	SummaryBody     string `json:"summaryBody"`
-	MessageTitle1   string `json:"messageTitle1"`
-	MessageBody1    string `json:"messageBody1"`
-	MessageTitle2   string `json:"messageTitle2"`
-	MessageBody2    string `json:"messageBody2"`
-	MessageTitle3   string `json:"messageTitle3"`
-	MessageBody3    string `json:"messageBody3"`
-	ReflectionItem1 string `json:"reflectionItem1"`
-	ReflectionItem2 string `json:"reflectionItem2"`
-	ReflectionItem3 string `json:"reflectionItem3"`
-	PrayerTitle     string `json:"prayerTitle"`
-	PrayerBody      string `json:"prayerBody"`
+	Audience          string   `json:"audience"`
+	Title             string   `json:"title"`
+	BibleText         string   `json:"bibleText"`
+	Hymn              string   `json:"hymn"`
+	Preacher          string   `json:"preacher"`
+	ChurchName        string   `json:"churchName"`
+	SermonDate        string   `json:"sermonDate"`
+	SourceURL         string   `json:"sourceURL"`
+	SupportScriptures []string `json:"support_scriptures"`
+	SummaryTitle      string   `json:"summaryTitle"`
+	SummaryBody       string   `json:"summaryBody"`
+	MessageTitle1     string   `json:"messageTitle1"`
+	MessageBody1      string   `json:"messageBody1"`
+	MessageTitle2     string   `json:"messageTitle2"`
+	MessageBody2      string   `json:"messageBody2"`
+	MessageTitle3     string   `json:"messageTitle3"`
+	MessageBody3      string   `json:"messageBody3"`
+	ReflectionItem1   string   `json:"reflectionItem1"`
+	ReflectionItem2   string   `json:"reflectionItem2"`
+	ReflectionItem3   string   `json:"reflectionItem3"`
+	PrayerTitle       string   `json:"prayerTitle"`
+	PrayerBody        string   `json:"prayerBody"`
 }
 
 type HistoryService struct {
@@ -560,19 +561,25 @@ func buildQTSectionDocFromFlat(flat *flatQTStep2Data, expectedAudience string) *
 		audience = stringsTrim(expectedAudience)
 	}
 
+	supportScriptures := cleanStringSlice(flat.SupportScriptures)
+	if supportScriptures == nil {
+		supportScriptures = []string{}
+	}
+
 	return &QTSectionDoc{
 		Version:  "1.0",
 		DocType:  "qt",
 		Audience: audience,
 		Template: "qt_classic",
 		Metadata: map[string]any{
-			"title":       strings.TrimSpace(flat.Title),
-			"bible_text":  strings.TrimSpace(flat.BibleText),
-			"hymn":        strings.TrimSpace(flat.Hymn),
-			"preacher":    strings.TrimSpace(flat.Preacher),
-			"church_name": strings.TrimSpace(flat.ChurchName),
-			"sermon_date": strings.TrimSpace(flat.SermonDate),
-			"source_url":  strings.TrimSpace(flat.SourceURL),
+			"title":              strings.TrimSpace(flat.Title),
+			"bible_text":         strings.TrimSpace(flat.BibleText),
+			"hymn":               strings.TrimSpace(flat.Hymn),
+			"support_scriptures": supportScriptures,
+			"preacher":           strings.TrimSpace(flat.Preacher),
+			"church_name":        strings.TrimSpace(flat.ChurchName),
+			"sermon_date":        strings.TrimSpace(flat.SermonDate),
+			"source_url":         strings.TrimSpace(flat.SourceURL),
 		},
 		Sections: []QTSectionData{
 			{

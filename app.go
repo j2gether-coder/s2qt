@@ -821,3 +821,12 @@ func (a *App) GetTemplatePreview(templateID string) (string, error) {
 	service.LogInfo("template: preview completed")
 	return previewPath, nil
 }
+
+// sideNavQR용 함수
+func (a *App) GetSideNavQRDataURI() (string, error) {
+	qrSvc, err := service.NewQRService()
+	if err != nil {
+		return "", err
+	}
+	return qrSvc.GetSideNavQRDataURI()
+}

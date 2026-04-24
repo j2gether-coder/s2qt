@@ -678,3 +678,35 @@ func normalizeURLIfNeeded(s string) string {
 	}
 	return s
 }
+
+func (s *QRService) GetSideNavQRDataURI() (string, error) {
+	if s == nil || s.Paths == nil {
+		return "", fmt.Errorf("QRService 또는 Paths가 nil 입니다")
+	}
+
+	qrPath := strings.TrimSpace(s.Paths.DefaultQRFile)
+
+	// footer 설정에 기본 QR 경로가 있으면 우선 사용
+	if cfg, _, err := resolveFooterConfig(QTFooterModeDefault, nil); err == nil && cfg != nil {
+		if strings.TrimSpace(cfg.QRImagePath) != "" {
+			qrPath = strings.TrimSpace(cfg.QRImagePath)
+		}
+	}
+
+	// 먼저 기존 파일을 바로 data URI로 변환 시도
+	dataURI := EncodeImageAsDataURI(qrPath)
+	if dataURI != "" {
+		return dataURI, nil
+	}
+
+	// 없으면 기본 S2QT 링크 QR 생성 후 다시 변환
+	result, err := s.WriteDefaultS2QTLinkQRCode()
+	if err != nil {
+		return "", err
+	}
+	if result == nil || strings.TrimSpace(result.FilePath) == "" {
+		return "", nil
+	}
+
+	return EncodeImageAsDataURI(result.FilePath), nil
+}

@@ -75,39 +75,55 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 	}
 
 	if req.MakePDF {
+		LogInfo("step3: pdf generation started")
+
 		if err := s.makePDF(footerCfg); err != nil {
 			result.PDF = QTStep3FileResult{
 				Success: false,
 				Status:  "실패",
 				Error:   err.Error(),
 			}
+			LogError("step3: pdf generation failed: " + err.Error())
 		} else {
 			result.PDF = QTStep3FileResult{
 				Success:  true,
 				Status:   "완료",
 				FilePath: s.Paths.TempPdf,
 			}
+			LogInfo("step3: pdf generation completed")
 		}
 	}
 
 	if req.MakePNG {
+		LogInfo("step3: png generation started")
+
 		if err := s.makePNG(req.DPI, footerCfg); err != nil {
 			result.PNG = QTStep3FileResult{
 				Success: false,
 				Status:  "실패",
 				Error:   err.Error(),
 			}
+			LogError("step3: png generation failed: " + err.Error())
 		} else {
 			result.PNG = QTStep3FileResult{
 				Success:  true,
 				Status:   "완료",
 				FilePath: s.Paths.TempPng,
 			}
+			LogInfo("step3: png generation completed")
 		}
 	}
 
 	if req.MakePDF || req.MakePNG {
 		s.applyTemplateAfterGenerate(result, req, footerCfg)
+	}
+
+	if req.MakePDF {
+		logStep3FileFinalResult("pdf", result.PDF)
+	}
+
+	if req.MakePNG {
+		logStep3FileFinalResult("png", result.PNG)
 	}
 
 	if req.MakeDOCX {
@@ -223,5 +239,27 @@ func (s *QTStep3Service) applyTemplateFatalError(result *QTStep3Result, req *QTS
 		result.PNG.Success = false
 		result.PNG.Status = "실패"
 		result.PNG.Error = msg
+	}
+}
+
+func logStep3FileFinalResult(kind string, item QTStep3FileResult) {
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	if kind == "" {
+		kind = "output"
+	}
+
+	if item.Success {
+		if strings.TrimSpace(item.FilePath) != "" {
+			LogInfo(fmt.Sprintf("step3: %s final result completed path=%s", kind, item.FilePath))
+		} else {
+			LogInfo(fmt.Sprintf("step3: %s final result completed", kind))
+		}
+		return
+	}
+
+	if strings.TrimSpace(item.Error) != "" {
+		LogError(fmt.Sprintf("step3: %s final result failed: %s", kind, item.Error))
+	} else {
+		LogError(fmt.Sprintf("step3: %s final result failed", kind))
 	}
 }
