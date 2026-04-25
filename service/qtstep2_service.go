@@ -63,6 +63,7 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	if doc.Metadata != nil {
 		out.Title = ensureQTTitlePrefix(step2firstNonEmpty(getStringFromMap(doc.Metadata, "title")))
 		out.BibleText = normalizeBibleReference(getStringFromMap(doc.Metadata, "bible_text"))
+		out.BiblePassageText = getStringFromMap(doc.Metadata, "bible_passage_text")
 		out.Hymn = normalizeHymnText(getStringFromMap(doc.Metadata, "hymn"))
 		out.Preacher = getStringFromMap(doc.Metadata, "preacher")
 		out.ChurchName = getStringFromMap(doc.Metadata, "church_name")
@@ -159,6 +160,7 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		Metadata: map[string]any{
 			"title":              finalTitle,
 			"bible_text":         finalBibleText,
+			"bible_passage_text": strings.TrimSpace(req.BiblePassageText),
 			"hymn":               normalizeHymnText(req.Hymn),
 			"support_scriptures": finalSupportScriptures,
 			"preacher":           strings.TrimSpace(req.Preacher),
@@ -169,7 +171,7 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		Sections: []QTSectionData{
 			{
 				Type:  "summary",
-				Title: step2firstNonEmpty(req.SummaryTitle, "🌿 말씀의 창: 본문 요약"),
+				Title: step2firstNonEmpty(req.SummaryTitle, "🌿 말씀의 창"),
 				Blocks: []QTBlockData{
 					{Type: "paragraph", Text: strings.TrimSpace(req.SummaryBody)},
 				},
@@ -215,7 +217,23 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		return fmt.Errorf("temp.json 직렬화 실패: %w", err)
 	}
 
-	return os.WriteFile(s.Paths.TempJson, b, 0644)
+	if err := os.WriteFile(s.Paths.TempJson, b, 0644); err != nil {
+		return fmt.Errorf("temp.json 저장 실패: %w", err)
+	}
+
+	// 저장 버튼은 필수 절차이므로 temp.html도 함께 최신 상태로 갱신
+	htmlReq := *req
+	htmlReq.Title = finalTitle
+	htmlReq.BibleText = finalBibleText
+	htmlReq.BiblePassageText = strings.TrimSpace(req.BiblePassageText)
+	htmlReq.Hymn = normalizeHymnText(req.Hymn)
+	htmlReq.SupportScriptures = finalSupportScriptures
+
+	if _, err := s.BuildHTML(&htmlReq); err != nil {
+		return fmt.Errorf("temp.html 저장 실패: %w", err)
+	}
+
+	return nil
 }
 
 func (s *QTStep2Service) BuildHTML(req *QTStep2Data) (string, error) {
@@ -223,12 +241,14 @@ func (s *QTStep2Service) BuildHTML(req *QTStep2Data) (string, error) {
 		return "", fmt.Errorf("step2 data가 비어 있습니다")
 	}
 
-	html := buildQTStep2HTML(req)
-	if strings.TrimSpace(html) == "" {
+	bodyHTML := buildQTStep2HTML(req)
+	if strings.TrimSpace(bodyHTML) == "" {
 		return "", fmt.Errorf("html 생성 결과가 비어 있습니다")
 	}
 
-	if err := os.WriteFile(s.Paths.TempHtml, []byte(html), 0644); err != nil {
+	fullHTML := s.wrapQTStep2HTMLDocument(bodyHTML)
+
+	if err := os.WriteFile(s.Paths.TempHtml, []byte(fullHTML), 0644); err != nil {
 		return "", fmt.Errorf("temp.html 저장 실패: %w", err)
 	}
 
@@ -238,14 +258,24 @@ func (s *QTStep2Service) BuildHTML(req *QTStep2Data) (string, error) {
 func buildQTStep2HTML(req *QTStep2Data) string {
 	titleText := ensureQTTitlePrefix(step2firstNonEmpty(req.Title, "QT"))
 	bibleText := normalizeBibleReference(req.BibleText)
+	hymnText := normalizeHymnText(req.Hymn)
 	supportScriptures := normalizeBibleRefSlice(req.SupportScriptures)
+	biblePassageText := formatBiblePassageForOutput(req.BiblePassageText)
+
+	biblePassageTitle := "성경본문"
+	biblePassageClass := "qt-bible-passage"
+
+	if isBiblePassageAbbreviated(req.BiblePassageText) {
+		biblePassageTitle = "성경본문(축약)"
+		biblePassageClass += " is-abbreviated"
+	}
 
 	subboxParts := make([]string, 0)
+
 	if bibleText != "" {
 		subboxParts = append(subboxParts, "본문 성구: "+escapeHTML(bibleText))
 	}
 
-	hymnText := normalizeHymnText(req.Hymn)
 	if hymnText != "" {
 		subboxParts = append(subboxParts, "찬송: "+escapeHTML(hymnText))
 	}
@@ -262,6 +292,15 @@ func buildQTStep2HTML(req *QTStep2Data) string {
 		subbox = `<div class="qt-subbox">` + strings.Join(subboxParts, "<br />") + `</div>`
 	}
 
+	passageHTML := ""
+	if strings.TrimSpace(biblePassageText) != "" {
+		passageHTML = `
+  <div class="` + biblePassageClass + `">
+    <div class="qt-bible-passage-title">` + escapeHTML(biblePassageTitle) + `</div>
+    <p>` + nl2br(escapeHTML(biblePassageText)) + `</p>
+  </div>`
+	}
+
 	prayerTitle := strings.TrimSpace(req.PrayerTitle)
 	showPrayerInnerTitle := prayerTitle != "" && prayerTitle != "오늘의 기도" && prayerTitle != "🙏 오늘의 기도"
 
@@ -274,8 +313,9 @@ func buildQTStep2HTML(req *QTStep2Data) string {
 <div class="qt-wrap">
   <div class="qt-title">` + escapeHTML(titleText) + `</div>
   ` + subbox + `
+  ` + passageHTML + `
 
-  <h2 class="qt-section-title">🌿 말씀의 창: 본문 요약</h2>
+  <h2 class="qt-section-title">🌿 말씀의 창</h2>
   <div class="qt-body">
     <p>` + nl2br(escapeHTML(req.SummaryBody)) + `</p>
   </div>
@@ -569,4 +609,53 @@ func normalizeHymnText(s string) string {
 	}
 
 	return strings.TrimSpace(s)
+}
+
+func splitBiblePassageLines(text string) []string {
+	raw := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	out := make([]string, 0, len(raw))
+
+	for _, line := range raw {
+		s := strings.TrimSpace(line)
+		if s == "" {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func formatBiblePassageForOutput(text string) string {
+	lines := splitBiblePassageLines(text)
+	if len(lines) == 0 {
+		return ""
+	}
+	if len(lines) <= 5 {
+		return strings.Join(lines, "\n")
+	}
+	return lines[0] + "\n...\n" + lines[len(lines)-1]
+}
+
+func isBiblePassageAbbreviated(text string) bool {
+	lines := splitBiblePassageLines(text)
+	return len(lines) > 5
+}
+
+func (s *QTStep2Service) wrapQTStep2HTMLDocument(body string) string {
+	cssText := loadQTHTMLStyle()
+
+	return `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>S2QT Preview</title>
+</head>
+<body>
+  <style>
+` + cssText + `
+  </style>
+` + body + `
+</body>
+</html>`
 }

@@ -87,13 +87,14 @@ type LLMPrepareResult struct {
 type QTStep2Data struct {
 	Audience string `json:"audience"`
 
-	Title      string `json:"title"`
-	BibleText  string `json:"bibleText"`
-	Hymn       string `json:"hymn"`
-	Preacher   string `json:"preacher"`
-	ChurchName string `json:"churchName"`
-	SermonDate string `json:"sermonDate"`
-	SourceURL  string `json:"sourceURL"`
+	Title            string `json:"title"`
+	BibleText        string `json:"bibleText"`
+	BiblePassageText string `json:"bible_passage_text"`
+	Hymn             string `json:"hymn"`
+	Preacher         string `json:"preacher"`
+	ChurchName       string `json:"churchName"`
+	SermonDate       string `json:"sermonDate"`
+	SourceURL        string `json:"sourceURL"`
 
 	SupportScriptures []string `json:"support_scriptures"`
 

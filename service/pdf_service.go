@@ -459,6 +459,34 @@ const defaultQTPDFStyle = `
   line-height: 1.2;
 }
 
+.qt-bible-passage {
+  margin: 10px 0 16px 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-left: 4px solid #60a5fa;
+  border-radius: 6px;
+}
+
+.qt-bible-passage-title {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.qt-bible-passage p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #374151;
+  white-space: pre-line;
+}
+
+.qt-bible-passage.is-abbreviated {
+  background: #fffaf0;
+  border-left-color: #f59e0b;
+}
+
 h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
   page-break-inside: avoid;
   break-inside: avoid;
@@ -490,23 +518,17 @@ func (s *PDFService) SaveHtmlAndMakePDFWithFooter(html string, footerOverride *Q
 		return nil, err
 	}
 
-	if _, err := s.SaveHtmlAndMakeJSON(html); err != nil {
-		return nil, fmt.Errorf("temp.json 저장 실패: %w", err)
+	pdfJSONSourcePath := buildPDFSourceJSONPath(s.Paths.TempHtml)
+	if _, err := s.SaveHtmlAndMakeJSONToPath(html, pdfJSONSourcePath); err != nil {
+		return nil, fmt.Errorf("pdf source json 저장 실패: %w", err)
 	}
+	defer os.Remove(pdfJSONSourcePath)
 
 	fragment := stripStyleBlock(html)
 
 	mdContent := buildMarkdownSnapshot(fragment)
 	if err := os.WriteFile(s.Paths.TempMd, []byte(mdContent), 0644); err != nil {
 		return nil, fmt.Errorf("temp.md 저장 실패: %w", err)
-	}
-
-	htmlContent, err := s.wrapHTMLForHTML(fragment)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(s.Paths.TempHtml, []byte(htmlContent), 0644); err != nil {
-		return nil, fmt.Errorf("temp.html 저장 실패: %w", err)
 	}
 
 	pdfHTMLContent, err := s.wrapHTMLForPDF(fragment, footerOverride)
@@ -526,7 +548,7 @@ func (s *PDFService) SaveHtmlAndMakePDFWithFooter(html string, footerOverride *Q
 
 	return &PDFResult{
 		Success:  true,
-		Message:  "temp.md, temp.html, temp.pdf 생성이 완료되었습니다.",
+		Message:  "PDF 생성이 완료되었습니다.",
 		MdFile:   s.Paths.TempMd,
 		HtmlFile: s.Paths.TempHtml,
 		PdfFile:  s.Paths.TempPdf,
@@ -536,16 +558,49 @@ func (s *PDFService) SaveHtmlAndMakePDFWithFooter(html string, footerOverride *Q
 func (s *PDFService) cleanupPDFTemps() error {
 	files := []string{
 		s.Paths.TempMd,
-		s.Paths.TempHtml,
 		s.Paths.TempPdf,
 		buildPDFSourcePath(s.Paths.TempHtml),
-		buildJSONPath(s.Paths.TempHtml),
+		buildPDFSourceJSONPath(s.Paths.TempHtml),
 	}
 
 	for _, f := range files {
 		_ = os.Remove(f)
 	}
 	return nil
+}
+
+func (s *PDFService) SaveHtmlAndMakeJSONToPath(html, jsonPath string) (string, error) {
+	html = strings.TrimSpace(html)
+	if html == "" {
+		return "", fmt.Errorf("html 내용이 비어 있습니다")
+	}
+
+	fragment := stripStyleBlock(html)
+	if fragment == "" {
+		return "", fmt.Errorf("style 제거 후 html fragment가 비어 있습니다")
+	}
+
+	doc, err := parseQTHTMLToJSON(fragment)
+	if err != nil {
+		return "", err
+	}
+
+	_ = os.Remove(jsonPath)
+
+	b, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("temp.json 직렬화 실패: %w", err)
+	}
+
+	if err := os.WriteFile(jsonPath, b, 0644); err != nil {
+		return "", fmt.Errorf("temp.json 저장 실패: %w", err)
+	}
+
+	return jsonPath, nil
+}
+
+func (s *PDFService) SaveHtmlAndMakeJSON(html string) (string, error) {
+	return s.SaveHtmlAndMakeJSONToPath(html, buildJSONPath(s.Paths.TempHtml))
 }
 
 func buildPDFSourcePath(tempHTMLPath string) string {
@@ -925,37 +980,6 @@ func findEdgePath() (string, error) {
 	}
 
 	return "", fmt.Errorf("Microsoft Edge 실행 파일을 찾지 못했습니다")
-}
-
-func (s *PDFService) SaveHtmlAndMakeJSON(html string) (string, error) {
-	html = strings.TrimSpace(html)
-	if html == "" {
-		return "", fmt.Errorf("html 내용이 비어 있습니다")
-	}
-
-	fragment := stripStyleBlock(html)
-	if fragment == "" {
-		return "", fmt.Errorf("style 제거 후 html fragment가 비어 있습니다")
-	}
-
-	doc, err := parseQTHTMLToJSON(fragment)
-	if err != nil {
-		return "", err
-	}
-
-	jsonPath := buildJSONPath(s.Paths.TempHtml)
-	_ = os.Remove(jsonPath)
-
-	b, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("temp.json 직렬화 실패: %w", err)
-	}
-
-	if err := os.WriteFile(jsonPath, b, 0644); err != nil {
-		return "", fmt.Errorf("temp.json 저장 실패: %w", err)
-	}
-
-	return jsonPath, nil
 }
 
 func buildJSONPath(tempHTMLPath string) string {
@@ -1372,4 +1396,9 @@ func normalizeHTMLFragment(content string) string {
 	content = htmlReplacer.ReplaceAllString(content, "")
 
 	return strings.TrimSpace(content)
+}
+
+func buildPDFSourceJSONPath(tempHTMLPath string) string {
+	dir := filepath.Dir(tempHTMLPath)
+	return filepath.Join(dir, "temp_pdf_source.json")
 }

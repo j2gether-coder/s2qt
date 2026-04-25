@@ -84,6 +84,14 @@ const defaultQTPromptJSONSchema = `공통 구조 규칙:
 - 입력 본문 범위 밖의 절은 절대 표기하지 말 것
 - 절 매칭이 애매하면 절 표기를 생략할 것
 
+본문 텍스트 규칙:
+- metadata.bible_passage_text 필드를 반드시 포함할 것
+- metadata.bible_passage_text에는 입력된 본문 성구에 해당하는 실제 본문 텍스트 초안을 넣을 것
+- 가능한 경우 절 번호가 드러나도록 작성할 것
+- 가능한 경우 한 절당 한 줄 형태로 작성할 것
+- 설명문이나 해설을 붙이지 말고 본문 텍스트만 넣을 것
+- 본문 텍스트가 불확실하더라도 비워 두지 말고 가능한 범위에서 자연스럽게 작성할 것
+
 검증 규칙:
 - sections 배열의 길이는 반드시 4여야 한다
 - message 섹션의 blocks 길이는 반드시 6이어야 한다
@@ -102,6 +110,7 @@ const defaultQTPromptJSONSchema = `공통 구조 규칙:
   "metadata": {
     "title": "[QT] audience 규칙에 따라 결정된 제목",
     "bible_text": "{{bible_text}}",
+	"bible_passage_text": "",
     "hymn": "",
     "support_scriptures": [],
     "preacher": "{{preacher}}",
@@ -114,7 +123,7 @@ const defaultQTPromptJSONSchema = `공통 구조 규칙:
   "sections": [
     {
       "type": "summary",
-      "title": "🌿 말씀의 창: 본문 요약",
+      "title": "🌿 말씀의 창",
       "blocks": [
         { "type": "paragraph", "text": "" }
       ]

@@ -19,7 +19,8 @@ function resolveInitialReadonlyTitle(audienceId, basicInfo) {
 export function renderQTStep2(audienceId, appState) {
   const basicInfo = appState?.source?.basicInfo || {};
   const titleText = resolveInitialReadonlyTitle(audienceId, basicInfo);
-  const bibleText = basicInfo.bibleText || '-';
+  const bibleText = basicInfo.bibleText || '';
+  const hymnText = basicInfo.hymn || '';
 
   return `
     <section class="workspace-step-panel">
@@ -29,26 +30,72 @@ export function renderQTStep2(audienceId, appState) {
         <div id="qt-step2-message" class="ui-inline-message hidden"></div>
       </section>
 
-      <section class="card card-soft-meta">
-        <div class="meta-readonly-grid">
-          <div class="meta-readonly-item">
-            <div class="meta-readonly-label">제목</div>
-            <div class="meta-readonly-value" id="qtReadonlyTitle">${escapeHtml(titleText)}</div>
-          </div>
-
-          <div class="meta-readonly-item">
-            <div class="meta-readonly-label">본문 성구</div>
-            <div class="meta-readonly-value" id="qtReadonlyBibleText">${escapeHtml(bibleText)}</div>
-          </div>
-        </div>
-      </section>
-
       <section class="card editor-card">
         <div class="editor-card-head">
           <h3 class="mini-title">QT를 검토 및 편집</h3>
         </div>
 
         <div class="section-edit-group topgap">
+          <div class="section-edit-card">
+            <label class="form-label">제목</label>
+            <div class="hint topgap-sm">
+              Step1에서 생성된 제목을 확인하고 필요 시 수정합니다.
+            </div>
+            <input
+              id="title"
+              type="text"
+              class="topgap-sm"
+              value="${escapeHtml(titleText)}"
+              placeholder="제목을 입력해 주세요."
+            />
+          </div>
+
+          <div class="section-edit-card">
+            <label class="form-label">본문 성구</label>
+            <div class="hint topgap-sm">
+              Step1에서 생성된 본문 성구를 확인하고 필요 시 수정합니다.
+            </div>
+            <input
+              id="bibleText"
+              type="text"
+              class="topgap-sm"
+              value="${escapeHtml(bibleText)}"
+              placeholder="예) 시편 1:1~2"
+            />
+          </div>
+
+          <div class="section-edit-card">
+            <label class="form-label">찬송</label>
+            <div class="hint topgap-sm">
+              Step1에서 생성되었거나 기본 정보에서 입력한 찬송을 확인하고 수정합니다.
+            </div>
+            <input
+              id="hymn"
+              type="text"
+              class="topgap-sm"
+              value="${escapeHtml(hymnText)}"
+              placeholder="예) 488장 이 몸의 소망 무언가"
+            />
+          </div>
+
+          <div class="section-edit-card">
+            <label class="form-label">본문 텍스트</label>
+            <div class="hint topgap-sm">
+              AI가 생성한 본문 텍스트 초안입니다. 성경 본문과 대조하여 확인 후 저장해 주세요.
+            </div>
+            <div class="hint topgap-sm">
+              본문이 5절을 초과하면 Step3 산출물에서는 첫 절과 마지막 절 중심으로 축약 표시될 수 있습니다.
+            </div>
+            <textarea
+              id="biblePassageText"
+              class="topgap-sm"
+              rows="6"
+              placeholder="예)
+1절 복 있는 사람은 악인들의 꾀를 따르지 아니하며 죄인들의 길에 서지 아니하며 오만한 자들의 자리에 앉지 아니하고
+2절 오직 여호와의 율법을 즐거워하여 그의 율법을 주야로 묵상하는도다"
+            ></textarea>
+          </div>
+
           <div class="section-edit-card">
             <label class="form-label">관련 성구</label>
             <div class="hint topgap-sm">
@@ -59,7 +106,7 @@ export function renderQTStep2(audienceId, appState) {
               type="text"
               class="topgap-sm"
               placeholder="콤마(,)로 구분하여 입력해 주세요. 예) 이사야 40:31, 로마서 8:28"
-             />
+            />
           </div>
 
           <div class="section-edit-card">
