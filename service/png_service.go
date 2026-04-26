@@ -47,16 +47,10 @@ func (s *PNGService) GenerateFromTempHTML(dpi int) (*PNGGenerateResult, error) {
 }
 
 func (s *PNGService) GenerateFromTempHTMLWithFooter(dpi int, footerOverride *QTFooterConfig) (*PNGGenerateResult, error) {
-	sourcePath, err := s.buildPNGSourceFromHTMLFile(s.Paths.TempHtml, footerOverride)
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(sourcePath)
-
-	return s.GenerateFromHTMLFile(sourcePath, s.Paths.TempPng, dpi)
+	return s.GenerateFromTempHTMLWithFooterAndBG(dpi, footerOverride, false)
 }
 
-func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*PNGGenerateResult, error) {
+func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int, transparentBG bool) (*PNGGenerateResult, error) {
 	htmlPath = strings.TrimSpace(htmlPath)
 	pngPath = strings.TrimSpace(pngPath)
 
@@ -120,8 +114,10 @@ func (s *PNGService) GenerateFromHTMLFile(htmlPath, pngPath string, dpi int) (*P
 		return nil, err
 	}
 
-	if err := transparentizePNGBackground(absPNG, 248); err != nil {
-		return nil, fmt.Errorf("PNG 배경 투명화 실패: %w", err)
+	if transparentBG {
+		if err := transparentizePNGBackground(absPNG, 248); err != nil {
+			return nil, fmt.Errorf("PNG 배경 투명화 실패: %w", err)
+		}
 	}
 
 	return &PNGGenerateResult{
@@ -149,14 +145,14 @@ func waitForGeneratedPNG(path string, timeout time.Duration) error {
 	return fmt.Errorf("PNG 파일 생성 확인 실패: %s", path)
 }
 
-func (s *PNGService) buildPNGSourceFromHTMLFile(htmlPath string, footerOverride *QTFooterConfig) (string, error) {
+func (s *PNGService) buildPNGSourceFromHTMLFile(htmlPath string, footerOverride *QTFooterConfig, transparentBG bool) (string, error) {
 	b, err := os.ReadFile(htmlPath)
 	if err != nil {
 		return "", fmt.Errorf("html 읽기 실패: %w", err)
 	}
 
 	sourcePath := buildPNGSourcePath(htmlPath)
-	sourceHTML, err := s.wrapHTMLForPNG(string(b), footerOverride)
+	sourceHTML, err := s.wrapHTMLForPNG(string(b), footerOverride, transparentBG)
 	if err != nil {
 		return "", err
 	}
@@ -173,8 +169,8 @@ func buildPNGSourcePath(tempHTMLPath string) string {
 	return filepath.Join(dir, "temp_png_source.html")
 }
 
-func (s *PNGService) wrapHTMLForPNG(content string, footerOverride *QTFooterConfig) (string, error) {
-	pngStyle := loadQTPNGStyle()
+func (s *PNGService) wrapHTMLForPNG(content string, footerOverride *QTFooterConfig, transparentBG bool) (string, error) {
+	pngStyle := loadQTPNGStyle(transparentBG)
 	cleaned := normalizeHTMLFragment(content)
 
 	qrSvc, err := NewQRService()
@@ -215,7 +211,12 @@ func wrapHTMLDocument(title, css, body string) string {
 </html>`
 }
 
-func loadQTPNGStyle() string {
+func loadQTPNGStyle(transparentBG bool) string {
+	bgColor := "#ffffff"
+	if transparentBG {
+		bgColor = "transparent"
+	}
+
 	return loadQTPDFStyle() + `
 
 html{
@@ -223,7 +224,7 @@ html{
   height: 297mm;
   margin: 0;
   padding: 0;
-  background: #ffffff;
+  background: ` + bgColor + `;
   overflow: hidden;
 }
 
@@ -233,7 +234,7 @@ body{
   margin: 0 !important;
   padding: var(--qt-page-top, 10mm) 12mm 24mm 12mm !important;
   box-sizing: border-box;
-  background: #ffffff;
+  background: ` + bgColor + `;
   overflow: hidden;
 }
 
@@ -418,4 +419,14 @@ func transparentizePNGBackground(pngPath string, whiteThreshold uint8) error {
 	defer out.Close()
 
 	return png.Encode(out, rgba)
+}
+
+func (s *PNGService) GenerateFromTempHTMLWithFooterAndBG(dpi int, footerOverride *QTFooterConfig, transparentBG bool) (*PNGGenerateResult, error) {
+	sourcePath, err := s.buildPNGSourceFromHTMLFile(s.Paths.TempHtml, footerOverride, transparentBG)
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(sourcePath)
+
+	return s.GenerateFromHTMLFile(sourcePath, s.Paths.TempPng, dpi, transparentBG)
 }

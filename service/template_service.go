@@ -1252,3 +1252,16 @@ func templateReplaceOutputFile(src, dst string) error {
 	}
 	return nil
 }
+
+func (s *TemplateService) ShouldUseTransparentPNGBackground() (bool, error) {
+	if s == nil || s.DB == nil {
+		return false, fmt.Errorf("template db is nil")
+	}
+
+	settings, err := s.LoadTemplateSettings()
+	if err != nil {
+		return false, err
+	}
+
+	return settings.Enabled && strings.TrimSpace(settings.SelectedID) != "", nil
+}

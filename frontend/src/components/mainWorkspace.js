@@ -552,7 +552,7 @@ function bindQtPrepareEvents() {
       setBasicInfoField('title', e.target.value);
       clearBasicInfoSavedState();
       updateQtPrepareStatus();
-      mountAppShell('app');
+      mountAppShell();
     });
   }
 
@@ -564,7 +564,7 @@ function bindQtPrepareEvents() {
       setBasicInfoField('bibleText', e.target.value);
       clearBasicInfoSavedState();
       updateQtPrepareStatus();
-      mountAppShell('app');
+      mountAppShell();
     });
   }
 
@@ -575,7 +575,7 @@ function bindQtPrepareEvents() {
       clearInlineMessage("workspace-message");
       setBasicInfoField('hymn', e.target.value);
       clearBasicInfoSavedState();
-      mountAppShell('app');
+      mountAppShell();
     });
   }
 
@@ -586,7 +586,7 @@ function bindQtPrepareEvents() {
       clearInlineMessage("workspace-message");
       setBasicInfoField('preacher', e.target.value);
       clearBasicInfoSavedState();
-      mountAppShell('app');
+      mountAppShell();
     });
   }
 
@@ -597,7 +597,7 @@ function bindQtPrepareEvents() {
       clearInlineMessage("workspace-message");
       setBasicInfoField('churchName', e.target.value);
       clearBasicInfoSavedState();
-      mountAppShell('app');
+      mountAppShell();
     });
   }
 
@@ -608,7 +608,7 @@ function bindQtPrepareEvents() {
       clearInlineMessage("workspace-message");
       setBasicInfoField('sermonDate', e.target.value);
       clearBasicInfoSavedState();
-      mountAppShell('app');
+      mountAppShell();
     });
   }
 

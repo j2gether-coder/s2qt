@@ -13,6 +13,14 @@
   --qt-purple-border: #b39ddb;
   --qt-line: #d1d5db;
 
+  --qt-passage-bg: #f8fafc;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #1f2937;
+  --qt-passage-text: #374151;
+
+  --qt-passage-abbr-bg: #fffaf0;
+  --qt-passage-abbr-border: #f59e0b;
+
   max-width: 760px;
   margin: 0 auto;
   padding: 0;
@@ -24,7 +32,15 @@
   word-break: keep-all;
 }
 
-.qt-main{
+.qt-main,
+.qt-body,
+.qt-body p,
+.qt-list,
+.qt-list li,
+.qt-subbox,
+.qt-prayer-title,
+.qt-footer,
+.qt-footer-text{
   color: var(--qt-text);
 }
 
@@ -38,34 +54,6 @@
   margin: 0 0 10px 0;
 }
 
-.qt-bible-passage {
-  margin: 10px 0 16px 0;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-left: 4px solid #60a5fa;
-  border-radius: 6px;
-}
-
-.qt-bible-passage-title {
-  margin: 0 0 6px 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.qt-bible-passage p {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.65;
-  color: #374151;
-  white-space: pre-line;
-}
-
-.qt-bible-passage.is-abbreviated {
-  background: #fffaf0;
-  border-left-color: #f59e0b;
-}
-
 .qt-subbox{
   margin: 12px 0;
   padding: 10px 14px;
@@ -74,7 +62,34 @@
   border-radius: 6px;
   font-weight: 700;
   font-size: 13px;
-  color: var(--qt-text);
+}
+
+.qt-bible-passage{
+  margin: 10px 0 16px 0;
+  padding: 10px 12px;
+  background: var(--qt-passage-bg);
+  border-left: 4px solid var(--qt-passage-border);
+  border-radius: 6px;
+}
+
+.qt-bible-passage-title{
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--qt-passage-title);
+}
+
+.qt-bible-passage p{
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--qt-passage-text);
+  white-space: pre-line;
+}
+
+.qt-bible-passage.is-abbreviated{
+  background: var(--qt-passage-abbr-bg);
+  border-left-color: var(--qt-passage-abbr-border);
 }
 
 .qt-section-title{
@@ -103,45 +118,42 @@
 .qt-reflection{
   background: var(--qt-yellow-bg);
   border-left: 4px solid var(--qt-yellow-border);
-  color: var(--qt-text);
 }
 
 .qt-prayer{
   background: var(--qt-purple-bg);
   border-left: 4px solid var(--qt-purple-border);
+}
+
+.qt-reflection,
+.qt-reflection *,
+.qt-prayer,
+.qt-prayer *{
   color: var(--qt-text);
 }
 
 .qt-list{
   margin: 0;
   padding-left: 18px;
-  color: var(--qt-text);
 }
 
 .qt-list li{
   margin: 5px 0;
-  color: var(--qt-text);
-}
-
-.qt-body{
-  color: var(--qt-text);
 }
 
 .qt-body p{
   margin: 0 0 8px 0;
-  color: var(--qt-text);
 }
 
 .qt-prayer-title{
   font-weight: 700;
   margin-bottom: 6px;
-  color: var(--qt-text);
 }
 
 .qt-footer{
   margin-top: 28px;
-  color: var(--qt-muted);
   text-align: center;
+  color: var(--qt-muted);
 }
 
 .qt-footer-line{
@@ -150,24 +162,9 @@
   margin-bottom: 10px;
 }
 
-.qt-footer-text{
-  color: var(--qt-muted);
-}
-
 h1,h2,h3,blockquote,ul{
   page-break-inside: avoid;
   break-inside: avoid;
-}
-
-/* 기본 상태에서도 내부 텍스트를 명확히 상속 */
-.qt-reflection,
-.qt-reflection *{
-  color: var(--qt-text);
-}
-
-.qt-prayer,
-.qt-prayer *{
-  color: var(--qt-text);
 }
 
 @media (prefers-color-scheme: dark){
@@ -185,62 +182,18 @@ h1,h2,h3,blockquote,ul{
     --qt-purple-bg: #31224a;
     --qt-purple-border: #c4b5fd;
     --qt-line: #475569;
+
+    --qt-passage-bg: #1f2937;
+    --qt-passage-border: #60a5fa;
+    --qt-passage-title: #e5e7eb;
+    --qt-passage-text: #d1d5db;
+
+    --qt-passage-abbr-bg: #3b2f1a;
+    --qt-passage-abbr-border: #f59e0b;
   }
 
   .qt-wrap{
     background: var(--qt-bg);
     color: var(--qt-text);
-  }
-
-  .qt-main,
-  .qt-body,
-  .qt-body p,
-  .qt-list,
-  .qt-list li,
-  .qt-subbox,
-  .qt-footer,
-  .qt-footer-text{
-    color: var(--qt-text) !important;
-  }
-
-  .qt-reflection{
-    background: var(--qt-yellow-bg) !important;
-    border-left-color: var(--qt-yellow-border) !important;
-    color: var(--qt-text) !important;
-  }
-
-  .qt-reflection,
-  .qt-reflection *,
-  .qt-reflection .qt-list,
-  .qt-reflection .qt-list li,
-  .qt-reflection p,
-  .qt-reflection div,
-  .qt-reflection span{
-    color: #f3f4f6 !important;
-  }
-
-  .qt-prayer{
-    background: var(--qt-purple-bg) !important;
-    border-left-color: var(--qt-purple-border) !important;
-    color: var(--qt-text) !important;
-  }
-
-  .qt-prayer,
-  .qt-prayer *,
-  .qt-prayer .qt-body,
-  .qt-prayer .qt-body p,
-  .qt-prayer .qt-prayer-title,
-  .qt-prayer div,
-  .qt-prayer span{
-    color: #f3f4f6 !important;
-  }
-
-  .qt-subbox{
-    background: var(--qt-blue-bg) !important;
-    border-left-color: var(--qt-blue-border) !important;
-  }
-
-  .qt-footer-line{
-    background: var(--qt-line) !important;
   }
 }

@@ -48,7 +48,7 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 	}
 
 	if _, err := os.Stat(s.Paths.TempHtml); err != nil {
-		return nil, fmt.Errorf("temp.html이 없습니다. Step2 미리보기를 먼저 실행해 주세요")
+		return nil, fmt.Errorf("temp.html이 없습니다. Step2 저장을 먼저 실행해 주세요")
 	}
 
 	if req.DPI <= 0 {
@@ -166,7 +166,17 @@ func (s *QTStep3Service) makePNG(dpi int, footerCfg *QTFooterConfig) error {
 		return err
 	}
 
-	_, err = pngSvc.GenerateFromTempHTMLWithFooter(dpi, footerCfg)
+	tplSvc, err := NewTemplateServiceWithDB(s.DB)
+	if err != nil {
+		return err
+	}
+
+	transparentBG, err := tplSvc.ShouldUseTransparentPNGBackground()
+	if err != nil {
+		return err
+	}
+
+	_, err = pngSvc.GenerateFromTempHTMLWithFooterAndBG(dpi, footerCfg, transparentBG)
 	return err
 }
 

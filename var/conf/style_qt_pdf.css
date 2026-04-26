@@ -29,6 +29,14 @@ body{
   --qt-purple-border: #b39ddb;
   --qt-line: #d1d5db;
 
+  --qt-passage-bg: #f8fafc;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #1f2937;
+  --qt-passage-text: #374151;
+
+  --qt-passage-abbr-bg: #fffaf0;
+  --qt-passage-abbr-border: #f59e0b;
+
   width: 100%;
   max-width: 186mm;
   margin: 0 auto;
@@ -41,8 +49,14 @@ body{
   word-break: keep-all;
 }
 
-.qt-main{
-  width: 100%;
+.qt-main,
+.qt-body,
+.qt-body p,
+.qt-list,
+.qt-list li,
+.qt-subbox,
+.qt-prayer-title{
+  color: var(--qt-text);
 }
 
 .qt-title{
@@ -64,36 +78,35 @@ body{
   border-radius: 6px;
   font-weight: 700;
   font-size: 12px;
-  color: var(--qt-text);
   line-height: 1.4;
 }
 
-.qt-bible-passage {
+.qt-bible-passage{
   margin: 10px 0 16px 0;
   padding: 10px 12px;
-  background: #f8fafc;
-  border-left: 4px solid #60a5fa;
+  background: var(--qt-passage-bg);
+  border-left: 4px solid var(--qt-passage-border);
   border-radius: 6px;
 }
 
-.qt-bible-passage-title {
+.qt-bible-passage-title{
   margin: 0 0 6px 0;
   font-size: 13px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--qt-passage-title);
 }
 
-.qt-bible-passage p {
+.qt-bible-passage p{
   margin: 0;
   font-size: 12.5px;
   line-height: 1.65;
-  color: #374151;
+  color: var(--qt-passage-text);
   white-space: pre-line;
 }
 
-.qt-bible-passage.is-abbreviated {
-  background: #fffaf0;
-  border-left-color: #f59e0b;
+.qt-bible-passage.is-abbreviated{
+  background: var(--qt-passage-abbr-bg);
+  border-left-color: var(--qt-passage-abbr-border);
 }
 
 .qt-section-title{
@@ -131,6 +144,13 @@ body{
   border-left: 4px solid var(--qt-purple-border);
 }
 
+.qt-reflection,
+.qt-reflection *,
+.qt-prayer,
+.qt-prayer *{
+  color: var(--qt-text);
+}
+
 .qt-list{
   margin: 0;
   padding-left: 16px;
@@ -142,14 +162,12 @@ body{
 
 .qt-body p{
   margin: 0 0 6px 0;
-  color: var(--qt-text);
   line-height: 1.45;
 }
 
 .qt-prayer-title{
   font-weight: 700;
   margin-bottom: 4px;
-  color: var(--qt-text);
 }
 
 .qt-footer{
