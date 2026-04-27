@@ -1017,7 +1017,7 @@ func (s *TemplateService) wrapHTMLForTemplatePDF(content string, item *TemplateI
 	}
 
 	pdfStyle := loadQTPDFStyle()
-	pdfStyle = mergeQTFooterRuntimeStyle(pdfStyle, resolvedFooter)
+	pdfStyle = mergeQTFooterRuntimeStylePDF(pdfStyle, resolvedFooter)
 	pdfStyle += "\n\n" + buildTemplateRuntimeStyle(item.templateBackgroundPathForPDF())
 
 	layoutBody := buildQTTemplateLayerLayout(cleaned, item.templateBackgroundPathForPDF(), resolvedFooter)

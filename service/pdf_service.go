@@ -691,7 +691,7 @@ func (s *PDFService) wrapHTMLForPDF(content string, footerOverride *QTFooterConf
 	}
 
 	layoutBody := buildQTFixedPageLayout(cleaned, resolvedFooter)
-	pdfStyle = mergeQTFooterRuntimeStyle(pdfStyle, resolvedFooter)
+	pdfStyle = mergeQTFooterRuntimeStylePDF(pdfStyle, resolvedFooter)
 
 	return wrapHTMLDocumentForPDF("S2QT PDF", pdfStyle, layoutBody), nil
 }
@@ -745,7 +745,7 @@ func buildQTFixedPageLayout(bodyHTML string, footerCfg *QTFooterConfig) string {
 ` + buildQTFooterHTML(footerCfg) + buildQTFooterQRHTML(footerCfg)
 }
 
-func mergeQTFooterRuntimeStyle(base string, footerCfg *QTFooterConfig) string {
+func mergeQTFooterRuntimeStylePDF(base string, footerCfg *QTFooterConfig) string {
 	if footerCfg == nil {
 		return base
 	}
@@ -753,6 +753,16 @@ func mergeQTFooterRuntimeStyle(base string, footerCfg *QTFooterConfig) string {
 	qrReserved := 0.0
 	if footerCfg.ShowQR && footerCfg.QRSizeMM > 0 {
 		qrReserved = footerCfg.QRSizeMM
+	}
+
+	safeArea := footerCfg.SafeAreaMM
+	if safeArea <= 0 {
+		safeArea = 36.0
+	}
+
+	qrSize := footerCfg.QRSizeMM
+	if qrSize <= 0 {
+		qrSize = 27.0
 	}
 
 	runtime := fmt.Sprintf(`
@@ -764,7 +774,7 @@ func mergeQTFooterRuntimeStyle(base string, footerCfg *QTFooterConfig) string {
   --qt-footer-bottom: 2mm;
   --qt-qr-bottom: 2mm;
 }
-`, footerCfg.SafeAreaMM, footerCfg.QRSizeMM, qrReserved)
+`, safeArea, qrSize, qrReserved)
 
 	return base + "\n\n" + runtime
 }

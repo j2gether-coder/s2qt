@@ -189,9 +189,43 @@ func (s *PNGService) wrapHTMLForPNG(content string, footerOverride *QTFooterConf
 	}
 
 	layoutBody := buildQTFixedPageLayout(cleaned, resolvedFooter)
-	pngStyle = mergeQTFooterRuntimeStyle(pngStyle, resolvedFooter)
+	pngStyle = mergeQTFooterRuntimeStylePNG(pngStyle, resolvedFooter)
 
 	return wrapHTMLDocument("S2QT PNG", pngStyle, layoutBody), nil
+}
+
+func mergeQTFooterRuntimeStylePNG(base string, footerCfg *QTFooterConfig) string {
+	if footerCfg == nil {
+		return base
+	}
+
+	zoneHeight := footerCfg.SafeAreaMM
+	if zoneHeight <= 0 {
+		zoneHeight = 32.0
+	}
+
+	qrSize := footerCfg.QRSizeMM
+	if qrSize <= 0 {
+		qrSize = 27.0
+	}
+
+	runtime := fmt.Sprintf(`
+:root{
+  --qt-page-top: 10mm;
+  --qt-footer-zone-height: %.2fmm;
+  --qt-footer-zone-bottom: 0mm;
+  --qt-footer-side-padding: 12mm;
+
+  --qt-footer-text-bottom: 2mm;
+  --qt-footer-brand-bottom: 0mm;
+
+  --qt-footer-qr-bottom: -2.5mm;
+  --qt-footer-qr-right: 12mm;
+  --qt-footer-qr-size: %.2fmm;
+}
+`, zoneHeight, qrSize)
+
+	return base + "\n\n" + runtime
 }
 
 func wrapHTMLDocument(title, css, body string) string {
@@ -214,50 +248,208 @@ func wrapHTMLDocument(title, css, body string) string {
 </html>`
 }
 
+func loadQTBaseStyle() string {
+	return `
+.qt-wrap{
+  --qt-bg: #ffffff;
+  --qt-text: #1f2937;
+  --qt-muted: #4b5563;
+  --qt-title: #1f3b2f;
+  --qt-green: #1f8f55;
+  --qt-blue: #1d4ed8;
+  --qt-blue-bg: #eaf4ff;
+  --qt-blue-border: #3b82f6;
+  --qt-yellow-bg: #fff8d9;
+  --qt-yellow-border: #f4c542;
+  --qt-purple-bg: #f4efff;
+  --qt-purple-border: #b39ddb;
+  --qt-line: #d1d5db;
+
+  --qt-passage-bg: #f8fafc;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #1f2937;
+  --qt-passage-text: #374151;
+
+  --qt-passage-abbr-bg: #fffaf0;
+  --qt-passage-abbr-border: #f59e0b;
+
+  width: 100%;
+  max-width: 186mm;
+  margin: 0 auto;
+  padding: 0;
+  font-family: 'Nanum Gothic','Apple SD Gothic Neo',sans-serif;
+  line-height: 1.45;
+  color: var(--qt-text);
+  background: var(--qt-bg);
+  font-size: 12px;
+  word-break: keep-all;
+}
+
+.qt-main,
+.qt-body,
+.qt-body p,
+.qt-list,
+.qt-list li,
+.qt-subbox,
+.qt-prayer-title{
+  color: var(--qt-text);
+}
+
+.qt-title{
+  text-align: center;
+  color: var(--qt-title);
+  font-size: 20px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--qt-green);
+  padding-bottom: 6px;
+  margin: 0 0 8px 0;
+  line-height: 1.25;
+}
+
+.qt-subbox{
+  margin: 8px 0 10px 0;
+  padding: 8px 12px;
+  background: var(--qt-blue-bg);
+  border-left: 4px solid var(--qt-blue-border);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.qt-bible-passage{
+  margin: 10px 0 16px 0;
+  padding: 10px 12px;
+  background: var(--qt-passage-bg);
+  border-left: 4px solid var(--qt-passage-border);
+  border-radius: 6px;
+}
+
+.qt-bible-passage-title{
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--qt-passage-title);
+}
+
+.qt-bible-passage p{
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--qt-passage-text);
+  white-space: pre-line;
+}
+
+.qt-bible-passage.is-abbreviated{
+  background: var(--qt-passage-abbr-bg);
+  border-left-color: var(--qt-passage-abbr-border);
+}
+
+.qt-section-title{
+  color: var(--qt-green);
+  border-left: 4px solid var(--qt-green);
+  padding-left: 8px;
+  margin: 14px 0 8px 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.qt-message-title{
+  color: var(--qt-blue);
+  margin: 10px 0 4px 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.qt-box{
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--qt-text);
+}
+
+.qt-reflection{
+  background: var(--qt-yellow-bg);
+  border-left: 4px solid var(--qt-yellow-border);
+}
+
+.qt-prayer{
+  background: var(--qt-purple-bg);
+  border-left: 4px solid var(--qt-purple-border);
+}
+
+.qt-reflection,
+.qt-reflection *,
+.qt-prayer,
+.qt-prayer *{
+  color: var(--qt-text);
+}
+
+.qt-list{
+  margin: 0;
+  padding-left: 16px;
+}
+
+.qt-list li{
+  margin: 4px 0;
+}
+
+.qt-body p{
+  margin: 0 0 6px 0;
+  line-height: 1.45;
+}
+
+.qt-prayer-title{
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+`
+}
+
 func loadQTPNGStyle(transparentBG bool) string {
 	bgColor := "#ffffff"
 	if transparentBG {
 		bgColor = "transparent"
 	}
 
-	return loadQTPDFStyle() + `
+	return loadQTBaseStyle() + `
+
+@page{
+  size: A4;
+  margin: 0;
+}
 
 html{
   width: 210mm;
   height: 297mm;
-  margin: 0;
-  padding: 0;
-  background: ` + bgColor + `;
-  overflow: hidden;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: ` + bgColor + ` !important;
+  overflow: hidden !important;
 }
-
-:root{
-  --qt-footer-zone-height: 28mm;
-  --qt-footer-zone-bottom: 0mm;
-  --qt-footer-side-padding: 12mm;
-
-  --qt-footer-text-bottom: 2.0mm;
-  --qt-footer-brand-bottom: 0.0mm;
-
-  --qt-footer-qr-bottom: -2.5mm;
-  --qt-footer-qr-right: 12mm;
-  --qt-footer-qr-size: 27mm;
-}
-
 
 body{
+  position: relative !important;
   width: 210mm;
   height: 297mm;
   margin: 0 !important;
   padding:
     var(--qt-page-top, 10mm)
-    var(--qt-png-page-side, 12mm)
-    var(--qt-footer-zone-height, 28mm)
-    var(--qt-png-page-side, 12mm) !important;
-  box-sizing: border-box;
-  /* background: ` + bgColor + `;*/
-  background: #ffdddd !important;
-  overflow: hidden;
+    var(--qt-footer-side-padding, 12mm)
+    var(--qt-footer-zone-height, 32mm)
+    var(--qt-footer-side-padding, 12mm) !important;
+  box-sizing: border-box !important;
+  background: ` + bgColor + ` !important;
+  overflow: hidden !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .qt-page-frame{
@@ -267,44 +459,78 @@ body{
   overflow: hidden;
 }
 
-.qt-wrap{
+.qt-page-content-scaled{
   width: 100%;
-  max-width: 186mm;
-  margin: 0 auto;
-  padding: 0 !important;
+  transform-origin: top center;
 }
 
-/* -------------------------
-   PNG footer zone
-   ------------------------- */
+/* PNG footer zone */
 .qt-footer{
   position: fixed !important;
   left: var(--qt-footer-side-padding, 12mm) !important;
   right: var(--qt-footer-side-padding, 12mm) !important;
   bottom: var(--qt-footer-zone-bottom, 0mm) !important;
-  height: var(--qt-footer-zone-height, 28mm) !important;
-  outline: 2px solid blue !important;
+  height: var(--qt-footer-zone-height, 32mm) !important;
+  color: #4b5563 !important;
+  z-index: 20 !important;
+  pointer-events: none;
 }
 
-/* footer 문구: zone 맨 아래 기준 */
+.qt-footer-line{
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  height: 0 !important;
+  border-top: 2px solid var(--qt-green) !important;
+}
+
 .qt-footer-text{
   position: absolute !important;
   left: 50% !important;
   bottom: var(--qt-footer-text-bottom, 2mm) !important;
   top: auto !important;
   transform: translateX(-50%) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
 }
 
-/* 브랜드/교회명: footer 문구 바로 위 */
 .qt-footer-brand{
   position: absolute !important;
   left: 50% !important;
-  bottom: var(--qt-footer-brand-bottom, 8mm) !important;
+  bottom: var(--qt-footer-brand-bottom, 0mm) !important;
   top: auto !important;
   transform: translateX(-50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 1.5mm !important;
+  max-width: none !important;
 }
 
-/* QR: zone 맨 아래 우측 기준 */
+.qt-footer-brand-image{
+  max-width: 40mm !important;
+  max-height: 4mm !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+.qt-footer-church{
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  line-height: 1.1 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
 .qt-page-qr{
   position: fixed !important;
   right: var(--qt-footer-qr-right, 12mm) !important;
@@ -312,10 +538,23 @@ body{
   top: auto !important;
   width: var(--qt-footer-qr-size, 27mm) !important;
   height: var(--qt-footer-qr-size, 27mm) !important;
-  outline: 2px solid red !important;
+  max-width: var(--qt-footer-qr-size, 27mm) !important;
+  max-height: var(--qt-footer-qr-size, 27mm) !important;
+  object-fit: contain !important;
+  display: block !important;
+  z-index: 30 !important;
+  pointer-events: none;
 }
 
-/* 서브박스 줄바꿈 */
+.qt-page-qr.left-bottom{
+  left: var(--qt-footer-side-padding, 12mm) !important;
+  right: auto !important;
+}
+
+.qt-page-qr.right-bottom{
+  right: var(--qt-footer-qr-right, 12mm) !important;
+}
+
 .qt-subbox-line{
   display: block;
 }
@@ -477,7 +716,7 @@ func (s *PNGService) GenerateFromTempHTMLWithFooterAndBG(dpi int, footerOverride
 	if err != nil {
 		return nil, err
 	}
-	//defer os.Remove(sourcePath)
+	defer os.Remove(sourcePath)
 
 	return s.GenerateFromHTMLFile(sourcePath, s.Paths.TempPng, dpi, transparentBG)
 }
