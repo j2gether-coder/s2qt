@@ -207,6 +207,9 @@ func wrapHTMLDocument(title, css, body string) string {
 </head>
 <body>
 ` + body + `
+<script>
+` + qtPDFScript + `
+</script>
 </body>
 </html>`
 }
@@ -228,13 +231,32 @@ html{
   overflow: hidden;
 }
 
+:root{
+  --qt-footer-zone-height: 28mm;
+  --qt-footer-zone-bottom: 0mm;
+  --qt-footer-side-padding: 12mm;
+
+  --qt-footer-text-bottom: 2.0mm;
+  --qt-footer-brand-bottom: 0.0mm;
+
+  --qt-footer-qr-bottom: -2.5mm;
+  --qt-footer-qr-right: 12mm;
+  --qt-footer-qr-size: 27mm;
+}
+
+
 body{
   width: 210mm;
   height: 297mm;
   margin: 0 !important;
-  padding: var(--qt-page-top, 10mm) 12mm 24mm 12mm !important;
+  padding:
+    var(--qt-page-top, 10mm)
+    var(--qt-png-page-side, 12mm)
+    var(--qt-footer-zone-height, 28mm)
+    var(--qt-png-page-side, 12mm) !important;
   box-sizing: border-box;
-  background: ` + bgColor + `;
+  /* background: ` + bgColor + `;*/
+  background: #ffdddd !important;
   overflow: hidden;
 }
 
@@ -252,19 +274,48 @@ body{
   padding: 0 !important;
 }
 
-:root{
-  --qt-png-footer-bottom: 0.0mm;
-  --qt-png-qr-bottom: 0.0mm;
-}
-
+/* -------------------------
+   PNG footer zone
+   ------------------------- */
 .qt-footer{
-  bottom: var(--qt-png-footer-bottom, var(--qt-footer-bottom, 0.0mm)) !important;
+  position: fixed !important;
+  left: var(--qt-footer-side-padding, 12mm) !important;
+  right: var(--qt-footer-side-padding, 12mm) !important;
+  bottom: var(--qt-footer-zone-bottom, 0mm) !important;
+  height: var(--qt-footer-zone-height, 28mm) !important;
+  outline: 2px solid blue !important;
 }
 
+/* footer 문구: zone 맨 아래 기준 */
+.qt-footer-text{
+  position: absolute !important;
+  left: 50% !important;
+  bottom: var(--qt-footer-text-bottom, 2mm) !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
+}
+
+/* 브랜드/교회명: footer 문구 바로 위 */
+.qt-footer-brand{
+  position: absolute !important;
+  left: 50% !important;
+  bottom: var(--qt-footer-brand-bottom, 8mm) !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
+}
+
+/* QR: zone 맨 아래 우측 기준 */
 .qt-page-qr{
-  bottom: var(--qt-png-qr-bottom, var(--qt-qr-bottom, 0.0mm)) !important;
+  position: fixed !important;
+  right: var(--qt-footer-qr-right, 12mm) !important;
+  bottom: var(--qt-footer-qr-bottom, 1mm) !important;
+  top: auto !important;
+  width: var(--qt-footer-qr-size, 27mm) !important;
+  height: var(--qt-footer-qr-size, 27mm) !important;
+  outline: 2px solid red !important;
 }
 
+/* 서브박스 줄바꿈 */
 .qt-subbox-line{
   display: block;
 }
@@ -426,7 +477,7 @@ func (s *PNGService) GenerateFromTempHTMLWithFooterAndBG(dpi int, footerOverride
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(sourcePath)
+	//defer os.Remove(sourcePath)
 
 	return s.GenerateFromHTMLFile(sourcePath, s.Paths.TempPng, dpi, transparentBG)
 }

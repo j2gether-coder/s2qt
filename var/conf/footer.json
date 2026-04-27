@@ -16,15 +16,15 @@
     "qr_image_path": "var/image/s2qt_link.png",
     "qr_position": "right-bottom",
     "qr_size_mm": 27.0,
-    "safe_area_mm": 36.0
+    "safe_area_mm": 32.0
   },
   "qr_defaults": {
     "style": "dot",
     "size_px": 768,
-    "margin_modules": 4,
+    "margin_modules": 2,
     "dot_scale": 0.82,
     "keep_finder_box": true,
-    "background_rgba": [255, 255, 255, 255],
+    "background_rgba": [0, 0, 0, 0],
     "foreground_rgba": [0, 0, 0, 255]
   },
   "subscriber_footer": {
@@ -39,6 +39,6 @@
     "qr_image_path": "var/image/church_qr.png",
     "qr_position": "right-bottom",
     "qr_size_mm": 27.0,
-    "safe_area_mm": 38.0
+    "safe_area_mm": 32.0
   }
 }

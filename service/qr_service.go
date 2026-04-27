@@ -111,7 +111,7 @@ func DefaultFooterConfigFile() FooterConfigFile {
 			QRImagePath: filepath.Join("var", "image", "s2qt_link.png"),
 			QRPosition:  "right-bottom",
 			QRSizeMM:    27.0,
-			SafeAreaMM:  36.0,
+			SafeAreaMM:  32.0,
 		},
 		QRDefaults: DefaultQRRenderOptions(),
 		SubscriberFooter: QTFooterConfig{
@@ -122,7 +122,7 @@ func DefaultFooterConfigFile() FooterConfigFile {
 			QRImagePath: filepath.Join("var", "image", "church_qr.png"),
 			QRPosition:  "right-bottom",
 			QRSizeMM:    27.0,
-			SafeAreaMM:  38.0,
+			SafeAreaMM:  32.0,
 		},
 	}
 }
@@ -130,12 +130,12 @@ func DefaultFooterConfigFile() FooterConfigFile {
 func DefaultQRRenderOptions() QRRenderOptions {
 	return QRRenderOptions{
 		SizePx:         768,
-		MarginModules:  4,
+		MarginModules:  2, // 기존 4 -> 2 (1차 테스트 권장)
 		Style:          QRStyleDot,
 		DotScale:       0.82,
 		KeepFinderBox:  true,
-		BackgroundRGBA: [4]uint8{255, 255, 255, 255},
-		ForegroundRGBA: [4]uint8{0, 0, 0, 255},
+		BackgroundRGBA: [4]uint8{0, 0, 0, 0},   // 완전 투명 배경
+		ForegroundRGBA: [4]uint8{0, 0, 0, 255}, // 검정
 	}
 }
 
