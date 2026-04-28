@@ -128,9 +128,9 @@ body{
 .qt-footer{
   position: fixed !important;
   left: 12mm !important;
-  right: 12mm !important;
+  right: calc(12mm + var(--qt-qr-reserved, 0mm) + 4mm) !important;
   bottom: var(--qt-footer-bottom, 2mm) !important;
-  height: 12mm !important;
+  height: 14mm !important;
   color: #4b5563 !important;
   z-index: 20 !important;
   pointer-events: none;
@@ -149,8 +149,8 @@ body{
   position: absolute !important;
   left: 0 !important;
   right: 0 !important;
-  top: 2.5mm !important;
-  font-size: 10px !important;
+  top: 8.2mm !important;
+  font-size: 9.5px !important;
   font-weight: 700 !important;
   line-height: 1.2 !important;
   text-align: center !important;
@@ -160,7 +160,7 @@ body{
   position: absolute !important;
   left: 0 !important;
   right: 0 !important;
-  top: 6.8mm !important;
+  top: 2.4mm !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -170,8 +170,8 @@ body{
 }
 
 .qt-footer-brand-image{
-  max-width: 40mm !important;
-  max-height: 4mm !important;
+  max-width: 42mm !important;
+  max-height: 5mm !important;
   width: auto !important;
   height: auto !important;
   object-fit: contain !important;
