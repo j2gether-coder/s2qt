@@ -385,7 +385,7 @@ func (s *QRService) WriteQRCode(text, outPath string, opts *QRRenderOptions) (*Q
 		finalOpts.SizePx = 768
 	}
 	if finalOpts.MarginModules < 0 {
-		finalOpts.MarginModules = 4
+		finalOpts.MarginModules = 2
 	}
 	if finalOpts.DotScale <= 0 || finalOpts.DotScale > 1.0 {
 		finalOpts.DotScale = 0.82
