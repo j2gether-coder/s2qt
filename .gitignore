@@ -28,6 +28,7 @@
 /var/state/
 /var/template/
 /var/log/
+/var/db/
 
 ####################################
 # Env / Logs
