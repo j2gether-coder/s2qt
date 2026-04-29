@@ -35,8 +35,14 @@ func (s *SiteFileService) PrepareSiteLogoFile(srcPath string) (string, error) {
 
 	targetPath := strings.TrimSpace(s.Paths.SiteLogoFile)
 	if targetPath == "" {
-		// path.go 수정 전 임시 fallback
 		targetPath = filepath.Join("var", "image", "site_logo.png")
+	}
+
+	srcAbs, _ := filepath.Abs(srcPath)
+	dstAbs, _ := filepath.Abs(targetPath)
+
+	if srcAbs == dstAbs {
+		return targetPath, nil
 	}
 
 	return CopyFileToFixedPath(srcPath, targetPath)

@@ -41,6 +41,25 @@ type BrandService struct {
 	Paths *util.AppPaths
 }
 
+const brandImageAspectRatioThreshold = 2.6
+
+func isLikelyBrandImageByRatio(path string) bool {
+	img, err := decodeBrandImageFile(path)
+	if err != nil {
+		return false
+	}
+
+	b := img.Bounds()
+	w := b.Dx()
+	h := b.Dy()
+	if w <= 0 || h <= 0 {
+		return false
+	}
+
+	ratio := float64(w) / float64(h)
+	return ratio >= brandImageAspectRatioThreshold
+}
+
 func NewBrandService(db *sql.DB) (*BrandService, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db is nil")
@@ -58,10 +77,22 @@ func NewBrandService(db *sql.DB) (*BrandService, error) {
 }
 
 func (s *BrandService) PrepareBrandImageFromDB() (*BrandPrepareResult, error) {
+	LogInfo("brand: PrepareBrandImageFromDB started")
+
 	settings, err := s.LoadBrandSettings()
 	if err != nil {
+		LogError("brand: LoadBrandSettings failed: " + err.Error())
 		return nil, err
 	}
+
+	LogInfo(fmt.Sprintf(
+		"brand: settings churchName=%q denomination=%q churchOnlyName=%q logoPath=%q brandImageIncluded=%v",
+		settings.ChurchName,
+		settings.Denomination,
+		settings.ChurchOnlyName,
+		settings.LogoPath,
+		settings.BrandImageIncluded,
+	))
 
 	sourcePath := resolveFooterImagePath(settings.LogoPath)
 	if strings.TrimSpace(sourcePath) == "" {
@@ -81,14 +112,34 @@ func (s *BrandService) PrepareBrandImageFromDB() (*BrandPrepareResult, error) {
 		return nil, err
 	}
 
-	if settings.BrandImageIncluded {
+	brandImageIncludedBySetting := settings.BrandImageIncluded
+	brandImageIncludedByRatio := isLikelyBrandImageByRatio(sourcePath)
+	brandImageIncluded := brandImageIncludedBySetting || brandImageIncludedByRatio
+
+	LogInfo(fmt.Sprintf(
+		"brand: decision brandImageIncluded=%v bySetting=%v byRatio=%v sourcePath=%q",
+		brandImageIncluded,
+		brandImageIncludedBySetting,
+		brandImageIncludedByRatio,
+		sourcePath,
+	))
+
+	if brandImageIncluded {
+		LogInfo("brand: mode=normalized")
+
 		if err := s.writeNormalizedPNG(sourcePath, brandPath); err != nil {
+			LogError("brand: writeNormalizedPNG failed: " + err.Error())
 			return nil, err
 		}
+
 		if err := CopyFile(brandPath, finalPath); err != nil {
+			LogError("brand: copy normalized brand to final failed: " + err.Error())
 			return nil, fmt.Errorf("최종 site_logo.png 반영 실패: %w", err)
 		}
+
 		_ = os.Remove(brandPath)
+
+		LogInfo("brand: normalized brand image completed finalPath=" + finalPath)
 
 		return &BrandPrepareResult{
 			Success:   true,
@@ -98,13 +149,21 @@ func (s *BrandService) PrepareBrandImageFromDB() (*BrandPrepareResult, error) {
 		}, nil
 	}
 
+	LogInfo("brand: mode=composed")
+
 	if err := s.writeComposedBrandPNG(sourcePath, brandPath, settings); err != nil {
+		LogError("brand: writeComposedBrandPNG failed: " + err.Error())
 		return nil, err
 	}
+
 	if err := CopyFile(brandPath, finalPath); err != nil {
+		LogError("brand: copy composed brand to final failed: " + err.Error())
 		return nil, fmt.Errorf("합성 결과를 site_logo.png로 반영 실패: %w", err)
 	}
+
 	_ = os.Remove(brandPath)
+
+	LogInfo("brand: composed brand image completed finalPath=" + finalPath)
 
 	return &BrandPrepareResult{
 		Success:   true,
@@ -112,6 +171,19 @@ func (s *BrandService) PrepareBrandImageFromDB() (*BrandPrepareResult, error) {
 		BrandFile: finalPath,
 		Source:    sourcePath,
 	}, nil
+}
+
+func fillWhiteBackground(dst *image.RGBA) {
+	if dst == nil {
+		return
+	}
+	stddraw.Draw(
+		dst,
+		dst.Bounds(),
+		image.NewUniform(color.RGBA{R: 255, G: 255, B: 255, A: 255}),
+		image.Point{},
+		stddraw.Src,
+	)
 }
 
 func (s *BrandService) LoadBrandSettings() (*BrandSettings, error) {
@@ -159,6 +231,8 @@ WHERE setting_key IN (` + strings.Join(placeholders, ",") + `)
 			v = strings.TrimSpace(value.String)
 		}
 
+		LogInfo(fmt.Sprintf("brand: db setting key=%s value=%q", key, v))
+
 		switch key {
 		case "church.name":
 			result.ChurchName = normalizeChurchDisplayName(v)
@@ -203,7 +277,9 @@ func (s *BrandService) writeNormalizedPNG(srcPath, outPath string) error {
 
 	b := img.Bounds()
 	canvas := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	stddraw.Draw(canvas, canvas.Bounds(), img, b.Min, stddraw.Src)
+	fillWhiteBackground(canvas)
+
+	stddraw.Draw(canvas, canvas.Bounds(), img, b.Min, stddraw.Over)
 
 	f, err := os.Create(outPath)
 	if err != nil {
@@ -282,7 +358,7 @@ func (s *BrandService) writeComposedBrandPNG(srcPath, outPath string, settings *
 	canvasH := maxInt(targetLogoH+(paddingY*2), textBlockH+(paddingY*2))
 
 	canvas := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
-	stddraw.Draw(canvas, canvas.Bounds(), image.Transparent, image.Point{}, stddraw.Src)
+	fillWhiteBackground(canvas)
 
 	logoX := paddingX
 	logoY := (canvasH - targetLogoH) / 2

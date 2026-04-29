@@ -7,6 +7,8 @@ import {
   ChangePin,
   SelectImageFile,
   LoadImageAsDataURI,
+  PrepareSiteLogoFile,
+  PrepareFooterBrandImage,
 } from "../../../wailsjs/go/main/App";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 
@@ -159,6 +161,11 @@ async function loadBasicSettings() {
   const churchMap = new Map(churchItems.map((item) => [item.key, item]));
   const userMap = new Map(userItems.map((item) => [item.key, item]));
 
+  const brandImageIncludedValue =
+  churchMap.get("church.brand_image_included")?.value ??
+  churchMap.get("church.logo_with_name")?.value ??
+  "";
+
   let pinEnabled = false;
   let pinLength = 6;
 
@@ -180,25 +187,29 @@ async function loadBasicSettings() {
   }
 
   basicSettingsState = {
-    loaded: true,
-    userEmail: safeValue(userMap.get("user.email")?.value || ""),
-    pinEnabled,
-    pinLength,
-    pinMode: "idle",
-    pinDraft: {
-      currentPin: "",
-      newPin: "",
-      confirmPin: "",
-      step: "new",
-    },
+  loaded: true,
+  userEmail: safeValue(userMap.get("user.email")?.value || ""),
+  pinEnabled,
+  pinLength,
+  pinMode: "idle",
+  pinDraft: {
+    currentPin: "",
+    newPin: "",
+    confirmPin: "",
+    step: "new",
+  },
 
-    churchName: safeValue(churchMap.get("church.name")?.value || ""),
-    logoPath: safeValue(churchMap.get("church.logo_path")?.value || ""),
-    homepageUrl: safeValue(churchMap.get("church.homepage_url")?.value || ""),
-    footerText: safeValue(churchMap.get("church.default_footer_text")?.value || ""),
-    brandImageIncluded:
-      safeValue(churchMap.get("church.logo_with_name")?.value || "").toUpperCase() === "Y",
-  };
+  churchName: safeValue(churchMap.get("church.name")?.value || ""),
+  logoPath: safeValue(churchMap.get("church.logo_path")?.value || ""),
+  homepageUrl: safeValue(churchMap.get("church.homepage_url")?.value || ""),
+  footerText: safeValue(churchMap.get("church.default_footer_text")?.value || ""),
+  brandImageIncluded: parseBoolSetting(brandImageIncludedValue),
+};
+}
+
+function parseBoolSetting(value) {
+  const v = safeValue(value).trim().toLowerCase();
+  return v === "1" || v === "true" || v === "y" || v === "yes" || v === "on";
 }
 
 async function rerenderBasicTab() {
@@ -451,7 +462,10 @@ function renderChurchCard() {
           <button type="button" class="button-ghost" id="preview-logo-btn">로고 미리 보기</button>
         </div>
 
-        <div class="field-help-text topgap-sm">
+        <div
+          id="church-logo-path-text"
+          class="field-help-text topgap-sm"
+        >
           ${
             basicSettingsState.logoPath
               ? `선택된 파일: ${escapeHtml(basicSettingsState.logoPath)}`
@@ -764,13 +778,31 @@ async function handleSavePinProgress() {
 
 async function handleSelectLogo() {
   clearInlineMessage(BASIC_MESSAGE_ID);
+
   try {
-    const path = await SelectImageFile();
-    if (!path) {
+    const selectedPath = await SelectImageFile();
+    if (!selectedPath) {
       return;
     }
-    basicSettingsState.logoPath = path;
-    rerenderBasicTab();
+
+    const preparedPath = await PrepareSiteLogoFile(selectedPath);
+    if (!preparedPath) {
+      setInlineMessage(
+        BASIC_MESSAGE_ID,
+        "로고 파일을 앱 내부 경로로 복사하지 못했습니다.",
+        "error"
+      );
+      return;
+    }
+
+    basicSettingsState.logoPath = preparedPath;
+
+    const logoPathText = document.getElementById("church-logo-path-text");
+    if (logoPathText) {
+      logoPathText.textContent = `선택된 파일: ${preparedPath}`;
+    }
+
+    showToast("로고 파일이 준비되었습니다.", "success");
   } catch (error) {
     console.error(error);
     setInlineMessage(
@@ -856,7 +888,23 @@ function handleLogoPreviewKey(event) {
 async function handleSaveChurchSettings() {
   clearInlineMessage(BASIC_MESSAGE_ID);
 
-  const homepageUrl = document.getElementById("church-homepage-url-input")?.value || "";
+  const churchName = safeValue(
+    document.getElementById("church-name-input")?.value
+  ).trim();
+
+  const homepageUrl = safeValue(
+    document.getElementById("church-homepage-url-input")?.value
+  ).trim();
+
+  const footerText = safeValue(
+    document.getElementById("church-footer-text-input")?.value
+  );
+
+  const logoPath = safeValue(basicSettingsState.logoPath).trim();
+
+  const brandImageIncluded =
+    !!document.getElementById("church-brand-image-included-check")?.checked;
+
   if (!isProbablyUrl(homepageUrl)) {
     setInlineMessage(
       BASIC_MESSAGE_ID,
@@ -866,52 +914,74 @@ async function handleSaveChurchSettings() {
     return;
   }
 
+  if (logoPath && !brandImageIncluded && !churchName) {
+    setInlineMessage(
+      BASIC_MESSAGE_ID,
+      "로고 이미지에 교회명 또는 브랜드명이 포함되어 있지 않은 경우, 교회/브랜드명을 입력해야 합니다.",
+      "warning"
+    );
+    return;
+  }
+
   try {
     const items = [
       {
         key: "church.name",
-        value: document.getElementById("church-name-input")?.value || "",
+        value: churchName,
         valueType: "text",
         isSecret: false,
         group: "church",
       },
       {
         key: "church.logo_path",
-        value: basicSettingsState.logoPath || "",
+        value: logoPath,
         valueType: "text",
         isSecret: false,
         group: "church",
       },
       {
         key: "church.homepage_url",
-        value: homepageUrl.trim(),
+        value: homepageUrl,
         valueType: "url",
         isSecret: false,
         group: "church",
       },
       {
         key: "church.default_footer_text",
-        value: document.getElementById("church-footer-text-input")?.value || "",
+        value: footerText,
         valueType: "multiline",
         isSecret: false,
         group: "church",
       },
       {
-        key: "church.logo_with_name",
-        value: document.getElementById("church-brand-image-included-check")?.checked ? "Y" : "N",
-        valueType: "text",
+        key: "church.brand_image_included",
+        value: brandImageIncluded ? "true" : "false",
+        valueType: "boolean",
         isSecret: false,
         group: "church",
       },
     ];
 
+    console.log("[settings-basic] save church settings", items);
+
     await SaveAppSettings(items);
 
-    basicSettingsState.churchName = document.getElementById("church-name-input")?.value || "";
-    basicSettingsState.homepageUrl = homepageUrl.trim();
-    basicSettingsState.footerText = document.getElementById("church-footer-text-input")?.value || "";
-    basicSettingsState.brandImageIncluded = 
-      !!document.getElementById("church-brand-image-included-check")?.checked;
+    if (logoPath) {
+      const brandResult = await PrepareFooterBrandImage();
+      if (brandResult?.brandFile) {
+        basicSettingsState.logoPath = brandResult.brandFile;
+
+        const logoPathText = document.getElementById("church-logo-path-text");
+        if (logoPathText) {
+          logoPathText.textContent = `선택된 파일: ${brandResult.brandFile}`;
+        }
+      }
+    }
+
+    basicSettingsState.churchName = churchName;
+    basicSettingsState.homepageUrl = homepageUrl;
+    basicSettingsState.footerText = footerText;
+    basicSettingsState.brandImageIncluded = brandImageIncluded;
 
     showToast("교회/브랜드 설정이 저장되었습니다.", "success");
   } catch (error) {
