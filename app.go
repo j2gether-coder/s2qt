@@ -193,6 +193,31 @@ func (a *App) PrepareSiteLogoFile(srcPath string) (string, error) {
 	return resultPath, nil
 }
 
+func (a *App) PrepareFooterBrandImage() (*service.BrandPrepareResult, error) {
+	service.LogInfo("settings: prepare footer brand image requested")
+
+	if a.db == nil {
+		err := fmt.Errorf("db is not initialized")
+		service.LogError("settings: prepare footer brand image failed: " + err.Error())
+		return nil, err
+	}
+
+	svc, err := service.NewBrandService(a.db)
+	if err != nil {
+		service.LogError("settings: brand service create failed: " + err.Error())
+		return nil, err
+	}
+
+	result, err := svc.PrepareBrandImageFromDB()
+	if err != nil {
+		service.LogError("settings: prepare footer brand image failed: " + err.Error())
+		return nil, err
+	}
+
+	service.LogInfo("settings: prepare footer brand image completed")
+	return result, nil
+}
+
 func (a *App) GetVideoMeta(url string) (*service.VideoMeta, error) {
 	url = strings.TrimSpace(url)
 	if url == "" {
@@ -574,7 +599,35 @@ func (a *App) SaveAppSettings(items []service.SettingItem) error {
 	if a.settingsSvc == nil {
 		return fmt.Errorf("settings service is not initialized")
 	}
-	return a.settingsSvc.SaveSettings(items)
+
+	service.LogInfo(fmt.Sprintf("settings: SaveAppSettings requested count=%d", len(items)))
+
+	for _, item := range items {
+		key := strings.TrimSpace(item.Key)
+		value := strings.TrimSpace(item.Value)
+
+		// secret 값은 로그에 남기지 않음
+		if item.IsSecret {
+			value = "***SECRET***"
+		}
+
+		service.LogInfo(fmt.Sprintf(
+			"settings: item key=%s value=%q valueType=%s group=%s isSecret=%v",
+			key,
+			value,
+			strings.TrimSpace(item.ValueType),
+			strings.TrimSpace(item.Group),
+			item.IsSecret,
+		))
+	}
+
+	if err := a.settingsSvc.SaveSettings(items); err != nil {
+		service.LogError("settings: SaveAppSettings failed: " + err.Error())
+		return err
+	}
+
+	service.LogInfo("settings: SaveAppSettings completed")
+	return nil
 }
 
 func (a *App) SaveSecretSettingWithPin(key string, plainValue string, valueType string, group string, pin string) error {

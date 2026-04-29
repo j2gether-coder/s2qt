@@ -72,31 +72,15 @@ func (s *FooterService) PrepareFooterConfigFromDB(mode QTFooterMode) (*QTFooterC
 		cfg.FooterText = "말씀을 묵상으로, 묵상을 삶으로"
 	}
 
-	// 1) 실제 로고 파일이 있을 때만 brand_service.go 시도
+	// site_logo.png는 환경설정 저장 시점에 이미 footer용 최종 이미지로 정규화되어 있어야 한다.
+	// Step3 산출물 생성 시점에서는 BrandService를 다시 호출하지 않는다.
+	// 이유: site_logo.png를 다시 읽어 재합성하면 교회명/브랜드명이 중복 합성될 수 있다.
 	logoConfigured := strings.TrimSpace(cfg.LogoPath) != "" && ifileExists(cfg.LogoPath)
 
 	if logoConfigured {
-		brandSvc, err := NewBrandService(s.DB)
-		if err == nil && brandSvc != nil {
-			brandRes, brandErr := brandSvc.PrepareBrandImageFromDB()
-			if brandErr == nil && brandRes != nil {
-				brandFile := strings.TrimSpace(brandRes.BrandFile)
-				if brandFile != "" && ifileExists(brandFile) {
-					cfg.BrandImagePath = brandFile
-					cfg.ChurchName = ""
-					cfg.LogoPath = ""
-				}
-			}
-		}
-
-		if strings.TrimSpace(cfg.BrandImagePath) == "" {
-			brandImagePath := s.resolveBrandImagePath(settings)
-			if brandImagePath != "" {
-				cfg.BrandImagePath = brandImagePath
-				cfg.ChurchName = ""
-				cfg.LogoPath = ""
-			}
-		}
+		cfg.BrandImagePath = cfg.LogoPath
+		cfg.ChurchName = ""
+		cfg.LogoPath = ""
 	}
 
 	homepageURL := strings.TrimSpace(settings.HomepageURL)
@@ -136,6 +120,7 @@ func (s *FooterService) LoadFooterSettings() (*FooterSettings, error) {
 		"church.name",
 		"church.logo_path",
 		"church.brand_image_included",
+		"church.logo_with_name",
 		"church.homepage_url",
 		"church.default_footer_text",
 	}
@@ -182,6 +167,10 @@ WHERE setting_key IN (` + strings.Join(placeholders, ",") + `)
 			result.LogoPath = v
 		case "church.brand_image_included":
 			result.BrandImageIncluded = parseBoolText(v)
+		case "church.logo_with_name":
+			if !result.BrandImageIncluded {
+				result.BrandImageIncluded = parseBoolText(v)
+			}
 		case "church.homepage_url":
 			result.HomepageURL = v
 		case "church.default_footer_text":

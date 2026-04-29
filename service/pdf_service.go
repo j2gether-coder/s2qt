@@ -125,12 +125,19 @@ body{
   padding: 0 !important;
 }
 
+/* ==================================================
+   PDF Footer Layout
+   - 좌측 50mm: site_logo.png
+   - 중앙 1fr : 하단문구
+   - 우측 50mm: QR
+   ================================================== */
+
 .qt-footer{
   position: fixed !important;
   left: 12mm !important;
-  right: calc(12mm + var(--qt-qr-reserved, 0mm) + 4mm) !important;
+  right: 12mm !important;
   bottom: var(--qt-footer-bottom, 2mm) !important;
-  height: 14mm !important;
+  height: 29mm !important;
   color: #4b5563 !important;
   z-index: 20 !important;
   pointer-events: none;
@@ -145,33 +152,48 @@ body{
   border-top: 2px solid var(--qt-green) !important;
 }
 
-.qt-footer-text{
+.qt-footer-grid{
   position: absolute !important;
   left: 0 !important;
   right: 0 !important;
-  top: 8.2mm !important;
-  font-size: 9.5px !important;
-  font-weight: 700 !important;
-  line-height: 1.2 !important;
-  text-align: center !important;
+  top: 2mm !important;
+  height: var(--qt-qr-size, 27mm) !important;
+
+  display: grid !important;
+  grid-template-columns: 50mm 1fr 50mm !important;
+  column-gap: 0 !important;
+  align-items: center !important;
+}
+
+/* 좌측: 사이트 로고 */
+.qt-footer-logo-cell{
+  width: 50mm !important;
+  height: var(--qt-qr-size, 27mm) !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  overflow: hidden !important;
 }
 
 .qt-footer-brand{
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  top: 2.4mm !important;
+  position: static !important;
+  width: 50mm !important;
+  height: 18mm !important;
+
   display: flex !important;
   align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-  gap: 1.5mm !important;
-  max-width: none !important;
+  justify-content: flex-start !important;
+
+  text-align: left !important;
+  max-width: 50mm !important;
+  overflow: hidden !important;
 }
 
 .qt-footer-brand-image{
-  max-width: 42mm !important;
-  max-height: 5mm !important;
+  max-width: 50mm !important;
+  max-height: 18mm !important;
   width: auto !important;
   height: auto !important;
   object-fit: contain !important;
@@ -182,31 +204,72 @@ body{
   font-size: 9px !important;
   font-weight: 600 !important;
   line-height: 1.1 !important;
-  text-align: center !important;
+  text-align: left !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
-.qt-page-qr{
-  position: fixed !important;
-  bottom: var(--qt-qr-bottom, 2mm) !important;
+/* 중앙: 하단문구 */
+.qt-footer-text-cell{
+  height: var(--qt-qr-size, 27mm) !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 4mm !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.qt-footer-text{
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+
+  width: 100% !important;
+  margin: 0 !important;
+
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  text-align: center !important;
+
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+/* 우측: QR */
+.qt-footer-qr-cell{
+  width: 50mm !important;
+  height: var(--qt-qr-size, 27mm) !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+
+  overflow: hidden !important;
+}
+
+.qt-footer-qr-image{
   width: var(--qt-qr-size, 27mm) !important;
   height: var(--qt-qr-size, 27mm) !important;
   max-width: var(--qt-qr-size, 27mm) !important;
   max-height: var(--qt-qr-size, 27mm) !important;
   object-fit: contain !important;
   display: block !important;
-  z-index: 30 !important;
-  pointer-events: none;
 }
 
-.qt-page-qr.left-bottom{
-  left: 12mm !important;
+/* 기존 fixed QR 방식 무력화용: 혹시 남아 있어도 표시 안정화 */
+.qt-page-qr{
+  display: none !important;
 }
 
+.qt-page-qr.left-bottom,
 .qt-page-qr.right-bottom{
-  right: 12mm !important;
+  display: none !important;
 }
 
 h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
@@ -742,7 +805,7 @@ func buildQTFixedPageLayout(bodyHTML string, footerCfg *QTFooterConfig) string {
 ` + bodyHTML + `
   </div>
 </div>
-` + buildQTFooterHTML(footerCfg) + buildQTFooterQRHTML(footerCfg)
+` + buildQTFooterHTML(footerCfg)
 }
 
 func mergeQTFooterRuntimeStylePDF(base string, footerCfg *QTFooterConfig) string {
@@ -786,15 +849,21 @@ func buildQTFooterHTML(cfg *QTFooterConfig) string {
 
 	var parts []string
 	parts = append(parts, `<div class="qt-footer" aria-hidden="true">`)
+
 	if cfg.ShowDivider {
 		parts = append(parts, `<div class="qt-footer-line"></div>`)
 	}
 
+	parts = append(parts, `<div class="qt-footer-grid">`)
+
+	parts = append(parts, `<div class="qt-footer-logo-cell">`)
 	brandHTML := buildQTFooterBrandHTML(cfg)
 	if brandHTML != "" {
 		parts = append(parts, brandHTML)
 	}
+	parts = append(parts, `</div>`)
 
+	parts = append(parts, `<div class="qt-footer-text-cell">`)
 	footerText := strings.TrimSpace(cfg.FooterText)
 	if footerText == "" {
 		footerText = qtFooterMessage
@@ -802,7 +871,16 @@ func buildQTFooterHTML(cfg *QTFooterConfig) string {
 	if footerText != "" {
 		parts = append(parts, `<div class="qt-footer-text">`+footerText+`</div>`)
 	}
+	parts = append(parts, `</div>`)
 
+	parts = append(parts, `<div class="qt-footer-qr-cell">`)
+	qrHTML := buildQTFooterQRHTML(cfg)
+	if qrHTML != "" {
+		parts = append(parts, qrHTML)
+	}
+	parts = append(parts, `</div>`)
+
+	parts = append(parts, `</div>`)
 	parts = append(parts, `</div>`)
 
 	return "\n" + strings.Join(parts, "\n")
@@ -841,13 +919,7 @@ func buildQTFooterQRHTML(cfg *QTFooterConfig) string {
 		return ""
 	}
 
-	posClass := "right-bottom"
-	if strings.EqualFold(strings.TrimSpace(cfg.QRPosition), "left-bottom") {
-		posClass = "left-bottom"
-	}
-
-	return `
-<img class="qt-page-qr ` + posClass + `" src="` + dataURI + `" alt="footer qr" />`
+	return `<img class="qt-footer-qr-image" src="` + dataURI + `" alt="footer qr" />`
 }
 
 func stripStyleBlock(content string) string {
