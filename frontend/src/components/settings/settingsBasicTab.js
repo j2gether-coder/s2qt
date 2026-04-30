@@ -212,9 +212,17 @@ function parseBoolSetting(value) {
   return v === "1" || v === "true" || v === "y" || v === "yes" || v === "on";
 }
 
-async function rerenderBasicTab() {
-  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
-  rerenderCurrentSettingsPanel();
+function rerenderBasicTab() {
+  const contentRoot = document.querySelector("#settingsContentRoot");
+  if (!contentRoot) return;
+  contentRoot.innerHTML = renderSettingsBasicTab();
+  bindSettingsBasicTabEvents();
+}
+
+function updatePinSlotsDom() {
+  const pinDisplay = document.querySelector(".settings-basic-tab .pin-display");
+  if (!pinDisplay) return;
+  pinDisplay.innerHTML = renderPinSlots(getCurrentPinValue(), basicSettingsState.pinLength);
 }
 
 function renderBasicSecurityNoticeCard() {
@@ -1057,7 +1065,7 @@ export async function bindSettingsBasicTabEvents() {
   pinKeyButtons.forEach((button) => {
     button.addEventListener("click", () => {
       applyPinDigit(button.dataset.basicPinKey || "");
-      rerenderBasicTab();
+      updatePinSlotsDom();
     });
   });
 
@@ -1065,7 +1073,7 @@ export async function bindSettingsBasicTabEvents() {
   if (pinBackspaceBtn) {
     pinBackspaceBtn.addEventListener("click", () => {
       backspacePinDigit();
-      rerenderBasicTab();
+      updatePinSlotsDom();
     });
   }
 
@@ -1073,7 +1081,7 @@ export async function bindSettingsBasicTabEvents() {
   if (pinClearBtn) {
     pinClearBtn.addEventListener("click", () => {
       clearPinDigits();
-      rerenderBasicTab();
+      updatePinSlotsDom();
     });
   }
 

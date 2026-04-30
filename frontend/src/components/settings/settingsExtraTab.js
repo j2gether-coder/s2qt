@@ -101,9 +101,11 @@ async function loadExtraSettings() {
   };
 }
 
-async function rerenderExtraTab() {
-  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
-  rerenderCurrentSettingsPanel();
+function rerenderExtraTab() {
+  const contentRoot = document.querySelector("#settingsContentRoot");
+  if (!contentRoot) return;
+  contentRoot.innerHTML = renderSettingsExtraTab();
+  bindSettingsExtraTabEvents();
 }
 
 function getAiModeLabel(mode) {

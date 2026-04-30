@@ -1644,6 +1644,52 @@ textarea.input {
   text-align: center;
   font-size: 13px;
   line-height: 1.6;
+  min-height: 215px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.history-search-card .input,
+.history-search-card select.input {
+  font-size: 12px;
+}
+
+.history-search-card .input::placeholder {
+  font-size: 12px;
+}
+
+.settings-extra-tab .input,
+.settings-extra-tab select.input {
+  font-size: 12px;
+}
+
+.settings-extra-tab .input::placeholder {
+  font-size: 12px;
+}
+
+.settings-extra-tab .checkbox-row {
+  font-size: 12px;
+}
+
+.settings-extra-tab .masked-secret-value {
+  font-size: 12px;
+}
+
+.settings-extra-tab .radio-inline-item {
+  font-size: 12px;
+}
+
+.history-table tbody tr.history-filler-row td {
+  height: 43px;
+  padding: 0 12px;
+  border-bottom: 1px solid #f3f4f6;
+  background: transparent;
+}
+
+.history-table tbody tr.history-filler-row:hover {
+  background: transparent;
 }
 
 .history-count-text {

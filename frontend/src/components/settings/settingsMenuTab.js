@@ -4,6 +4,8 @@ import {
 } from "../../../wailsjs/go/main/App";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 import { mountAppShell } from "../appShell";
+import { updateMenuConfigItem } from "../../state/appState";
+import { rerenderSideNavMenu } from "../sideNav";
 
 const MENU_MESSAGE_ID = "settings-menu-message";
 
@@ -66,9 +68,24 @@ async function loadMenuSettings() {
   };
 }
 
-async function rerenderMenuTab() {
-  const { rerenderCurrentSettingsPanel } = await import("./appSettings");
-  rerenderCurrentSettingsPanel();
+function rerenderMenuTab() {
+  const contentRoot = document.querySelector("#settingsContentRoot");
+  if (!contentRoot) return;
+  contentRoot.innerHTML = renderSettingsMenuTab();
+  bindSettingsMenuTabEvents();
+}
+
+function rerenderSideNav() {
+  rerenderSideNavMenu(() => mountAppShell("app"));
+}
+
+function syncAppStateMenuConfig(items) {
+  items.forEach((item) => {
+    updateMenuConfigItem(item.id, {
+      visible: item.visible,
+      label: item.label,
+    });
+  });
 }
 
 function getCurrentMenuItem(itemId) {
@@ -240,9 +257,17 @@ async function handleSaveMenuSettings() {
 
     await SaveAppSettings(saveItems);
     menuSettingsState.items = nextItems;
+    syncAppStateMenuConfig(nextItems);
+
+    nextItems.forEach((item) => {
+      const labelInput = document.getElementById(`menu-label-${item.id}`);
+      if (labelInput && labelInput.value !== item.label) {
+        labelInput.value = item.label;
+      }
+    });
 
     showToast("메뉴 설정이 저장되었습니다.", "success");
-    rerenderMenuTab();
+    rerenderSideNav();
   } catch (error) {
     console.error(error);
     setInlineMessage(
@@ -253,9 +278,24 @@ async function handleSaveMenuSettings() {
   }
 }
 
-function handleRefreshMenu() {
+async function handleRefreshMenu() {
   clearInlineMessage(MENU_MESSAGE_ID);
-  mountAppShell("app");
+
+  try {
+    await loadMenuSettings();
+    syncAppStateMenuConfig(menuSettingsState.items);
+
+    rerenderSideNav();
+    rerenderMenuTab();
+    showToast("메뉴를 새로 고쳤습니다.", "success");
+  } catch (error) {
+    console.error(error);
+    setInlineMessage(
+      MENU_MESSAGE_ID,
+      error?.message || "메뉴 새로 고침 중 오류가 발생했습니다.",
+      "error"
+    );
+  }
 }
 
 export async function bindSettingsMenuTabEvents() {

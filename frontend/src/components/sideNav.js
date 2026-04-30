@@ -99,3 +99,39 @@ export function bindSideNavEvents(onMenuChange) {
 
   void loadSideNavQR();
 }
+
+function renderSideNavMenuItems() {
+  const visibleMenus = getVisibleMenus();
+  return visibleMenus
+    .map(
+      (menu) => `
+        <button
+          class="side-nav-item ${appState.selectedMenu === menu.id ? "active" : ""}"
+          type="button"
+          data-menu-id="${menu.id}"
+        >
+          ${menu.label}
+        </button>
+      `
+    )
+    .join("");
+}
+
+export function rerenderSideNavMenu(onMenuChange) {
+  const menuRoot = document.querySelector(".side-nav-menu");
+  if (!menuRoot) return;
+
+  menuRoot.innerHTML = renderSideNavMenuItems();
+
+  const buttons = menuRoot.querySelectorAll("[data-menu-id]");
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const menuId = button.dataset.menuId;
+      setSelectedMenu(menuId);
+
+      if (typeof onMenuChange === "function") {
+        onMenuChange(menuId);
+      }
+    });
+  });
+}

@@ -5,7 +5,7 @@ import {
   DeleteHistory,
   PrepareReworkFromHistory,
 } from "../../../wailsjs/go/main/App";
-import { appState, setAudienceStep, setBasicInfoField, setSelectedMenu } from "../../state/appState";
+import { appState, getMenuLabel, setAudienceStep, setBasicInfoField, setSelectedMenu } from "../../state/appState";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 import { mountAppShell } from "../appShell";
 
@@ -18,7 +18,7 @@ const DEFAULT_HISTORY_FILTERS = {
   sortDir: "desc",
 };
 
-const DEFAULT_HISTORY_PAGE_SIZE = 10;
+const DEFAULT_HISTORY_PAGE_SIZE = 5;
 
 let historyState = {
   loaded: false,
@@ -59,18 +59,8 @@ function formatDateOnly(value) {
 }
 
 function audienceLabel(audienceId) {
-  switch (audienceId) {
-    case "adult":
-      return "장년";
-    case "young_adult":
-      return "청년";
-    case "teen":
-      return "중고등부";
-    case "child":
-      return "어린이";
-    default:
-      return audienceId || "-";
-  }
+  if (!audienceId) return "-";
+  return getMenuLabel(audienceId) || audienceId;
 }
 
 function isSelected(historyId) {
@@ -169,7 +159,7 @@ function getFilteredItems() {
 
 function renderSearchCard() {
   return `
-    <section class="card">
+    <section class="card history-search-card">
       <h3 class="mini-title">검색 조건</h3>
 
       <div class="form-grid two-column-grid topgap-sm">
@@ -188,10 +178,10 @@ function renderSearchCard() {
           <label class="form-label">연령대</label>
           <select id="history-audience-filter" class="input">
             <option value="all" ${historyState.filters.audience === "all" ? "selected" : ""}>전체</option>
-            <option value="adult" ${historyState.filters.audience === "adult" ? "selected" : ""}>장년</option>
-            <option value="young_adult" ${historyState.filters.audience === "young_adult" ? "selected" : ""}>청년</option>
-            <option value="teen" ${historyState.filters.audience === "teen" ? "selected" : ""}>중고등부</option>
-            <option value="child" ${historyState.filters.audience === "child" ? "selected" : ""}>어린이</option>
+            <option value="adult" ${historyState.filters.audience === "adult" ? "selected" : ""}>${escapeHtml(audienceLabel("adult"))}</option>
+            <option value="young_adult" ${historyState.filters.audience === "young_adult" ? "selected" : ""}>${escapeHtml(audienceLabel("young_adult"))}</option>
+            <option value="teen" ${historyState.filters.audience === "teen" ? "selected" : ""}>${escapeHtml(audienceLabel("teen"))}</option>
+            <option value="child" ${historyState.filters.audience === "child" ? "selected" : ""}>${escapeHtml(audienceLabel("child"))}</option>
           </select>
         </div>
 
@@ -234,6 +224,15 @@ function renderSearchCard() {
   `;
 }
 
+function renderFillerRows(count) {
+  if (count <= 0) return "";
+  return Array.from({ length: count }, () => `
+        <tr class="history-filler-row" aria-hidden="true">
+          <td colspan="5">&nbsp;</td>
+        </tr>
+      `).join("");
+}
+
 function renderTableBodyContent(items) {
   if (!historyState.searched) {
     return `
@@ -255,7 +254,7 @@ function renderTableBodyContent(items) {
     `;
   }
 
-  return items
+  const dataRows = items
     .map((item) => {
       const availableAudienceLabels = getAvailableAudienceLabels(item.id);
 
@@ -288,6 +287,9 @@ function renderTableBodyContent(items) {
       `;
     })
     .join("");
+
+  const fillerCount = Math.max(0, historyState.pageSize - items.length);
+  return dataRows + renderFillerRows(fillerCount);
 }
 
 function renderHistoryPagination() {
@@ -338,10 +340,10 @@ function renderTableCard() {
     items.every((item) => isSelected(item.id));
 
   return `
-    <section class="card">
+    <section class="card" id="history-table-section">
       <div class="card-inline-head">
         <div class="card-inline-head-left">
-          <h3 class="mini-title">작업 목록 
+          <h3 class="mini-title">작업 목록
             <span class="history-count-text">(${visibleCount}/${totalCount})</span>
           </h3>
         </div>
@@ -430,13 +432,33 @@ function resetSearchFilters() {
   historyState.filters = { ...DEFAULT_HISTORY_FILTERS };
 }
 
-async function rerenderHistoryWorkspace() {
-  const workspaceRoot = document.querySelector(".main-workspace");
-  if (!workspaceRoot) return;
+function rerenderHistoryTableSection() {
+  const tableSection = document.getElementById("history-table-section");
+  if (!tableSection) return;
 
-  const { renderMainWorkspace, bindMainWorkspaceEvents } = await import("../mainWorkspace");
-  workspaceRoot.innerHTML = renderMainWorkspace();
-  bindMainWorkspaceEvents();
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = renderTableCard().trim();
+  const next = wrapper.firstElementChild;
+  if (!next) return;
+
+  tableSection.replaceWith(next);
+  bindSelectionEvents();
+  bindActionEvents();
+  bindPaginationEvents();
+}
+
+function clearSearchCardInputs() {
+  const keyword = document.getElementById("history-keyword-input");
+  if (keyword) keyword.value = "";
+
+  const audience = document.getElementById("history-audience-filter");
+  if (audience) audience.value = DEFAULT_HISTORY_FILTERS.audience;
+
+  const sortKey = document.getElementById("history-sort-key");
+  if (sortKey) sortKey.value = DEFAULT_HISTORY_FILTERS.sortKey;
+
+  const sortDir = document.getElementById("history-sort-dir");
+  if (sortDir) sortDir.value = DEFAULT_HISTORY_FILTERS.sortDir;
 }
 
 async function handleSearchSubmit() {
@@ -448,7 +470,7 @@ async function handleSearchSubmit() {
     historyState.selectedIds = [];
     await loadHistoryData();
     historyState.searched = true;
-    await rerenderHistoryWorkspace();
+    rerenderHistoryTableSection();
   } catch (error) {
     console.error(error);
     setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "작업 내역 조회 중 오류가 발생했습니다.", "error");
@@ -459,7 +481,8 @@ async function handleSearchReset() {
   clearInlineMessage(HISTORY_MESSAGE_ID);
   resetSearchFilters();
   resetHistoryResults();
-  await rerenderHistoryWorkspace();
+  clearSearchCardInputs();
+  rerenderHistoryTableSection();
 }
 
 async function handleReworkSelected() {
@@ -528,7 +551,7 @@ async function handleDeleteSelected() {
     await loadHistoryData();
     historyState.searched = true;
     showToast("선택한 작업을 삭제했습니다.", "success");
-    await rerenderHistoryWorkspace();
+    rerenderHistoryTableSection();
   } catch (error) {
     console.error(error);
     setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "작업 삭제 중 오류가 발생했습니다.", "error");
@@ -554,7 +577,7 @@ async function handlePageMove(direction) {
     historyState.selectedIds = [];
     await loadHistoryData();
     historyState.searched = true;
-    await rerenderHistoryWorkspace();
+    rerenderHistoryTableSection();
   } catch (error) {
     console.error(error);
     setInlineMessage(HISTORY_MESSAGE_ID, error?.message || "페이지 이동 중 오류가 발생했습니다.", "error");
@@ -608,7 +631,7 @@ function bindFilterEvents() {
 function bindSelectionEvents() {
   const selectAll = document.getElementById("history-select-all");
   if (selectAll) {
-    selectAll.addEventListener("change", async () => {
+    selectAll.addEventListener("change", () => {
       const items = getFilteredItems();
 
       if (selectAll.checked) {
@@ -617,13 +640,13 @@ function bindSelectionEvents() {
         historyState.selectedIds = [];
       }
 
-      await rerenderHistoryWorkspace();
+      rerenderHistoryTableSection();
     });
   }
 
   const rowChecks = document.querySelectorAll("[data-history-select-id]");
   rowChecks.forEach((checkbox) => {
-    checkbox.addEventListener("change", async () => {
+    checkbox.addEventListener("change", () => {
       const id = Number(checkbox.dataset.historySelectId);
       if (!id) return;
 
@@ -635,7 +658,7 @@ function bindSelectionEvents() {
         historyState.selectedIds = historyState.selectedIds.filter((item) => item !== id);
       }
 
-      await rerenderHistoryWorkspace();
+      rerenderHistoryTableSection();
     });
   });
 }
