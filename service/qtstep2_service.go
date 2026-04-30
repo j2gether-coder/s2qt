@@ -652,9 +652,9 @@ func (s *QTStep2Service) wrapQTStep2HTMLDocument(body string) string {
   <title>S2QT Preview</title>
 </head>
 <body>
-  <style>
+<style>
 ` + cssText + `
-  </style>
+</style>
 ` + body + `
 </body>
 </html>`

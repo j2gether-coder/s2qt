@@ -279,6 +279,13 @@ h1,h2,h3,blockquote,ul,li,.qt-box,.qt-subbox{
 `
 
 const defaultQTHTMLStyle = `
+html, body{
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #1f2937;
+}
+
 .qt-wrap{
   --qt-bg: #ffffff;
   --qt-text: #1f2937;
@@ -294,9 +301,17 @@ const defaultQTHTMLStyle = `
   --qt-purple-border: #b39ddb;
   --qt-line: #d1d5db;
 
+  --qt-passage-bg: #f8fafc;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #1f2937;
+  --qt-passage-text: #374151;
+
+  --qt-passage-abbr-bg: #fffaf0;
+  --qt-passage-abbr-border: #f59e0b;
+
   max-width: 760px;
   margin: 0 auto;
-  padding: 0;
+  padding: 16px;
   font-family: 'Nanum Gothic','Apple SD Gothic Neo',sans-serif;
   line-height: 1.6;
   color: var(--qt-text);
@@ -324,6 +339,34 @@ const defaultQTHTMLStyle = `
   font-weight: 700;
   font-size: 13px;
   color: var(--qt-text);
+}
+
+.qt-bible-passage{
+  margin: 10px 0 16px 0;
+  padding: 10px 12px;
+  background: var(--qt-passage-bg);
+  border-left: 4px solid var(--qt-passage-border);
+  border-radius: 6px;
+}
+
+.qt-bible-passage-title{
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--qt-passage-title);
+}
+
+.qt-bible-passage p{
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--qt-passage-text);
+  white-space: pre-line;
+}
+
+.qt-bible-passage.is-abbreviated{
+  background: var(--qt-passage-abbr-bg);
+  border-left-color: var(--qt-passage-abbr-border);
 }
 
 .qt-section-title{
@@ -357,6 +400,13 @@ const defaultQTHTMLStyle = `
 .qt-prayer{
   background: var(--qt-purple-bg);
   border-left: 4px solid var(--qt-purple-border);
+}
+
+.qt-reflection,
+.qt-reflection *,
+.qt-prayer,
+.qt-prayer *{
+  color: var(--qt-text);
 }
 
 .qt-list{
@@ -398,6 +448,212 @@ const defaultQTHTMLStyle = `
 h1,h2,h3,blockquote,ul{
   page-break-inside: avoid;
   break-inside: avoid;
+}
+
+.qt-wrap.qt-theme-dark,
+[data-qt-theme="dark"] .qt-wrap{
+  --qt-bg: #111827;
+  --qt-text: #f3f4f6;
+  --qt-muted: #cbd5e1;
+  --qt-title: #e5f7ec;
+  --qt-green: #4ade80;
+  --qt-blue: #93c5fd;
+  --qt-blue-bg: #1e3a5f;
+  --qt-blue-border: #60a5fa;
+  --qt-yellow-bg: #4b3b12;
+  --qt-yellow-border: #facc15;
+  --qt-purple-bg: #31224a;
+  --qt-purple-border: #c4b5fd;
+  --qt-line: #475569;
+
+  --qt-passage-bg: #1f2937;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #e5e7eb;
+  --qt-passage-text: #d1d5db;
+
+  --qt-passage-abbr-bg: #3b2f1a;
+  --qt-passage-abbr-border: #f59e0b;
+}
+
+.qt-wrap.qt-theme-dark,
+[data-qt-theme="dark"] .qt-wrap{
+  background: var(--qt-bg);
+  color: var(--qt-text);
+}
+
+@media (prefers-color-scheme: dark){
+  html, body{
+    background: #0b1220;
+    color: #f3f4f6;
+  }
+
+  .qt-wrap:not(.qt-theme-light){
+    --qt-bg: #111827;
+    --qt-text: #f3f4f6;
+    --qt-muted: #cbd5e1;
+    --qt-title: #e5f7ec;
+    --qt-green: #4ade80;
+    --qt-blue: #93c5fd;
+    --qt-blue-bg: #1e3a5f;
+    --qt-blue-border: #60a5fa;
+    --qt-yellow-bg: #4b3b12;
+    --qt-yellow-border: #facc15;
+    --qt-purple-bg: #31224a;
+    --qt-purple-border: #c4b5fd;
+    --qt-line: #475569;
+
+    --qt-passage-bg: #1f2937;
+    --qt-passage-border: #60a5fa;
+    --qt-passage-title: #e5e7eb;
+    --qt-passage-text: #d1d5db;
+
+    --qt-passage-abbr-bg: #3b2f1a;
+    --qt-passage-abbr-border: #f59e0b;
+  }
+
+  .qt-wrap:not(.qt-theme-light){
+    background: var(--qt-bg);
+    color: var(--qt-text);
+  }
+}
+`
+
+const qtBiblePassageHTMLStyle = `
+.qt-bible-passage{
+  margin: 10px 0 16px 0;
+  padding: 10px 12px;
+  background: var(--qt-passage-bg, #f8fafc);
+  border-left: 4px solid var(--qt-passage-border, #60a5fa);
+  border-radius: 6px;
+}
+
+.qt-bible-passage-title{
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--qt-passage-title, #1f2937);
+}
+
+.qt-bible-passage p{
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--qt-passage-text, #374151);
+  white-space: pre-line;
+}
+
+.qt-bible-passage.is-abbreviated{
+  background: var(--qt-passage-abbr-bg, #fffaf0);
+  border-left-color: var(--qt-passage-abbr-border, #f59e0b);
+}
+
+.qt-wrap.qt-theme-dark,
+[data-qt-theme="dark"] .qt-wrap{
+  --qt-passage-bg: #1f2937;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #e5e7eb;
+  --qt-passage-text: #d1d5db;
+  --qt-passage-abbr-bg: #3b2f1a;
+  --qt-passage-abbr-border: #f59e0b;
+}
+
+@media (prefers-color-scheme: dark){
+  .qt-wrap:not(.qt-theme-light){
+    --qt-passage-bg: #1f2937;
+    --qt-passage-border: #60a5fa;
+    --qt-passage-title: #e5e7eb;
+    --qt-passage-text: #d1d5db;
+    --qt-passage-abbr-bg: #3b2f1a;
+    --qt-passage-abbr-border: #f59e0b;
+  }
+}
+`
+
+const qtReflectionPrayerHTMLStyle = `
+.qt-reflection{
+  background: var(--qt-yellow-bg, #fff8d9);
+  border-left: 4px solid var(--qt-yellow-border, #f4c542);
+}
+
+.qt-prayer{
+  background: var(--qt-purple-bg, #f4efff);
+  border-left: 4px solid var(--qt-purple-border, #b39ddb);
+}
+
+.qt-reflection,
+.qt-reflection *,
+.qt-prayer,
+.qt-prayer *{
+  color: var(--qt-text, #1f2937);
+}
+
+.qt-wrap.qt-theme-dark,
+[data-qt-theme="dark"] .qt-wrap{
+  --qt-text: #f3f4f6;
+  --qt-yellow-bg: #4b3b12;
+  --qt-yellow-border: #facc15;
+  --qt-purple-bg: #31224a;
+  --qt-purple-border: #c4b5fd;
+}
+
+@media (prefers-color-scheme: dark){
+  .qt-wrap:not(.qt-theme-light){
+    --qt-text: #f3f4f6;
+    --qt-yellow-bg: #4b3b12;
+    --qt-yellow-border: #facc15;
+    --qt-purple-bg: #31224a;
+    --qt-purple-border: #c4b5fd;
+  }
+}
+`
+
+const qtExplicitLightHTMLStyle = `
+.qt-wrap.qt-theme-light,
+[data-qt-theme="light"] .qt-wrap{
+  --qt-bg: #ffffff;
+  --qt-text: #1f2937;
+  --qt-muted: #4b5563;
+  --qt-title: #1f3b2f;
+  --qt-green: #1f8f55;
+  --qt-blue: #1d4ed8;
+  --qt-blue-bg: #eaf4ff;
+  --qt-blue-border: #3b82f6;
+  --qt-yellow-bg: #fff8d9;
+  --qt-yellow-border: #f4c542;
+  --qt-purple-bg: #f4efff;
+  --qt-purple-border: #b39ddb;
+  --qt-line: #d1d5db;
+  --qt-passage-bg: #f8fafc;
+  --qt-passage-border: #60a5fa;
+  --qt-passage-title: #1f2937;
+  --qt-passage-text: #374151;
+  --qt-passage-abbr-bg: #fffaf0;
+  --qt-passage-abbr-border: #f59e0b;
+  background: var(--qt-bg);
+  color: var(--qt-text);
+}
+
+.qt-wrap.qt-theme-light .qt-reflection,
+[data-qt-theme="light"] .qt-wrap .qt-reflection{
+  background: var(--qt-yellow-bg);
+  border-left-color: var(--qt-yellow-border);
+}
+
+.qt-wrap.qt-theme-light .qt-prayer,
+[data-qt-theme="light"] .qt-wrap .qt-prayer{
+  background: var(--qt-purple-bg);
+  border-left-color: var(--qt-purple-border);
+}
+
+.qt-wrap.qt-theme-light .qt-reflection,
+.qt-wrap.qt-theme-light .qt-reflection *,
+.qt-wrap.qt-theme-light .qt-prayer,
+.qt-wrap.qt-theme-light .qt-prayer *,
+[data-qt-theme="light"] .qt-wrap .qt-reflection,
+[data-qt-theme="light"] .qt-wrap .qt-reflection *,
+[data-qt-theme="light"] .qt-wrap .qt-prayer,
+[data-qt-theme="light"] .qt-wrap .qt-prayer *{
+  color: var(--qt-text);
 }
 `
 
@@ -674,25 +930,60 @@ func buildPDFSourcePath(tempHTMLPath string) string {
 func loadQTHTMLStyle() string {
 	cfg, err := loadAppConfig()
 	if err != nil {
-		return defaultQTHTMLStyle
+		return ensureQTHTMLModeStyles(defaultQTHTMLStyle)
 	}
 
 	stylePath := strings.TrimSpace(cfg.StyleQTHTMLFile)
 	if stylePath == "" {
-		return defaultQTHTMLStyle
+		return ensureQTHTMLModeStyles(defaultQTHTMLStyle)
 	}
 
 	b, err := os.ReadFile(stylePath)
 	if err != nil {
-		return defaultQTHTMLStyle
+		return ensureQTHTMLModeStyles(defaultQTHTMLStyle)
 	}
 
 	text := strings.TrimSpace(string(b))
 	if text == "" {
-		return defaultQTHTMLStyle
+		return ensureQTHTMLModeStyles(defaultQTHTMLStyle)
 	}
 
-	return text
+	return ensureQTHTMLModeStyles(text)
+}
+
+func ensureQTHTMLModeStyles(style string) string {
+	style = strings.TrimSpace(style)
+	if style == "" {
+		style = defaultQTHTMLStyle
+	}
+
+	if strings.Contains(style, ".qt-bible-passage") {
+		return ensureQTExplicitLightHTMLStyle(ensureQTReflectionPrayerHTMLStyle(style))
+	}
+
+	style += "\n\n" + strings.TrimSpace(qtBiblePassageHTMLStyle)
+	return ensureQTExplicitLightHTMLStyle(ensureQTReflectionPrayerHTMLStyle(style))
+}
+
+func ensureQTReflectionPrayerHTMLStyle(style string) string {
+	hasReflectionPrayer := strings.Contains(style, ".qt-reflection") &&
+		strings.Contains(style, ".qt-prayer")
+	hasDarkReflectionPrayer := strings.Contains(style, "prefers-color-scheme") &&
+		strings.Contains(style, "--qt-yellow-bg") &&
+		strings.Contains(style, "--qt-purple-bg")
+
+	if hasReflectionPrayer && hasDarkReflectionPrayer {
+		return style
+	}
+
+	return style + "\n\n" + strings.TrimSpace(qtReflectionPrayerHTMLStyle)
+}
+
+func ensureQTExplicitLightHTMLStyle(style string) string {
+	if strings.Contains(style, ".qt-wrap.qt-theme-light") {
+		return style
+	}
+	return style + "\n\n" + strings.TrimSpace(qtExplicitLightHTMLStyle)
 }
 
 func loadQTPDFStyle() string {
