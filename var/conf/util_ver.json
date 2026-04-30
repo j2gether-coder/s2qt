@@ -1,15 +1,16 @@
 {
-  "last_checked_at": "2026-04-26T19:57:01+09:00",
-  "last_check_mode": "video",
+  "last_checked_at": "2026-04-30T13:45:40+09:00",
+  "last_check_mode": "png",
   "last_check_ok": true,
   "installed": {
     "ffmpeg": true,
     "ffprobe": true,
     "ggml-tiny.bin": true,
+    "pdfium.dll": true,
     "yt-dlp": true
   },
   "versions": {
-    "yt-dlp": "2026.02.04"
+    "yt-dlp": "2026.03.17"
   },
   "model_installed": true
 }

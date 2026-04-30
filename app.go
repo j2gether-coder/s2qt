@@ -254,33 +254,144 @@ func (a *App) PrepareRuntimeForInput(inputType string) (*service.UtilCheckResult
 
 	service.LogInfo("qt_prepare: runtime prepare requested")
 
-	var result *service.UtilCheckResult
+	var inputResult *service.UtilCheckResult
 
 	switch inputType {
 	case "text":
-		result, err = service.CheckRuntimeForText()
+		inputResult, err = service.CheckRuntimeForText()
 	case "audio":
-		result, err = service.CheckRuntimeForAudio(true)
+		inputResult, err = service.CheckRuntimeForAudio(true)
 	case "video", "url", "youtube":
-		result, err = service.CheckRuntimeForVideo(true)
+		inputResult, err = service.CheckRuntimeForVideo(true)
 	default:
 		err = fmt.Errorf("unsupported input type: %s", inputType)
 	}
 
 	if err != nil {
-		service.LogError("qt_prepare: runtime prepare failed: " + err.Error())
+		service.LogError("qt_prepare: input runtime prepare failed: " + err.Error())
 		service.EndEventLog("FAILED")
 		return nil, err
 	}
 
-	if result != nil && !result.OK {
-		service.LogError("qt_prepare: runtime prepare failed: " + result.Message)
+	if inputResult != nil && !inputResult.OK {
+		service.LogError("qt_prepare: input runtime prepare failed: " + inputResult.Message)
 		service.EndEventLog("FAILED")
-		return result, nil
+		return inputResult, nil
+	}
+
+	service.LogInfo("qt_prepare: output runtime prepare requested")
+
+	outputResult, err := service.CheckRuntimeForPNG(true)
+	if err != nil {
+		service.LogError("qt_prepare: output runtime prepare failed: " + err.Error())
+		service.EndEventLog("FAILED")
+		return nil, err
+	}
+
+	mergedResult := mergeUtilCheckResults(inputResult, outputResult)
+
+	if mergedResult != nil && !mergedResult.OK {
+		service.LogError("qt_prepare: runtime prepare failed: " + mergedResult.Message)
+		service.EndEventLog("FAILED")
+		return mergedResult, nil
 	}
 
 	service.LogInfo("qt_prepare: runtime prepare completed")
-	return result, nil
+	return mergedResult, nil
+}
+
+func mergeUtilCheckResults(a, b *service.UtilCheckResult) *service.UtilCheckResult {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+
+	merged := *a
+
+	modeA := strings.TrimSpace(a.Mode)
+	modeB := strings.TrimSpace(b.Mode)
+	if modeA != "" && modeB != "" && modeA != modeB {
+		merged.Mode = modeA + "+" + modeB
+	} else if modeA == "" {
+		merged.Mode = modeB
+	}
+
+	merged.OK = a.OK && b.OK
+
+	merged.Checked = appendUniqueStrings(
+		append([]string{}, a.Checked...),
+		b.Checked...,
+	)
+
+	merged.Missing = appendUniqueStrings(
+		append([]string{}, a.Missing...),
+		b.Missing...,
+	)
+
+	merged.Installed = appendUniqueStrings(
+		append([]string{}, a.Installed...),
+		b.Installed...,
+	)
+
+	if merged.Versions == nil {
+		merged.Versions = map[string]string{}
+	}
+	for k, v := range b.Versions {
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+		if k != "" && v != "" {
+			merged.Versions[k] = v
+		}
+	}
+
+	msgA := strings.TrimSpace(a.Message)
+	msgB := strings.TrimSpace(b.Message)
+
+	switch {
+	case msgA == "":
+		merged.Message = msgB
+	case msgB == "":
+		merged.Message = msgA
+	case msgA == msgB:
+		merged.Message = msgA
+	default:
+		merged.Message = msgA + " / " + msgB
+	}
+
+	return &merged
+}
+
+func appendUniqueStrings(dst []string, src ...string) []string {
+	seen := make(map[string]struct{}, len(dst))
+	result := make([]string, 0, len(dst)+len(src))
+
+	for _, item := range dst {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+
+	for _, item := range src {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+
+	return result
 }
 
 func (a *App) RunSourcePrepare(req service.SourcePrepareRequest) (*service.SourcePrepareResult, error) {

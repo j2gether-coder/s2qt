@@ -20,6 +20,11 @@ const (
 	defaultModelURL         = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
 
 	ffmpegPackageFileName = "ffmpeg-release-essentials.zip"
+
+	defaultPDFiumPackageURL  = "https://www.nuget.org/api/v2/package/bblanchon.PDFium.Win32/149.0.7811"
+	pdfiumPackageFileName    = "bblanchon.PDFium.Win32.149.0.7811.nupkg"
+	pdfiumDllFileName        = "pdfium.dll"
+	pdfiumRuntimeDocFileName = "pdfium_runtime.md"
 )
 
 type UtilComponent struct {
@@ -36,6 +41,7 @@ type UtilCheckOptions struct {
 	NeedFFmpeg bool
 	NeedYtDlp  bool
 	NeedModel  bool
+	NeedPDFium bool
 	AutoRepair bool
 }
 
@@ -84,6 +90,16 @@ func CheckRuntimeForVideo(autoRepair bool) (*UtilCheckResult, error) {
 		NeedModel:  true,
 		AutoRepair: autoRepair,
 	}, "video")
+}
+
+func CheckRuntimeForPNG(autoRepair bool) (*UtilCheckResult, error) {
+	return EnsureRuntime(UtilCheckOptions{
+		NeedFFmpeg: false,
+		NeedYtDlp:  false,
+		NeedModel:  false,
+		NeedPDFium: true,
+		AutoRepair: autoRepair,
+	}, "png")
 }
 
 func EnsureRuntime(opts UtilCheckOptions, mode string) (*UtilCheckResult, error) {
@@ -170,6 +186,45 @@ func EnsureRuntime(opts UtilCheckOptions, mode string) (*UtilCheckResult, error)
 			result.Missing = appendIfMissing(result.Missing, "ffprobe")
 			result.OK = false
 			LogError("util: ffprobe.exe missing")
+		}
+	}
+
+	if opts.NeedPDFium {
+		LogInfo("util: pdfium.dll check started")
+
+		result.Checked = append(result.Checked, "pdfium.dll")
+
+		pdfiumPath := filepath.Join(paths.Bin, pdfiumDllFileName)
+		pdfiumMissing := !fileExists(pdfiumPath)
+
+		if pdfiumMissing {
+			LogInfo("util: pdfium.dll missing detected")
+
+			if opts.AutoRepair {
+				LogInfo("util: pdfium.dll install started")
+				if err := installPDFiumDLL(paths.Data, paths.Bin); err != nil {
+					result.OK = false
+					LogError("util: pdfium.dll install failed: " + err.Error())
+					if result.Message == "" {
+						result.Message = fmt.Sprintf("pdfium.dll 설치 실패: %v", err)
+					}
+				} else {
+					LogInfo("util: pdfium.dll install completed")
+				}
+			} else {
+				result.OK = false
+			}
+		}
+
+		if fileExists(pdfiumPath) {
+			if pdfiumMissing {
+				result.Installed = appendIfMissing(result.Installed, "pdfium.dll")
+				LogInfo("util: pdfium.dll ready")
+			}
+		} else {
+			result.Missing = appendIfMissing(result.Missing, "pdfium.dll")
+			result.OK = false
+			LogError("util: pdfium.dll missing")
 		}
 	}
 
@@ -363,6 +418,191 @@ func installFFmpegPackage(dataDir, binDir string) error {
 	LogInfo("util: ffprobe.exe copied")
 
 	return nil
+}
+
+func installPDFiumDLL(dataDir, binDir string) error {
+	if strings.TrimSpace(defaultPDFiumPackageURL) == "" {
+		return fmt.Errorf("pdfium package url not configured")
+	}
+
+	LogInfo("util: pdfium package download started")
+
+	packagePath, err := downloadFile(dataDir, pdfiumPackageFileName, defaultPDFiumPackageURL)
+	if err != nil {
+		LogError("util: pdfium package download failed: " + err.Error())
+		return err
+	}
+
+	LogInfo("util: pdfium package download completed")
+
+	if err := verifyDownloadedFile(packagePath); err != nil {
+		LogError("util: pdfium package verification failed: " + err.Error())
+		return err
+	}
+
+	extractDir := filepath.Join(dataDir, "pdfium_extract")
+	if err := os.RemoveAll(extractDir); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := ensureDir(extractDir); err != nil {
+		return err
+	}
+
+	LogInfo("util: pdfium package extract started")
+	if err := unzipFile(packagePath, extractDir); err != nil {
+		LogError("util: pdfium package extract failed: " + err.Error())
+		return err
+	}
+	LogInfo("util: pdfium package extract completed")
+
+	pdfiumSrc, err := findPDFiumDLLInExtractDir(extractDir)
+	if err != nil {
+		LogError("util: pdfium.dll search failed: " + err.Error())
+		return err
+	}
+
+	if err := ensureDir(binDir); err != nil {
+		return err
+	}
+
+	targetPath := filepath.Join(binDir, pdfiumDllFileName)
+	if err := CopyFile(pdfiumSrc, targetPath); err != nil {
+		LogError("util: pdfium.dll copy failed: " + err.Error())
+		return err
+	}
+
+	LogInfo("util: pdfium.dll copied to bin")
+
+	if err := writePDFiumRuntimeDoc(dataDir, targetPath, pdfiumSrc); err != nil {
+		// 문서 작성 실패는 런타임 설치 실패로 보지 않음
+		LogError("util: pdfium runtime doc write failed: " + err.Error())
+	} else {
+		LogInfo("util: pdfium runtime doc saved")
+	}
+
+	return nil
+}
+
+func findPDFiumDLLInExtractDir(extractDir string) (string, error) {
+	preferred := []string{
+		filepath.Join(extractDir, "runtimes", "win-x64", "native", pdfiumDllFileName),
+		filepath.Join(extractDir, "build", "native", "x64", pdfiumDllFileName),
+		filepath.Join(extractDir, "x64", pdfiumDllFileName),
+	}
+
+	for _, p := range preferred {
+		if fileExists(p) {
+			return p, nil
+		}
+	}
+
+	var foundX64 string
+	var foundAny string
+
+	err := filepath.Walk(extractDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info == nil || info.IsDir() {
+			return nil
+		}
+		if !strings.EqualFold(info.Name(), pdfiumDllFileName) {
+			return nil
+		}
+
+		normalized := strings.ToLower(filepath.ToSlash(path))
+
+		if foundAny == "" {
+			foundAny = path
+		}
+
+		if strings.Contains(normalized, "win-x64") ||
+			strings.Contains(normalized, "/x64/") ||
+			strings.Contains(normalized, "x64") {
+			foundX64 = path
+			return io.EOF
+		}
+
+		return nil
+	})
+
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+
+	if foundX64 != "" {
+		return foundX64, nil
+	}
+	if foundAny != "" {
+		return foundAny, nil
+	}
+
+	return "", fmt.Errorf("pdfium.dll not found in extracted package")
+}
+
+func writePDFiumRuntimeDoc(dataDir, dllPath, sourcePath string) error {
+	varDir := filepath.Dir(dataDir)
+	docDir := filepath.Join(varDir, "doc")
+
+	if err := ensureDir(docDir); err != nil {
+		return err
+	}
+
+	docPath := filepath.Join(docDir, pdfiumRuntimeDocFileName)
+
+	content := strings.TrimSpace(fmt.Sprintf(`
+# PDFium Runtime
+
+## Purpose
+
+S2QT uses PDFium as the preferred runtime for converting generated PDF files into PNG images.
+
+## Installed File
+
+- bin/pdfium.dll
+
+Current installed path:
+
+%s
+
+## Source File
+
+The DLL was extracted from:
+
+%s
+
+## Downloaded Package
+
+- Package: bblanchon.PDFium.Win32
+- URL: %s
+
+## S2QT PNG Policy
+
+S2QT output policy:
+
+- HTML: review/edit/preview
+- PDF: official document
+- PNG: shared image generated from PDF
+
+The PDFium path should be used first for PDF-to-PNG conversion.
+The existing HTML screenshot-based PNG generation remains as fallback.
+
+## Packaging Policy
+
+Current runtime placement:
+
+- bin/pdfium.dll
+
+Future candidate:
+
+- s2qt.exe internal PDFium rendering using bin/pdfium.dll
+
+## License Notice
+
+Keep the relevant PDFium license and third-party notices with the application package before redistribution.
+`, dllPath, sourcePath, defaultPDFiumPackageURL))
+
+	return os.WriteFile(docPath, []byte(content+"\n"), 0o644)
 }
 
 func downloadFile(dataDir, fileName, url string) (string, error) {
