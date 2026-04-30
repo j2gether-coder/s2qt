@@ -199,9 +199,9 @@ func mergeQTFooterRuntimeStylePNG(base string, footerCfg *QTFooterConfig) string
 		return base
 	}
 
-	zoneHeight := footerCfg.SafeAreaMM
-	if zoneHeight <= 0 {
-		zoneHeight = 32.0
+	safeArea := footerCfg.SafeAreaMM
+	if safeArea <= 0 {
+		safeArea = 36.0
 	}
 
 	qrSize := footerCfg.QRSizeMM
@@ -209,21 +209,25 @@ func mergeQTFooterRuntimeStylePNG(base string, footerCfg *QTFooterConfig) string
 		qrSize = 27.0
 	}
 
+	// PNG는 PDF보다 footer 침범 방지를 위해 조금 더 여유를 둡니다.
+	// 최소 40mm 확보, 또는 QR 크기 + 13mm 중 큰 값 사용
+	minSafeArea := qrSize + 13.0
+	if minSafeArea < 40.0 {
+		minSafeArea = 40.0
+	}
+	if safeArea < minSafeArea {
+		safeArea = minSafeArea
+	}
+
 	runtime := fmt.Sprintf(`
 :root{
   --qt-page-top: 10mm;
-  --qt-footer-zone-height: %.2fmm;
-  --qt-footer-zone-bottom: 0mm;
-  --qt-footer-side-padding: 12mm;
-
-  --qt-footer-text-bottom: 2mm;
-  --qt-footer-brand-bottom: 0mm;
-
-  --qt-footer-qr-bottom: -2.5mm;
-  --qt-footer-qr-right: 12mm;
-  --qt-footer-qr-size: %.2fmm;
+  --qt-safe-area: %.2fmm;
+  --qt-qr-size: %.2fmm;
+  --qt-footer-bottom: 2mm;
+  --qt-qr-bottom: 2mm;
 }
-`, zoneHeight, qrSize)
+`, safeArea, qrSize)
 
 	return base + "\n\n" + runtime
 }
@@ -426,25 +430,25 @@ func loadQTPNGStyle(transparentBG bool) string {
   margin: 0;
 }
 
-html{
-  width: 210mm;
-  height: 297mm;
+html, body{
   margin: 0 !important;
   padding: 0 !important;
   background: ` + bgColor + ` !important;
+  width: 210mm !important;
+  height: 297mm !important;
   overflow: hidden !important;
 }
 
 body{
   position: relative !important;
-  width: 210mm;
-  height: 297mm;
+  width: 210mm !important;
+  height: 297mm !important;
   margin: 0 !important;
   padding:
     var(--qt-page-top, 10mm)
-    var(--qt-footer-side-padding, 12mm)
-    var(--qt-footer-zone-height, 32mm)
-    var(--qt-footer-side-padding, 12mm) !important;
+    12mm
+    var(--qt-safe-area, 40mm)
+    12mm !important;
   box-sizing: border-box !important;
   background: ` + bgColor + ` !important;
   overflow: hidden !important;
@@ -453,24 +457,31 @@ body{
 }
 
 .qt-page-frame{
-  position: relative;
-  width: 100%;
-  height: 100% !important;
-  overflow: hidden;
+  position: relative !important;
+  width: 100% !important;
+  height: calc(297mm - var(--qt-page-top, 10mm) - var(--qt-safe-area, 40mm)) !important;
+  overflow: hidden !important;
 }
 
 .qt-page-content-scaled{
-  width: 100%;
-  transform-origin: top center;
+  width: 100% !important;
+  transform-origin: top center !important;
 }
 
-/* PNG footer zone */
+.qt-wrap{
+  width: 100% !important;
+  max-width: 186mm !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+/* footer는 PDF 기준과 동일 */
 .qt-footer{
   position: fixed !important;
-  left: var(--qt-footer-side-padding, 12mm) !important;
-  right: var(--qt-footer-side-padding, 12mm) !important;
-  bottom: var(--qt-footer-zone-bottom, 0mm) !important;
-  height: var(--qt-footer-zone-height, 32mm) !important;
+  left: 12mm !important;
+  right: 12mm !important;
+  bottom: var(--qt-footer-bottom, 2mm) !important;
+  height: 29mm !important;
   color: #4b5563 !important;
   z-index: 20 !important;
   pointer-events: none;
@@ -485,36 +496,42 @@ body{
   border-top: 2px solid var(--qt-green) !important;
 }
 
-.qt-footer-text{
+.qt-footer-grid{
   position: absolute !important;
-  left: 50% !important;
-  bottom: var(--qt-footer-text-bottom, 2mm) !important;
-  top: auto !important;
-  transform: translateX(-50%) !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  line-height: 1.2 !important;
-  text-align: center !important;
-  white-space: nowrap !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 2mm !important;
+  height: var(--qt-qr-size, 27mm) !important;
+  display: grid !important;
+  grid-template-columns: 50mm 1fr 50mm !important;
+  column-gap: 0 !important;
+  align-items: center !important;
+}
+
+.qt-footer-logo-cell{
+  width: 50mm !important;
+  height: var(--qt-qr-size, 27mm) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  overflow: hidden !important;
 }
 
 .qt-footer-brand{
-  position: absolute !important;
-  left: 50% !important;
-  bottom: var(--qt-footer-brand-bottom, 0mm) !important;
-  top: auto !important;
-  transform: translateX(-50%) !important;
+  position: static !important;
+  width: 50mm !important;
+  height: 18mm !important;
   display: flex !important;
   align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-  gap: 1.5mm !important;
-  max-width: none !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  max-width: 50mm !important;
+  overflow: hidden !important;
 }
 
 .qt-footer-brand-image{
-  max-width: 40mm !important;
-  max-height: 4mm !important;
+  max-width: 50mm !important;
+  max-height: 18mm !important;
   width: auto !important;
   height: auto !important;
   object-fit: contain !important;
@@ -525,34 +542,56 @@ body{
   font-size: 9px !important;
   font-weight: 600 !important;
   line-height: 1.1 !important;
-  text-align: center !important;
+  text-align: left !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
-.qt-page-qr{
-  position: fixed !important;
-  right: var(--qt-footer-qr-right, 12mm) !important;
-  bottom: var(--qt-footer-qr-bottom, 1mm) !important;
-  top: auto !important;
-  width: var(--qt-footer-qr-size, 27mm) !important;
-  height: var(--qt-footer-qr-size, 27mm) !important;
-  max-width: var(--qt-footer-qr-size, 27mm) !important;
-  max-height: var(--qt-footer-qr-size, 27mm) !important;
+.qt-footer-text-cell{
+  height: var(--qt-qr-size, 27mm) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 4mm !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.qt-footer-text{
+  position: static !important;
+  width: 100% !important;
+  margin: 0 !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  text-align: center !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+.qt-footer-qr-cell{
+  width: 50mm !important;
+  height: var(--qt-qr-size, 27mm) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  overflow: hidden !important;
+}
+
+.qt-footer-qr-image{
+  width: var(--qt-qr-size, 27mm) !important;
+  height: var(--qt-qr-size, 27mm) !important;
+  max-width: var(--qt-qr-size, 27mm) !important;
+  max-height: var(--qt-qr-size, 27mm) !important;
   object-fit: contain !important;
   display: block !important;
-  z-index: 30 !important;
-  pointer-events: none;
 }
 
-.qt-page-qr.left-bottom{
-  left: var(--qt-footer-side-padding, 12mm) !important;
-  right: auto !important;
-}
-
+.qt-page-qr,
+.qt-page-qr.left-bottom,
 .qt-page-qr.right-bottom{
-  right: var(--qt-footer-qr-right, 12mm) !important;
+  display: none !important;
 }
 
 .qt-subbox-line{
