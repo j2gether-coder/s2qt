@@ -266,7 +266,7 @@ func buildQTStep2HTML(req *QTStep2Data) string {
 	biblePassageClass := "qt-bible-passage"
 
 	if isBiblePassageAbbreviated(req.BiblePassageText) {
-		biblePassageTitle = "성경본문(축약)"
+		biblePassageTitle = "성경본문(처음절과 마지막절)"
 		biblePassageClass += " is-abbreviated"
 	}
 
