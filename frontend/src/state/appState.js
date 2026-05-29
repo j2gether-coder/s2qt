@@ -38,6 +38,8 @@ export const appState = {
     lastSavedAt: "",
     basicInfoSavedAt: "",
     basicInfoMetaUrl: "",
+    progressStage: "",
+    progressMessage: "",
   },
 
   audienceSteps: {
@@ -95,6 +97,16 @@ export function setCleanedText(text) {
 
 export function setSourceStatus(status) {
   appState.source.sourceStatus = status;
+}
+
+export function setSourceProgress(stage, message) {
+  appState.source.progressStage = stage || "";
+  appState.source.progressMessage = message || "";
+}
+
+export function clearSourceProgress() {
+  appState.source.progressStage = "";
+  appState.source.progressMessage = "";
 }
 
 export function setBasicInfoField(field, value) {

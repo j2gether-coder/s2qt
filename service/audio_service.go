@@ -94,14 +94,21 @@ func (s *AudioService) transcribe() (string, error) {
 		"-l", "ko",
 		"-otxt",
 		"-of", strings.TrimSuffix(s.Paths.TempTxt, ".txt"),
+		"-pp",
 	}
 
-	out, err := newHiddenCommand(s.Paths.WhisperExe, args...).CombinedOutput()
+	lastPct := -1
+	out, err := runHiddenCommandStreaming(func(line string) {
+		if pct, ok := parseWhisperProgress(line); ok && pct != lastPct {
+			lastPct = pct
+			s.progress("transcribe", fmt.Sprintf("전사 중 %d%%", pct))
+		}
+	}, s.Paths.WhisperExe, args...)
 	if err != nil {
-		return string(out), fmt.Errorf("전사 실패: %w", err)
+		return out, fmt.Errorf("전사 실패: %w", err)
 	}
 
-	return string(out), nil
+	return out, nil
 }
 
 func (s *AudioService) ResolveRawText(audioPath string) (string, error) {

@@ -8,8 +8,11 @@ import {
   setRawText,
   setBasicInfoField,
   setSourceStatus,
+  setSourceProgress,
+  clearSourceProgress,
   setAudienceStep,
 } from '../state/appState';
+import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { mountAppShell } from './appShell';
 import { showToast, setInlineMessage, clearInlineMessage } from "../common/uiMessage";
 import {
@@ -60,6 +63,26 @@ function getAudienceStatusText(audienceId) {
   if (step === 'step3') return '문서 생성 단계';
   if (step === 'step2') return '검토 및 편집 단계';
   return 'AI(LLM) 이용 단계';
+}
+
+// 헤더 우측 상태 라벨 텍스트. 실행 중에는 단계/진행률 메시지를 덧붙인다.
+// (메시지는 백엔드가 생성하는 "전사 중 45%" 형태의 평문이라 별도 이스케이프가 불필요하다.)
+function getQtPrepareStatusText(status) {
+  const base = getSourceStatusLabel(status);
+  if (status !== 'RUNNING') return base;
+
+  const msg = (appState?.source?.progressMessage || '').trim();
+  return msg ? `${base} · ${msg}` : base;
+}
+
+// 진행 이벤트마다 전체 화면을 다시 그리지 않고 헤더 상태 라벨만 갱신한다.
+function updateRunningStatusLabel() {
+  if (appState?.source?.sourceStatus !== 'RUNNING') return;
+
+  const el = document.querySelector('.workspace-header-status');
+  if (el) {
+    el.textContent = getQtPrepareStatusText('RUNNING');
+  }
 }
 
 function updateQtPrepareStatus() {
@@ -167,10 +190,20 @@ async function runQtPrepare() {
 
   clearInlineMessage("workspace-message");
 
+  let unsubscribeProgress = null;
+
   try {
     const sourceType = appState?.source?.sourceType || '';
 
     setSourceStatus('RUNNING');
+    setSourceProgress('init', '준비 중...');
+
+    // 백엔드 파이프라인의 단계/진행률 이벤트를 구독하여 헤더 상태 라벨에 반영한다.
+    unsubscribeProgress = EventsOn('qt:prepare:progress', (payload) => {
+      setSourceProgress(payload?.stage || '', payload?.message || '');
+      updateRunningStatusLabel();
+    });
+
     mountAppShell('app');
 
     const runtimeResult = await PrepareRuntimeForInput(sourceType);
@@ -203,6 +236,11 @@ async function runQtPrepare() {
     updateQtPrepareStatus();
     setInlineMessage("workspace-message", error?.message || "자료 처리 중 오류가 발생했습니다.", "error");
     mountAppShell('app');
+  } finally {
+    if (unsubscribeProgress) {
+      unsubscribeProgress();
+    }
+    clearSourceProgress();
   }
 }
 
@@ -355,7 +393,7 @@ function renderQtPrepareLayout() {
     <section class="workspace-panel">
       <div class="workspace-header-row">
         <div class="workspace-header-title">QT 자료 준비</div>
-        <div class="workspace-header-status">${getSourceStatusLabel(sourceStatus || 'NOT_READY')}</div>
+        <div class="workspace-header-status">${getQtPrepareStatusText(sourceStatus || 'NOT_READY')}</div>
       </div>
 
       <div class="workspace-meta-note">

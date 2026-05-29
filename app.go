@@ -394,10 +394,62 @@ func appendUniqueStrings(dst []string, src ...string) []string {
 	return result
 }
 
+// makeSourcePrepareProgress는 QT 자료 준비 파이프라인의 단계별 진행 상황을
+// (1) 프론트엔드 "qt:prepare:progress" 이벤트로 실시간 전달하고,
+// (2) event.log에는 단계 전환 및 25% 단위로만 기록하여 과도한 로그를 막는다.
+func (a *App) makeSourcePrepareProgress() func(stage, message string) {
+	lastStage := ""
+	lastBucket := -1
+
+	return func(stage, message string) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "qt:prepare:progress", map[string]any{
+				"stage":   stage,
+				"message": message,
+			})
+		}
+
+		bucket := -1
+		if pct := parseProgressPercent(message); pct >= 0 {
+			bucket = pct / 25
+		}
+
+		if stage != lastStage || bucket != lastBucket {
+			lastStage = stage
+			lastBucket = bucket
+			service.LogInfo(fmt.Sprintf("qt_prepare: [%s] %s", stage, message))
+		}
+	}
+}
+
+// parseProgressPercent는 "... NN%" 형태 메시지에서 정수 퍼센트를 추출한다. 없으면 -1.
+func parseProgressPercent(message string) int {
+	idx := strings.LastIndexByte(message, '%')
+	if idx <= 0 {
+		return -1
+	}
+
+	start := idx
+	for start > 0 && message[start-1] >= '0' && message[start-1] <= '9' {
+		start--
+	}
+	if start == idx {
+		return -1
+	}
+
+	n := 0
+	for i := start; i < idx; i++ {
+		n = n*10 + int(message[i]-'0')
+	}
+	return n
+}
+
 func (a *App) RunSourcePrepare(req service.SourcePrepareRequest) (*service.SourcePrepareResult, error) {
 	service.LogInfo("qt_prepare: source prepare started")
 
-	pipeline, err := service.NewPipelineService(nil)
+	onProgress := a.makeSourcePrepareProgress()
+
+	pipeline, err := service.NewPipelineService(onProgress)
 	if err != nil {
 		service.LogError("qt_prepare: pipeline service create failed: " + err.Error())
 		return nil, err
