@@ -134,22 +134,24 @@ async function enrichVideoBasicInfoFromMeta() {
   if (!meta) return null;
 
   const basicInfo = appState?.source?.basicInfo || {};
+  // URL이 이전에 메타정보를 가져온 URL과 다르면(=새 영상이면) 메타 파생 필드를
+  // 새 값으로 덮어쓴다. 같은 URL을 다시 실행할 때는 비어 있는 필드만 채워
+  // 사용자가 직접 수정한 값을 보존한다.
+  const isNewVideo = (appState?.source?.basicInfoMetaUrl || '') !== url;
   let changed = false;
 
-  if (!(basicInfo.title || '').trim() && (meta.title || '').trim()) {
-    setBasicInfoField('title', meta.title);
+  const applyMetaField = (field, value) => {
+    if (!(value || '').trim()) return;
+    if (!isNewVideo && (basicInfo[field] || '').trim()) return;
+    setBasicInfoField(field, value);
     changed = true;
-  }
+  };
 
-  if (!(basicInfo.sermonDate || '').trim() && (meta.uploadDateText || '').trim()) {
-    setBasicInfoField('sermonDate', meta.uploadDateText);
-    changed = true;
-  }
+  applyMetaField('title', meta.title);
+  applyMetaField('sermonDate', meta.uploadDateText);
+  applyMetaField('churchName', meta.channel);
 
-  if (!(basicInfo.churchName || '').trim() && (meta.channel || '').trim()) {
-    setBasicInfoField('churchName', meta.channel);
-    changed = true;
-  }
+  appState.source.basicInfoMetaUrl = url;
 
   if (changed) {
     clearBasicInfoSavedState();

@@ -37,6 +37,7 @@ export const appState = {
     sourceId: "",
     lastSavedAt: "",
     basicInfoSavedAt: "",
+    basicInfoMetaUrl: "",
   },
 
   audienceSteps: {
