@@ -8,14 +8,8 @@ const DEFAULT_MENU_CONFIG = {
   settings: { visible: true, label: "환경 설정" },
 };
 
-export const appState = {
-  selectedMenu: "qt_prepare", // qt_prepare | adult | young_adult | teen | child | history | settings
-
-  menuConfig: {
-    ...DEFAULT_MENU_CONFIG,
-  },
-
-  source: {
+function createDefaultSourceState() {
+  return {
     sourceType: "video", // video | audio | text
     basicInfo: {
       title: "",
@@ -37,36 +31,79 @@ export const appState = {
     sourceId: "",
     lastSavedAt: "",
     basicInfoSavedAt: "",
-  },
+  };
+}
 
-  audienceSteps: {
+function createDefaultAudienceSteps() {
+  return {
     adult: "step1",
     young_adult: "step1",
     teen: "step1",
     child: "step1",
-  },
+  };
+}
 
-  audienceStepStatus: {
+function createDefaultAudienceStepStatus() {
+  return {
     adult: { step1: "idle", step2: "idle", step3: "idle" },
     young_adult: { step1: "idle", step2: "idle", step3: "idle" },
     teen: { step1: "idle", step2: "idle", step3: "idle" },
     child: { step1: "idle", step2: "idle", step3: "idle" },
-  },
+  };
+}
 
-  historySelected: {
+function createDefaultHistorySelected() {
+  return {
     historyId: null,
     audienceId: "",
     step1ResultJson: "",
-  },
+  };
+}
 
-  output: {
+function createDefaultOutput() {
+  return {
     htmlFile: "",
     pdfFile: "",
     docxFile: "",
     pptxFile: "",
     pngFile: "",
+  };
+}
+
+export const appState = {
+  selectedMenu: "qt_prepare", // qt_prepare | adult | young_adult | teen | child | history | settings
+
+  menuConfig: {
+    ...DEFAULT_MENU_CONFIG,
   },
+
+  source: createDefaultSourceState(),
+
+  audienceSteps: createDefaultAudienceSteps(),
+
+  audienceStepStatus: createDefaultAudienceStepStatus(),
+
+  historySelected: createDefaultHistorySelected(),
+
+  output: createDefaultOutput(),
 };
+
+export function resetWorkspaceSource() {
+  appState.source = createDefaultSourceState();
+  appState.audienceSteps = createDefaultAudienceSteps();
+  appState.audienceStepStatus = createDefaultAudienceStepStatus();
+  appState.historySelected = createDefaultHistorySelected();
+  appState.output = createDefaultOutput();
+  appState.qtStep2LoadedTitle = "";
+  appState.qtStep2LoadedMeta = {};
+}
+
+export function resetAudienceProgress() {
+  appState.audienceSteps = createDefaultAudienceSteps();
+  appState.audienceStepStatus = createDefaultAudienceStepStatus();
+  appState.qtStep2LoadedTitle = "";
+  appState.qtStep2LoadedMeta = {};
+}
 
 export function setSelectedMenu(menu) {
   appState.selectedMenu = menu;
