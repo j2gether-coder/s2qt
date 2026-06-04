@@ -31,8 +31,15 @@ function createDefaultSourceState() {
     sourceId: "",
     lastSavedAt: "",
     basicInfoSavedAt: "",
+<<<<<<< HEAD
   };
 }
+=======
+    basicInfoMetaUrl: "",
+    progressStage: "",
+    progressMessage: "",
+  },
+>>>>>>> eca2f5b2ac4f9e960a627b5f00eb2c39d54af1c3
 
 function createDefaultAudienceSteps() {
   return {
@@ -131,6 +138,16 @@ export function setCleanedText(text) {
 
 export function setSourceStatus(status) {
   appState.source.sourceStatus = status;
+}
+
+export function setSourceProgress(stage, message) {
+  appState.source.progressStage = stage || "";
+  appState.source.progressMessage = message || "";
+}
+
+export function clearSourceProgress() {
+  appState.source.progressStage = "";
+  appState.source.progressMessage = "";
 }
 
 export function setBasicInfoField(field, value) {

@@ -66,12 +66,18 @@ func (s *VideoService) downloadVideo(url string) (string, error) {
 	args := []string{
 		"-f", "mp4/bestvideo+bestaudio/best",
 		"--merge-output-format", "mp4",
+		"--newline",
 		"-o", s.Paths.TempVideo,
 		url,
 	}
 
-	out, err := newHiddenCommand(s.Paths.YtDlpExe, args...).CombinedOutput()
-	return string(out), err
+	lastPct := -1
+	return runHiddenCommandStreaming(func(line string) {
+		if pct, ok := parseYtDlpProgress(line); ok && pct != lastPct {
+			lastPct = pct
+			s.progress("download", fmt.Sprintf("동영상 다운로드 중 %d%%", pct))
+		}
+	}, s.Paths.YtDlpExe, args...)
 }
 
 func (s *VideoService) convertToWav() (string, error) {
@@ -95,10 +101,16 @@ func (s *VideoService) transcribe() (string, error) {
 		"-l", "ko",
 		"-otxt",
 		"-of", strings.TrimSuffix(s.Paths.TempTxt, ".txt"),
+		"-pp",
 	}
 
-	out, err := newHiddenCommand(s.Paths.WhisperExe, args...).CombinedOutput()
-	return string(out), err
+	lastPct := -1
+	return runHiddenCommandStreaming(func(line string) {
+		if pct, ok := parseWhisperProgress(line); ok && pct != lastPct {
+			lastPct = pct
+			s.progress("transcribe", fmt.Sprintf("전사 중 %d%%", pct))
+		}
+	}, s.Paths.WhisperExe, args...)
 }
 
 func (s *VideoService) countText(text string) (charCount, wordCount, lineCount, estimatedTokens int) {

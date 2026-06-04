@@ -88,8 +88,7 @@ export function renderQTStep2(audienceId, appState) {
             </div>
             <textarea
               id="biblePassageText"
-              class="topgap-sm"
-              rows="6"
+              class="topgap-sm textarea-3rows"
               placeholder="예)
 1절 복 있는 사람은 악인들의 꾀를 따르지 아니하며 죄인들의 길에 서지 아니하며 오만한 자들의 자리에 앉지 아니하고
 2절 오직 여호와의 율법을 즐거워하여 그의 율법을 주야로 묵상하는도다"
@@ -135,17 +134,17 @@ export function renderQTStep2(audienceId, appState) {
 
           <div class="section-edit-card">
             <label class="form-label">깊은 묵상과 적용 1</label>
-            <input id="reflectionItem1" type="text" />
+            <textarea id="reflectionItem1" class="textarea-3rows"></textarea>
           </div>
 
           <div class="section-edit-card">
             <label class="form-label">깊은 묵상과 적용 2</label>
-            <input id="reflectionItem2" type="text" />
+            <textarea id="reflectionItem2" class="textarea-3rows"></textarea>
           </div>
 
           <div class="section-edit-card">
             <label class="form-label">깊은 묵상과 적용 3</label>
-            <input id="reflectionItem3" type="text" />
+            <textarea id="reflectionItem3" class="textarea-3rows"></textarea>
           </div>
 
           <div class="section-edit-card">

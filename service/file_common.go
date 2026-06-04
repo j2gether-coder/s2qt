@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -109,4 +112,126 @@ func newHiddenCommand(name string, args ...string) *exec.Cmd {
 	}
 
 	return cmd
+}
+
+// scanLinesCR는 \n 뿐 아니라 \r(yt-dlp 진행바 등)로도 줄을 분리한다.
+// 외부 프로세스가 진행률을 \r로 같은 줄에 갱신하더라도 실시간으로 토큰을 얻기 위함이다.
+func scanLinesCR(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		return i + 1, data[:i], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+// runHiddenCommandStreaming은 newHiddenCommand와 동일하게 창을 숨긴 채 외부 명령을
+// 실행하되, stdout/stderr를 줄 단위로 스트리밍하여 onLine 콜백으로 전달한다.
+// 기존 CombinedOutput() 사용처와 호환되도록 전체 출력 문자열과 종료 에러를 함께 반환한다.
+func runHiddenCommandStreaming(onLine func(line string), name string, args ...string) (string, error) {
+	cmd := newHiddenCommand(name, args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+
+	var mu sync.Mutex
+	var buf strings.Builder
+
+	scan := func(r io.Reader) {
+		sc := bufio.NewScanner(r)
+		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		sc.Split(scanLinesCR)
+		for sc.Scan() {
+			line := sc.Text()
+			mu.Lock()
+			buf.WriteString(line)
+			buf.WriteByte('\n')
+			mu.Unlock()
+			if onLine != nil {
+				onLine(line)
+			}
+		}
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); scan(stdout) }()
+	go func() { defer wg.Done(); scan(stderr) }()
+	wg.Wait()
+
+	waitErr := cmd.Wait()
+	return buf.String(), waitErr
+}
+
+// percentInLine은 문자열 안의 "NN%" 또는 "NN.N%" 토큰에서 정수 퍼센트를 추출한다.
+// 0~100 범위를 벗어나면 무시한다. 진행률 토큰이 없으면 ok=false.
+func percentInLine(line string) (int, bool) {
+	idx := strings.LastIndexByte(line, '%')
+	if idx <= 0 {
+		return 0, false
+	}
+
+	start := idx
+	for start > 0 {
+		c := line[start-1]
+		if (c >= '0' && c <= '9') || c == '.' {
+			start--
+		} else {
+			break
+		}
+	}
+
+	token := strings.TrimSuffix(line[start:idx], ".")
+	if token == "" {
+		return 0, false
+	}
+
+	dot := strings.IndexByte(token, '.')
+	if dot >= 0 {
+		token = token[:dot]
+	}
+	if token == "" {
+		return 0, false
+	}
+
+	n := 0
+	for i := 0; i < len(token); i++ {
+		n = n*10 + int(token[i]-'0')
+	}
+	if n < 0 || n > 100 {
+		return 0, false
+	}
+	return n, true
+}
+
+// parseWhisperProgress은 whisper-cli -pp 출력 줄에서 전사 진행률을 추출한다.
+// 예: "whisper_print_progress_callback: progress =  45%"
+func parseWhisperProgress(line string) (int, bool) {
+	if !strings.Contains(line, "progress") {
+		return 0, false
+	}
+	return percentInLine(line)
+}
+
+// parseYtDlpProgress은 yt-dlp --newline 출력 줄에서 다운로드 진행률을 추출한다.
+// 예: "[download]  35.6% of  45.00MiB at  1.20MiB/s ETA 00:30"
+func parseYtDlpProgress(line string) (int, bool) {
+	if !strings.Contains(line, "[download]") {
+		return 0, false
+	}
+	return percentInLine(line)
 }

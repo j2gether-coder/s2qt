@@ -69,6 +69,7 @@ type flatQTStep2Data struct {
 	Audience          string   `json:"audience"`
 	Title             string   `json:"title"`
 	BibleText         string   `json:"bibleText"`
+	BiblePassageText  string   `json:"bible_passage_text"`
 	Hymn              string   `json:"hymn"`
 	Preacher          string   `json:"preacher"`
 	ChurchName        string   `json:"churchName"`
@@ -574,6 +575,7 @@ func buildQTSectionDocFromFlat(flat *flatQTStep2Data, expectedAudience string) *
 		Metadata: map[string]any{
 			"title":              strings.TrimSpace(flat.Title),
 			"bible_text":         strings.TrimSpace(flat.BibleText),
+			"bible_passage_text": strings.TrimSpace(flat.BiblePassageText),
 			"hymn":               strings.TrimSpace(flat.Hymn),
 			"support_scriptures": supportScriptures,
 			"preacher":           strings.TrimSpace(flat.Preacher),

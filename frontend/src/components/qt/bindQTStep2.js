@@ -286,19 +286,27 @@ export async function bindQTStep2Events(audienceId) {
     previewBtn.disabled = true;
   }
 
-  try {
-    await loadStep2Data(audienceId);
+  // 사이드 메뉴를 통해 audience가 리셋된 경우(step1 status가 idle)에는
+  // 이전 세션의 temp.json 내용을 입력창에 채우지 않는다.
+  // 같은 세션에서 Step1을 정상적으로 완료(=done)한 경우에만 disk에서 로드한다.
+  const step1Status = appState?.audienceStepStatus?.[audienceId]?.step1;
+  const shouldLoadFromDisk = step1Status === 'done';
 
-    if (previewBtn) {
-      previewBtn.disabled = false;
+  if (shouldLoadFromDisk) {
+    try {
+      await loadStep2Data(audienceId);
+
+      if (previewBtn) {
+        previewBtn.disabled = false;
+      }
+    } catch (error) {
+      console.error(error);
+      setInlineMessage(
+        "qt-step2-message",
+        'Step2 데이터를 불러오는 중 오류가 발생했습니다.',
+        "error"
+      );
     }
-  } catch (error) {
-    console.error(error);
-    setInlineMessage(
-      "qt-step2-message",
-      'Step2 데이터를 불러오는 중 오류가 발생했습니다.',
-      "error"
-    );
   }
 
   if (saveBtn) {

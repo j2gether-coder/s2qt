@@ -3,6 +3,8 @@ import {
   setSelectedMenu,
   getMenuLabel,
   isMenuVisible,
+  resetWorkspaceSource,
+  resetAudienceProgress,
 } from "../state/appState";
 import { GetSideNavQRDataURI } from "../../wailsjs/go/main/App";
 
@@ -83,17 +85,28 @@ async function loadSideNavQR() {
   }
 }
 
+function handleSideNavClick(menuId, onMenuChange) {
+  if (menuId !== appState.selectedMenu) {
+    if (menuId === "qt_prepare") {
+      resetWorkspaceSource();
+    } else {
+      resetAudienceProgress();
+    }
+  }
+
+  setSelectedMenu(menuId);
+
+  if (typeof onMenuChange === "function") {
+    onMenuChange(menuId);
+  }
+}
+
 export function bindSideNavEvents(onMenuChange) {
   const buttons = document.querySelectorAll("[data-menu-id]");
 
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
-      const menuId = button.dataset.menuId;
-      setSelectedMenu(menuId);
-
-      if (typeof onMenuChange === "function") {
-        onMenuChange(menuId);
-      }
+      handleSideNavClick(button.dataset.menuId, onMenuChange);
     });
   });
 
@@ -126,12 +139,7 @@ export function rerenderSideNavMenu(onMenuChange) {
   const buttons = menuRoot.querySelectorAll("[data-menu-id]");
   buttons.forEach((button) => {
     button.addEventListener("click", () => {
-      const menuId = button.dataset.menuId;
-      setSelectedMenu(menuId);
-
-      if (typeof onMenuChange === "function") {
-        onMenuChange(menuId);
-      }
+      handleSideNavClick(button.dataset.menuId, onMenuChange);
     });
   });
 }
