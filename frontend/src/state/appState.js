@@ -31,15 +31,11 @@ function createDefaultSourceState() {
     sourceId: "",
     lastSavedAt: "",
     basicInfoSavedAt: "",
-<<<<<<< HEAD
-  };
-}
-=======
     basicInfoMetaUrl: "",
     progressStage: "",
     progressMessage: "",
-  },
->>>>>>> eca2f5b2ac4f9e960a627b5f00eb2c39d54af1c3
+  };
+}
 
 function createDefaultAudienceSteps() {
   return {
