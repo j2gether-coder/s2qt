@@ -109,7 +109,7 @@ export function renderQTStep2(audienceId, appState) {
           </div>
 
           <div class="section-edit-card">
-            <label class="form-label">말씀의 창</label>
+            <label class="form-label">말씀의 길잡이</label>
             <input id="summaryTitle" type="text" />
             <textarea id="summaryBody" class="textarea-3rows"></textarea>
           </div>

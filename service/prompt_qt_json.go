@@ -87,7 +87,7 @@ const defaultQTPromptJSONSchema = `[JSON Contract]
   "sections": [
     {
       "type": "summary",
-      "title": "🌿 말씀의 창",
+      "title": "📖 말씀의 길잡이",
       "blocks": [
         { "type": "paragraph", "text": "" }
       ]

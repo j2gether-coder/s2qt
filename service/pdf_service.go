@@ -1686,7 +1686,7 @@ func normalizeQTSections(sections []QTJSONSection) []QTJSONSection {
 func qtSectionKey(title string) string {
 	t := normalizeQTHeading(title)
 	switch {
-	case strings.Contains(t, "말씀의창"):
+	case strings.Contains(t, "말씀의길잡이"):
 		return "summary"
 	case strings.Contains(t, "오늘의메시지"):
 		return "message"
