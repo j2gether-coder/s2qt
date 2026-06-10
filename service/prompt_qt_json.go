@@ -87,14 +87,14 @@ const defaultQTPromptJSONSchema = `[JSON Contract]
   "sections": [
     {
       "type": "summary",
-      "title": "📖 말씀의 길잡이",
+      "title": "말씀의 길잡이",
       "blocks": [
         { "type": "paragraph", "text": "" }
       ]
     },
     {
       "type": "message",
-      "title": "✨ 오늘의 메시지",
+      "title": "오늘의 메시지",
       "blocks": [
         { "type": "message_title", "text": "" },
         { "type": "paragraph", "text": "" },
@@ -106,14 +106,14 @@ const defaultQTPromptJSONSchema = `[JSON Contract]
     },
     {
       "type": "reflection",
-      "title": "🔍 깊은 묵상과 적용",
+      "title": "깊은 묵상과 적용",
       "blocks": [
         { "type": "list", "items": ["", "", ""] }
       ]
     },
     {
       "type": "prayer",
-      "title": "🙏 오늘의 기도",
+      "title": "오늘의 기도",
       "blocks": [
         { "type": "paragraph", "text": "" }
       ]

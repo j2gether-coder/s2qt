@@ -75,7 +75,7 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	for _, sec := range doc.Sections {
 		switch strings.TrimSpace(sec.Type) {
 		case "summary":
-			out.SummaryTitle = step2firstNonEmpty(sec.Title, "말씀의 창")
+			out.SummaryTitle = step2firstNonEmpty(sec.Title, "말씀의 길잡이")
 			if len(sec.Blocks) > 0 {
 				out.SummaryBody = strings.TrimSpace(sec.Blocks[0].Text)
 			}
@@ -171,7 +171,7 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		Sections: []QTSectionData{
 			{
 				Type:  "summary",
-				Title: step2firstNonEmpty(req.SummaryTitle, "🌿 말씀의 창"),
+				Title: step2firstNonEmpty(req.SummaryTitle, "📖 말씀의 길잡이"),
 				Blocks: []QTBlockData{
 					{Type: "paragraph", Text: strings.TrimSpace(req.SummaryBody)},
 				},
@@ -315,7 +315,7 @@ func buildQTStep2HTML(req *QTStep2Data) string {
   ` + subbox + `
   ` + passageHTML + `
 
-  <h2 class="qt-section-title">🌿 말씀의 창</h2>
+  <h2 class="qt-section-title">📖 말씀의 길잡이</h2>
   <div class="qt-body">
     <p>` + nl2br(escapeHTML(req.SummaryBody)) + `</p>
   </div>
