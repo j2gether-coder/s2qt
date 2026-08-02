@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"s2qt/util"
 )
@@ -67,10 +68,66 @@ func (s *PipelineService) saveTempJSON(jsonText string) error {
 	return os.WriteFile(s.Paths.TempJson, []byte(jsonText), 0644)
 }
 
+func countPreparedText(text string) (charCount, wordCount, lineCount, estimatedTokens int) {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+
+	charCount = utf8RuneCount(normalized)
+	wordCount = len(strings.Fields(normalized))
+	if strings.TrimSpace(normalized) == "" {
+		lineCount = 0
+	} else {
+		lineCount = len(strings.Split(normalized, "\n"))
+	}
+	estimatedTokens = charCount / 2
+	if estimatedTokens == 0 && charCount > 0 {
+		estimatedTokens = 1
+	}
+	return
+}
+
+func formatHMS(ms int64) string {
+	if ms < 0 {
+		ms = 0
+	}
+	totalSeconds := ms / 1000
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+func logSourcePrepareSummary(sourceType, status, txtFile string, metrics SourcePrepareMetrics) {
+	LogInfo(fmt.Sprintf(
+		"qt_prepare: [result] source=%s status=%s chars=%d words=%d lines=%d estimated_tokens=%d transcribe_model=%s fallback_model=%s fallback_used=%t",
+		strings.TrimSpace(sourceType),
+		strings.TrimSpace(status),
+		metrics.CharCount,
+		metrics.WordCount,
+		metrics.LineCount,
+		metrics.EstimatedTokens,
+		strings.TrimSpace(metrics.TranscribeModel),
+		strings.TrimSpace(metrics.FallbackModel),
+		metrics.FallbackUsed,
+	))
+	if strings.TrimSpace(metrics.RetryReason) != "" {
+		LogWarn(fmt.Sprintf("qt_prepare: [result] retry_reason=%s", strings.TrimSpace(metrics.RetryReason)))
+	}
+	LogInfo(fmt.Sprintf(
+		"qt_prepare: [time] download=%s convert=%s transcribe=%s total=%s",
+		formatHMS(metrics.DownloadMs),
+		formatHMS(metrics.ConvertMs),
+		formatHMS(metrics.TranscribeMs),
+		formatHMS(metrics.TotalMs),
+	))
+	LogInfo(fmt.Sprintf("qt_prepare: [file] temp_txt=%s", strings.TrimSpace(txtFile)))
+}
+
 func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePrepareResult, error) {
 	if req == nil {
 		return nil, fmt.Errorf("source prepare request가 nil입니다")
 	}
+	prepareStart := time.Now()
 
 	steps := []string{}
 	addStep := func(stage, msg string) {
@@ -83,6 +140,7 @@ func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePr
 
 	var rawText string
 	var err error
+	metrics := SourcePrepareMetrics{}
 
 	switch strings.TrimSpace(req.SourceType) {
 	case "text":
@@ -102,6 +160,13 @@ func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePr
 		}
 		addStep("audio", "오디오 원문 추출 중")
 		rawText, err = audioSvc.ResolveRawText(req.SourcePath)
+		if err == nil && audioSvc.LastTranscription != nil {
+			metrics.TranscribeMs = audioSvc.LastTranscription.TotalMs
+			metrics.TranscribeModel = audioSvc.LastTranscription.ModelName
+			metrics.FallbackModel = audioSvc.LastTranscription.FallbackModelName
+			metrics.FallbackUsed = audioSvc.LastTranscription.FallbackUsed
+			metrics.RetryReason = audioSvc.LastTranscription.RetryReason
+		}
 
 	case "video":
 		videoSvc, svcErr := NewVideoService(s.OnProgress)
@@ -123,6 +188,20 @@ func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePr
 				err = runErr
 			} else {
 				rawText = result.TranscriptText
+				metrics = SourcePrepareMetrics{
+					DownloadMs:      result.DownloadMs,
+					ConvertMs:       result.ConvertMs,
+					TranscribeMs:    result.TranscribeMs,
+					TotalMs:         result.TotalMs,
+					CharCount:       result.CharCount,
+					WordCount:       result.WordCount,
+					LineCount:       result.LineCount,
+					EstimatedTokens: result.EstimatedTokens,
+					TranscribeModel: result.TranscribeModel,
+					FallbackModel:   result.FallbackModel,
+					FallbackUsed:    result.FallbackUsed,
+					RetryReason:     result.RetryReason,
+				}
 				if strings.TrimSpace(rawText) == "" {
 					rawTextBytes, readErr := os.ReadFile(s.Paths.TempTxt)
 					if readErr != nil {
@@ -162,6 +241,14 @@ func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePr
 		}, err
 	}
 
+	if metrics.CharCount == 0 {
+		charCount, wordCount, lineCount, estimatedTokens := countPreparedText(rawText)
+		metrics.CharCount = charCount
+		metrics.WordCount = wordCount
+		metrics.LineCount = lineCount
+		metrics.EstimatedTokens = estimatedTokens
+	}
+
 	addStep("save", "temp.txt 저장 중")
 	if err := s.saveTempText(rawText); err != nil {
 		addStep("error", err.Error())
@@ -175,6 +262,11 @@ func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePr
 	}
 
 	addStep("done", "QT 준비 완료 (temp.txt 생성)")
+	if metrics.TotalMs == 0 {
+		metrics.TotalMs = time.Since(prepareStart).Milliseconds()
+	}
+	logSourcePrepareSummary(req.SourceType, "COMPLETED", s.Paths.TempTxt, metrics)
+
 	return &SourcePrepareResult{
 		Success:    true,
 		Message:    "QT 준비가 완료되었습니다.",
@@ -183,6 +275,7 @@ func (s *PipelineService) RunSourcePrepare(req *SourcePrepareRequest) (*SourcePr
 		RawText:    rawText,
 		TxtFile:    s.Paths.TempTxt,
 		Steps:      steps,
+		Metrics:    metrics,
 	}, nil
 }
 

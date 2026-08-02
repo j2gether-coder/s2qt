@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
 type AppPaths struct {
@@ -36,23 +38,40 @@ type AppPaths struct {
 	SecurityFile string
 
 	// fixed model file
-	WhisperModel string
+	WhisperModel         string
+	WhisperFallbackModel string
+	ModelConfigFile      string
+	WhisperModels        []WhisperModelConfig
 
 	// fixed temp files
-	TempVideo string
-	TempWav   string
-	TempTxt   string
-	TempJson  string
-	TempMd    string
-	TempHtml  string
-	TempPdf   string
-	TempDocx  string
-	TempPptx  string
-	TempPng   string
+	TempVideo       string
+	TempWav         string
+	TempTxt         string
+	TempJson        string
+	TempMd          string
+	TempHtml        string
+	TempPdf         string
+	TempDocx        string
+	TempPptx        string
+	TempPng         string
+	TempBlog        string
+	TempInfographic string
 
 	// Template files
 	Template        string
 	TemplateNoImage string
+}
+
+type WhisperModelConfig struct {
+	Name string `yaml:"name"`
+	File string `yaml:"file"`
+	URL  string `yaml:"url"`
+}
+
+type ModelConfig struct {
+	DefaultModel  string               `yaml:"default_model"`
+	FallbackModel string               `yaml:"fallback_model"`
+	Models        []WhisperModelConfig `yaml:"models"`
 }
 
 func GetAppPaths() (*AppPaths, error) {
@@ -91,10 +110,10 @@ func GetAppPaths() (*AppPaths, error) {
 		FfprobeExe: filepath.Join(binDir, "ffprobe.exe"),
 		WhisperExe: filepath.Join(binDir, "whisper-cli.exe"),
 
-		WhisperModel: filepath.Join(modelDir, "ggml-tiny.bin"),
-		DBFile:       filepath.Join(dbDir, "s2qt.db"),
-		SecurityFile: filepath.Join(confDir, "security.json"),
-		EventLogFile: filepath.Join(logDir, "event.log"),
+		ModelConfigFile: filepath.Join(confDir, "model.yaml"),
+		DBFile:          filepath.Join(dbDir, "s2qt.db"),
+		SecurityFile:    filepath.Join(confDir, "security.json"),
+		EventLogFile:    filepath.Join(logDir, "event.log"),
 
 		TempVideo: filepath.Join(tempDir, "video.mp4"),
 		TempWav:   filepath.Join(tempDir, "audio.wav"),
@@ -106,6 +125,9 @@ func GetAppPaths() (*AppPaths, error) {
 		TempDocx:  filepath.Join(tempDir, "temp.docx"),
 		TempPptx:  filepath.Join(tempDir, "temp.pptx"),
 		TempPng:   filepath.Join(tempDir, "temp.png"),
+		TempBlog:  filepath.Join(tempDir, "blog.html"),
+
+		TempInfographic: filepath.Join(tempDir, "infographic.md"),
 
 		SiteLogoFile:    filepath.Join(imageDir, "site_logo.png"),
 		SiteQRFile:      filepath.Join(imageDir, "site_qr.png"),
@@ -113,7 +135,107 @@ func GetAppPaths() (*AppPaths, error) {
 		TemplateNoImage: filepath.Join(templateDir, "no_image.png"),
 	}
 
-	return p, EnsureDirs(p)
+	if err := EnsureDirs(p); err != nil {
+		return nil, err
+	}
+
+	modelConfig, err := LoadModelConfig(p.ModelConfigFile)
+	if err != nil {
+		return nil, err
+	}
+	p.WhisperModels = modelConfig.Models
+	p.WhisperModel = filepath.Join(modelDir, modelConfig.DefaultModel)
+	p.WhisperFallbackModel = filepath.Join(modelDir, modelConfig.FallbackModel)
+
+	return p, nil
+}
+
+func LoadModelConfig(path string) (*ModelConfig, error) {
+	if !fileExists(path) {
+		cfg := DefaultModelConfig()
+		if err := writeModelConfig(path, cfg); err != nil {
+			return nil, err
+		}
+		return cfg, nil
+	}
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg ModelConfig
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, err
+	}
+
+	normalizeModelConfig(&cfg)
+	return &cfg, nil
+}
+
+func DefaultModelConfig() *ModelConfig {
+	cfg := &ModelConfig{}
+	normalizeModelConfig(cfg)
+	return cfg
+}
+
+func normalizeModelConfig(cfg *ModelConfig) {
+	if cfg.DefaultModel == "" {
+		cfg.DefaultModel = "ggml-tiny.bin"
+	}
+	if cfg.FallbackModel == "" {
+		cfg.FallbackModel = "ggml-base.bin"
+	}
+	if len(cfg.Models) == 0 {
+		cfg.Models = []WhisperModelConfig{
+			{
+				Name: "tiny",
+				File: "ggml-tiny.bin",
+				URL:  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+			},
+			{
+				Name: "base",
+				File: "ggml-base.bin",
+				URL:  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+			},
+		}
+	}
+	if !modelConfigHasFile(cfg.Models, "ggml-tiny.bin") {
+		cfg.Models = append(cfg.Models, WhisperModelConfig{
+			Name: "tiny",
+			File: "ggml-tiny.bin",
+			URL:  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+		})
+	}
+	if !modelConfigHasFile(cfg.Models, "ggml-base.bin") {
+		cfg.Models = append(cfg.Models, WhisperModelConfig{
+			Name: "base",
+			File: "ggml-base.bin",
+			URL:  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+		})
+	}
+}
+
+func modelConfigHasFile(models []WhisperModelConfig, file string) bool {
+	for _, model := range models {
+		if model.File == file {
+			return true
+		}
+	}
+	return false
+}
+
+func writeModelConfig(path string, cfg *ModelConfig) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, b, 0o644)
 }
 
 // 개발용: 현재 작업 경로에서 상위로 올라가며 go.mod / wails.json 탐색

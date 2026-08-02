@@ -142,6 +142,8 @@ function updateOutputState(result) {
   appState.output.htmlFile = result?.html?.filePath || '';
   appState.output.pdfFile = result?.pdf?.filePath || '';
   appState.output.pngFile = result?.png?.filePath || '';
+  appState.output.blogFile = result?.blog?.filePath || '';
+  appState.output.infographicFile = result?.infographic?.filePath || '';
 }
 
 function updateStep3ButtonState() {

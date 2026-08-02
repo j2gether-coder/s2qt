@@ -1,0 +1,9 @@
+default_model: ggml-tiny.bin
+fallback_model: ggml-base.bin
+models:
+    - name: tiny
+      file: ggml-tiny.bin
+      url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+    - name: base
+      file: ggml-base.bin
+      url: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin

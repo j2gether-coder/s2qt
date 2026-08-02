@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"syscall"
 )
 
 // VideoMeta
@@ -39,7 +38,6 @@ func FetchVideoMeta(ytdlpPath, url string) (*VideoMeta, error) {
 		"--dump-json",
 		url,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 	out, err := cmd.Output()
 	if err != nil {

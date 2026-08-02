@@ -17,7 +17,6 @@ import (
 const (
 	defaultFFmpegPackageURL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 	defaultYtDlpURL         = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
-	defaultModelURL         = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
 
 	ffmpegPackageFileName = "ffmpeg-release-essentials.zip"
 
@@ -312,15 +311,21 @@ func buildDirectComponents(paths *util.AppPaths, opts UtilCheckOptions) []UtilCo
 	}
 
 	if opts.NeedModel {
-		items = append(items, UtilComponent{
-			Key:          "ggml-tiny.bin",
-			FileName:     "ggml-tiny.bin",
-			TargetPath:   paths.WhisperModel,
-			Downloadable: true,
-			Versioned:    false,
-			URL:          defaultModelURL,
-			Description:  "Whisper model",
-		})
+		for _, model := range paths.WhisperModels {
+			fileName := strings.TrimSpace(model.File)
+			if fileName == "" {
+				continue
+			}
+			items = append(items, UtilComponent{
+				Key:          fileName,
+				FileName:     fileName,
+				TargetPath:   filepath.Join(paths.Model, fileName),
+				Downloadable: true,
+				Versioned:    false,
+				URL:          model.URL,
+				Description:  "Whisper model",
+			})
+		}
 	}
 
 	return items
@@ -773,7 +778,19 @@ func saveUtilVersion(confDir string, result *UtilCheckResult) error {
 		}
 	}
 
-	info.ModelInstalled = info.Installed["ggml-tiny.bin"]
+	checkedModel := false
+	modelInstalled := true
+	for _, key := range result.Checked {
+		if strings.HasPrefix(key, "ggml-") && strings.HasSuffix(key, ".bin") {
+			checkedModel = true
+			if contains(result.Missing, key) {
+				modelInstalled = false
+			}
+		}
+	}
+	if checkedModel {
+		info.ModelInstalled = modelInstalled
+	}
 
 	return writeJSON(confPath, info)
 }

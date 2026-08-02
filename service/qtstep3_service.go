@@ -142,7 +142,57 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 		}
 	}
 
+	// blog.html은 산출물 생성 시 항상 자동 생성한다.
+	// temp.json의 내부 전용 필드(성구 전체 본문)를 사용하며, 기존 산출물과 완전히 분리된다.
+	s.makeBlog(result)
+
+	// infographic.md도 산출물 생성 시 항상 자동 생성한다(화면에는 노출하지 않는다).
+	// var/conf/prompt_infographic.md 프롬프트 + temp.txt 전사문을 합친 중간 산출물이다.
+	s.makeInfographic(result)
+
 	return result, nil
+}
+
+func (s *QTStep3Service) makeInfographic(result *QTStep3Result) {
+	LogInfo("step3: infographic generation started")
+
+	infoSvc, err := NewInfographicService()
+	if err != nil {
+		result.Infographic = QTStep3FileResult{Success: false, Status: "실패", Error: err.Error()}
+		LogError("step3: infographic service create failed: " + err.Error())
+		return
+	}
+
+	path, err := infoSvc.BuildInfographicMD()
+	if err != nil {
+		result.Infographic = QTStep3FileResult{Success: false, Status: "실패", Error: err.Error()}
+		LogError("step3: infographic generation failed: " + err.Error())
+		return
+	}
+
+	result.Infographic = QTStep3FileResult{Success: true, Status: "완료", FilePath: path}
+	LogInfo("step3: infographic generation completed path=" + path)
+}
+
+func (s *QTStep3Service) makeBlog(result *QTStep3Result) {
+	LogInfo("step3: blog generation started")
+
+	blogSvc, err := NewBlogService()
+	if err != nil {
+		result.Blog = QTStep3FileResult{Success: false, Status: "실패", Error: err.Error()}
+		LogError("step3: blog service create failed: " + err.Error())
+		return
+	}
+
+	path, err := blogSvc.BuildBlogHTML()
+	if err != nil {
+		result.Blog = QTStep3FileResult{Success: false, Status: "실패", Error: err.Error()}
+		LogError("step3: blog generation failed: " + err.Error())
+		return
+	}
+
+	result.Blog = QTStep3FileResult{Success: true, Status: "완료", FilePath: path}
+	LogInfo("step3: blog generation completed path=" + path)
 }
 
 func (s *QTStep3Service) makePDF(footerCfg *QTFooterConfig) error {

@@ -19,6 +19,28 @@ type VideoPipelineResult struct {
 	ConvertMs    int64 `json:"convertMs"`
 	TranscribeMs int64 `json:"transcribeMs"`
 	TotalMs      int64 `json:"totalMs"`
+
+	TranscribeModel string `json:"transcribeModel,omitempty"`
+	FallbackModel   string `json:"fallbackModel,omitempty"`
+	FallbackUsed    bool   `json:"fallbackUsed,omitempty"`
+	RetryReason     string `json:"retryReason,omitempty"`
+}
+
+type SourcePrepareMetrics struct {
+	DownloadMs   int64 `json:"downloadMs,omitempty"`
+	ConvertMs    int64 `json:"convertMs,omitempty"`
+	TranscribeMs int64 `json:"transcribeMs,omitempty"`
+	TotalMs      int64 `json:"totalMs,omitempty"`
+
+	CharCount       int `json:"charCount,omitempty"`
+	WordCount       int `json:"wordCount,omitempty"`
+	LineCount       int `json:"lineCount,omitempty"`
+	EstimatedTokens int `json:"estimatedTokens,omitempty"`
+
+	TranscribeModel string `json:"transcribeModel,omitempty"`
+	FallbackModel   string `json:"fallbackModel,omitempty"`
+	FallbackUsed    bool   `json:"fallbackUsed,omitempty"`
+	RetryReason     string `json:"retryReason,omitempty"`
 }
 
 type ProgressEvent struct {
@@ -27,9 +49,10 @@ type ProgressEvent struct {
 }
 
 type AppConfig struct {
-	PromptQTJSONFile string `yaml:"prompt_qt_json_file"`
-	StyleQTHTMLFile  string `yaml:"style_qt_html_file"`
-	StyleQTPDFFile   string `yaml:"style_qt_pdf_file"`
+	PromptQTJSONFile      string `yaml:"prompt_qt_json_file"`
+	PromptInfographicFile string `yaml:"prompt_infographic_file"`
+	StyleQTHTMLFile       string `yaml:"style_qt_html_file"`
+	StyleQTPDFFile        string `yaml:"style_qt_pdf_file"`
 }
 
 type QTMeta struct {
@@ -54,13 +77,14 @@ type SourcePrepareRequest struct {
 }
 
 type SourcePrepareResult struct {
-	Success    bool     `json:"success"`
-	Message    string   `json:"message"`
-	Status     string   `json:"status"`
-	SourceType string   `json:"sourceType"`
-	RawText    string   `json:"rawText"`
-	TxtFile    string   `json:"txtFile"`
-	Steps      []string `json:"steps"`
+	Success    bool                 `json:"success"`
+	Message    string               `json:"message"`
+	Status     string               `json:"status"`
+	SourceType string               `json:"sourceType"`
+	RawText    string               `json:"rawText"`
+	TxtFile    string               `json:"txtFile"`
+	Steps      []string             `json:"steps"`
+	Metrics    SourcePrepareMetrics `json:"metrics,omitempty"`
 }
 
 // audience Step1용: temp.json 생성
@@ -139,9 +163,11 @@ type QTStep3FileResult struct {
 }
 
 type QTStep3Result struct {
-	HTML QTStep3FileResult `json:"html"`
-	PDF  QTStep3FileResult `json:"pdf"`
-	DOCX QTStep3FileResult `json:"docx"`
-	PPTX QTStep3FileResult `json:"pptx"`
-	PNG  QTStep3FileResult `json:"png"`
+	HTML        QTStep3FileResult `json:"html"`
+	PDF         QTStep3FileResult `json:"pdf"`
+	DOCX        QTStep3FileResult `json:"docx"`
+	PPTX        QTStep3FileResult `json:"pptx"`
+	PNG         QTStep3FileResult `json:"png"`
+	Blog        QTStep3FileResult `json:"blog"`
+	Infographic QTStep3FileResult `json:"infographic"`
 }

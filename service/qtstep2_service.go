@@ -130,6 +130,33 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	return out, nil
 }
 
+// preserveInternalBlogFields는 기존 temp.json의 blog 전용 내부 필드(support_scriptures_full)를
+// 새로 저장할 metadata 맵에 복사해 유실을 방지한다.
+func preserveInternalBlogFields(tempJsonPath string, metadata map[string]any) {
+	if metadata == nil {
+		return
+	}
+
+	b, err := os.ReadFile(tempJsonPath)
+	if err != nil {
+		return
+	}
+
+	var prev QTSectionDoc
+	if err := json.Unmarshal(b, &prev); err != nil {
+		return
+	}
+	if prev.Metadata == nil {
+		return
+	}
+
+	if v, ok := prev.Metadata["support_scriptures_full"]; ok {
+		if arr, ok := v.([]any); ok && len(arr) > 0 {
+			metadata["support_scriptures_full"] = arr
+		}
+	}
+}
+
 func ensureQTTitlePrefix(title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
@@ -211,6 +238,11 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 			},
 		},
 	}
+
+	// blog 전용 내부 필드(support_scriptures_full)는 Step2 UI에서 편집하지 않으므로,
+	// 기존 temp.json에 있던 값을 그대로 보존한다.
+	// (Step1 LLM이 생성한 관련 성구 전체 본문이 Step2 저장 시 유실되지 않도록 함)
+	preserveInternalBlogFields(s.Paths.TempJson, doc.Metadata)
 
 	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {

@@ -70,7 +70,7 @@ func (s *FileService) OpenGeneratedFile(filePath string) error {
 
 	switch runtime.GOOS {
 	case "windows":
-		return newHiddenCommand("cmd", "/c", "start", "", path).Start()
+		return newHiddenCommand("rundll32.exe", "url.dll,FileProtocolHandler", path).Start()
 	case "darwin":
 		return exec.Command("open", path).Start()
 	default:

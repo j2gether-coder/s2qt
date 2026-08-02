@@ -50,8 +50,6 @@ func (s *VideoService) checkRequiredFiles() error {
 	required := []string{
 		s.Paths.YtDlpExe,
 		s.Paths.FfmpegExe,
-		s.Paths.WhisperExe,
-		s.Paths.WhisperModel,
 	}
 
 	for _, f := range required {
@@ -59,7 +57,8 @@ func (s *VideoService) checkRequiredFiles() error {
 			return fmt.Errorf("필수 파일이 없습니다: %s", f)
 		}
 	}
-	return nil
+
+	return NewWhisperTranscriber(s.Paths, s.OnProgress).CheckRequiredFiles()
 }
 
 func (s *VideoService) downloadVideo(url string) (string, error) {
@@ -92,25 +91,6 @@ func (s *VideoService) convertToWav() (string, error) {
 
 	out, err := newHiddenCommand(s.Paths.FfmpegExe, args...).CombinedOutput()
 	return string(out), err
-}
-
-func (s *VideoService) transcribe() (string, error) {
-	args := []string{
-		"-m", s.Paths.WhisperModel,
-		"-f", s.Paths.TempWav,
-		"-l", "ko",
-		"-otxt",
-		"-of", strings.TrimSuffix(s.Paths.TempTxt, ".txt"),
-		"-pp",
-	}
-
-	lastPct := -1
-	return runHiddenCommandStreaming(func(line string) {
-		if pct, ok := parseWhisperProgress(line); ok && pct != lastPct {
-			lastPct = pct
-			s.progress("transcribe", fmt.Sprintf("전사 중 %d%%", pct))
-		}
-	}, s.Paths.WhisperExe, args...)
 }
 
 func (s *VideoService) countText(text string) (charCount, wordCount, lineCount, estimatedTokens int) {
@@ -178,23 +158,17 @@ func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
 	s.progress("convert", fmt.Sprintf("WAV 변환 완료 (%d ms)", convertMs))
 
 	s.progress("transcribe", "전사 중...")
-	transcribeStart := time.Now()
-	out, err = s.transcribe()
-	transcribeMs := time.Since(transcribeStart).Milliseconds()
-	logs = append(logs, fmt.Sprintf("=== whisper (%d ms) ===\n%s", transcribeMs, out))
+	transcription, err := NewWhisperTranscriber(s.Paths, s.OnProgress).Transcribe(s.Paths.TempWav)
 	if err != nil {
-		return nil, fmt.Errorf("전사 실패\n%s", out)
+		return nil, err
 	}
-	s.progress("transcribe", fmt.Sprintf("전사 완료 (%d ms)", transcribeMs))
+	transcribeMs := transcription.TotalMs
+	text := transcription.Text
+	logs = append(logs, transcription.Log)
 
+	s.progress("transcribe", fmt.Sprintf("전사 완료 (%d ms)", transcribeMs))
 	s.progress("finalize", "결과 정리 중...")
 
-	txtBytes, err := os.ReadFile(s.Paths.TempTxt)
-	if err != nil {
-		return nil, fmt.Errorf("전사 결과 읽기 실패: %w", err)
-	}
-
-	text := string(txtBytes)
 	charCount, wordCount, lineCount, estimatedTokens := s.countText(text)
 
 	logs = append(logs, fmt.Sprintf("[COUNT] chars=%d, words=%d, lines=%d, estimatedTokens=%d",
@@ -223,5 +197,9 @@ func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
 		ConvertMs:       convertMs,
 		TranscribeMs:    transcribeMs,
 		TotalMs:         totalMs,
+		TranscribeModel: transcription.ModelName,
+		FallbackModel:   transcription.FallbackModelName,
+		FallbackUsed:    transcription.FallbackUsed,
+		RetryReason:     transcription.RetryReason,
 	}, nil
 }

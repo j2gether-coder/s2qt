@@ -558,6 +558,9 @@ func (a *App) SaveManualLLMResult(jsonText string) error {
 		return err
 	}
 
+	// 코드펜스 제거 + LLM 구조적 콤마 누락 보정
+	jsonText = service.CleanLLMJSONOutput(jsonText)
+
 	var js any
 	if err := json.Unmarshal([]byte(jsonText), &js); err != nil {
 		service.LogError("step1: invalid json result")
