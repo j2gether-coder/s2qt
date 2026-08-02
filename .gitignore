@@ -45,3 +45,4 @@
 *.dll
 *.so
 *.dylib
+"*.zip" 
