@@ -443,7 +443,7 @@ func (s *TemplateService) ApplyTemplateToPDF(item *TemplateItem, footerOverride 
 		return err
 	}
 
-	return templateReplaceOutputFile(outPath, s.Paths.TempPdf)
+	return templateReplaceOutputFile(outPath, s.Paths.ReportPdf)
 }
 
 func (s *TemplateService) ApplyTemplateToPNG(item *TemplateItem) error {
@@ -453,8 +453,8 @@ func (s *TemplateService) ApplyTemplateToPNG(item *TemplateItem) error {
 	if s.Paths == nil {
 		return fmt.Errorf("template paths가 nil 입니다")
 	}
-	if !FileExists(s.Paths.TempPng) {
-		return fmt.Errorf("temp.png가 없습니다: %s", s.Paths.TempPng)
+	if !FileExists(s.Paths.ReportPng) {
+		return fmt.Errorf("report.png가 없습니다: %s", s.Paths.ReportPng)
 	}
 
 	templatePath := item.templateBackgroundPathForPNG()
@@ -465,11 +465,11 @@ func (s *TemplateService) ApplyTemplateToPNG(item *TemplateItem) error {
 	outPath := s.buildTemplatedPNGPath()
 	defer os.Remove(outPath)
 
-	if err := templateComposePNGToPath(templatePath, s.Paths.TempPng, outPath, item.PNGPlacement); err != nil {
+	if err := templateComposePNGToPath(templatePath, s.Paths.ReportPng, outPath, item.PNGPlacement); err != nil {
 		return err
 	}
 
-	return templateReplaceOutputFile(outPath, s.Paths.TempPng)
+	return templateReplaceOutputFile(outPath, s.Paths.ReportPng)
 }
 
 func normalizeTemplateSettings(v *TemplateSettings) *TemplateSettings {
@@ -1101,13 +1101,14 @@ func (s *TemplateService) readBaseHTML() (string, error) {
 	return cleaned, nil
 }
 
+// 템플릿 합성 중간 산출물은 reports가 아니라 var/temp에 둔다.
 func (s *TemplateService) buildTemplatedPDFPath() string {
-	dir := filepath.Dir(s.Paths.TempPdf)
+	dir := filepath.Dir(s.Paths.TempHtml)
 	return filepath.Join(dir, "temp_templated.pdf")
 }
 
 func (s *TemplateService) buildTemplatedPNGPath() string {
-	dir := filepath.Dir(s.Paths.TempPng)
+	dir := filepath.Dir(s.Paths.TempHtml)
 	return filepath.Join(dir, "temp_templated.png")
 }
 

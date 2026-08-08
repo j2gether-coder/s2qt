@@ -14,6 +14,7 @@ type AppPaths struct {
 	Bin          string
 	Var          string
 	Temp         string
+	Reports      string
 	Conf         string
 	Data         string
 	Doc          string
@@ -50,12 +51,14 @@ type AppPaths struct {
 	TempJson        string
 	TempMd          string
 	TempHtml        string
-	TempPdf         string
 	TempDocx        string
 	TempPptx        string
-	TempPng         string
 	TempBlog        string
 	TempInfographic string
+
+	// fixed report files (프로젝트 루트 reports 폴더)
+	ReportPdf string
+	ReportPng string
 
 	// Template files
 	Template        string
@@ -83,6 +86,7 @@ func GetAppPaths() (*AppPaths, error) {
 	binDir := filepath.Join(root, "bin")
 	varDir := filepath.Join(root, "var")
 	tempDir := filepath.Join(varDir, "temp")
+	reportsDir := filepath.Join(root, "reports")
 	modelDir := filepath.Join(varDir, "model")
 	confDir := filepath.Join(varDir, "conf")
 	dbDir := filepath.Join(varDir, "db")
@@ -96,6 +100,7 @@ func GetAppPaths() (*AppPaths, error) {
 		Bin:      binDir,
 		Var:      varDir,
 		Temp:     tempDir,
+		Reports:  reportsDir,
 		Conf:     confDir,
 		Data:     filepath.Join(varDir, "data"),
 		Doc:      docDir,
@@ -121,11 +126,12 @@ func GetAppPaths() (*AppPaths, error) {
 		TempJson:  filepath.Join(tempDir, "temp.json"),
 		TempMd:    filepath.Join(tempDir, "temp.md"),
 		TempHtml:  filepath.Join(tempDir, "temp.html"),
-		TempPdf:   filepath.Join(tempDir, "temp.pdf"),
 		TempDocx:  filepath.Join(tempDir, "temp.docx"),
 		TempPptx:  filepath.Join(tempDir, "temp.pptx"),
-		TempPng:   filepath.Join(tempDir, "temp.png"),
 		TempBlog:  filepath.Join(tempDir, "blog.html"),
+
+		ReportPdf: filepath.Join(reportsDir, "report.pdf"),
+		ReportPng: filepath.Join(reportsDir, "report.png"),
 
 		TempInfographic: filepath.Join(tempDir, "infographic.md"),
 
@@ -311,6 +317,7 @@ func EnsureDirs(p *AppPaths) error {
 		p.Bin,
 		p.Var,
 		p.Temp,
+		p.Reports,
 		p.Conf,
 		p.Data,
 		p.DB,

@@ -134,8 +134,8 @@ func run() error {
 		paths.DefaultQRFile,
 		paths.TempJson,
 		paths.TempHtml,
-		paths.TempPdf,
-		paths.TempPng,
+		paths.ReportPdf,
+		paths.ReportPng,
 	}
 	checkList = append(checkList, skinOutputs...)
 	checkFiles(checkList...)

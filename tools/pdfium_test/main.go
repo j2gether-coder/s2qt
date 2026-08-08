@@ -17,7 +17,7 @@ import (
 
 const (
 	defaultDLLPath = "bin/pdfium.dll"
-	defaultPDFPath = "var/temp/temp.pdf"
+	defaultPDFPath = "reports/report.pdf"
 	defaultPNGPath = "var/temp/temp_from_pdfium.png"
 	defaultDPI     = 300
 

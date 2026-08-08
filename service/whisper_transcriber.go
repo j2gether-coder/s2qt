@@ -94,7 +94,11 @@ func (t *WhisperTranscriber) Transcribe(inputAudioPath string) (*WhisperTranscri
 
 	result.RetryReason = retryReason
 	if !t.hasFallbackModel() {
-		return nil, fmt.Errorf("전사 품질 확인 실패: %s. fallback 모델이 설정되어 있지 않습니다", retryReason)
+		// fallback 모델이 없으면 재전사할 방법이 없다.
+		// 전사 자체는 끝났으므로 경고만 남기고 1차 결과를 그대로 사용한다.
+		LogWarn(fmt.Sprintf("qt_prepare: [transcribe] model=%s retry_reason=%s fallback_model=none", primaryName, retryReason))
+		t.progress("transcribe", "전사 품질 경고: "+retryReason)
+		return result, nil
 	}
 
 	fallbackName := filepath.Base(t.Paths.WhisperFallbackModel)
@@ -112,8 +116,22 @@ func (t *WhisperTranscriber) Transcribe(inputAudioPath string) (*WhisperTranscri
 	if readErr != nil {
 		return nil, readErr
 	}
+	if strings.TrimSpace(fallbackText) == "" {
+		// 재전사 결과가 비면 1차 결과라도 살려서 돌려준다.
+		// temp.txt는 재전사 때 비워졌으므로 1차 전사문을 다시 써 준다.
+		LogWarn("qt_prepare: [transcribe] fallback transcript is empty, keep primary transcript")
+		if writeErr := os.WriteFile(t.Paths.TempTxt, []byte(result.Text), 0o644); writeErr != nil {
+			return nil, fmt.Errorf("1차 전사문 복원 실패: %w", writeErr)
+		}
+		result.TotalMs = time.Since(start).Milliseconds()
+		return result, nil
+	}
 	if fallbackReason != "" {
-		return nil, fmt.Errorf("전사 품질 확인 실패: %s=%s, %s=%s", primaryName, retryReason, fallbackName, fallbackReason)
+		// 재전사 결과에도 반복 구간이 남아 있으면 경고만 남기고 진행한다.
+		// 여기서 실패로 끊으면 사용자는 편집할 원문조차 얻지 못한다.
+		result.RetryReason = fmt.Sprintf("%s=%s, %s=%s", primaryName, retryReason, fallbackName, fallbackReason)
+		LogWarn("qt_prepare: [transcribe] fallback transcript still suspicious: " + result.RetryReason)
+		t.progress("transcribe", "재전사 후에도 반복 구간이 남아 있습니다. 원문을 확인해 주세요")
 	}
 
 	result.Text = fallbackText
@@ -175,11 +193,25 @@ func (t *WhisperTranscriber) readTranscript() (string, string, error) {
 }
 
 const (
-	transcriptTailRepeatFailureRatio = 0.25
-	transcriptMinTailRepeatLines     = 4
+	// 연속 반복 구간이 이 길이 이상이면 전체 길이와 무관하게 환각으로 본다.
+	// 긴 설교는 전사 단위가 수백 개라 비율 기준만으로는 잡히지 않는다.
+	transcriptAbsoluteRepeatUnits = 5
+
+	// 짧은 전사에서는 비율 기준을 함께 본다.
+	transcriptMinRepeatUnits     = 4
+	transcriptRepeatFailureRatio = 0.25
+
+	// 연속이 아니라 흩어져 반복되는 경우(A B A B A B)를 잡는 기준.
+	transcriptDuplicateFailureRatio = 0.5
+	transcriptMinUnitsForDuplicate  = 8
+
+	transcriptReasonSampleRunes = 30
 )
 
-var transcriptLineCleaner = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+var (
+	transcriptLineCleaner     = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+	transcriptSentenceSpliter = regexp.MustCompile(`[.!?…]+\s*`)
+)
 
 func looksHallucinatedTranscript(text string) (bool, string) {
 	normalized := strings.TrimSpace(text)
@@ -187,18 +219,63 @@ func looksHallucinatedTranscript(text string) (bool, string) {
 		return true, "전사 결과가 비어 있습니다"
 	}
 
-	lines := transcriptLines(normalized)
-	if len(lines) == 0 {
+	units := transcriptUnits(normalized)
+	if len(units) == 0 {
 		return true, "전사 결과가 비어 있습니다"
 	}
 
-	tailRepeatLines := trailingRepeatedTranscriptLines(lines)
-	tailRepeatRatio := float64(tailRepeatLines) / float64(len(lines))
-	if tailRepeatLines >= transcriptMinTailRepeatLines && tailRepeatRatio >= transcriptTailRepeatFailureRatio {
-		return true, fmt.Sprintf("마지막 구간에서 유사 문장이 전체 라인의 %.0f%% 반복되었습니다", tailRepeatRatio*100)
+	// 1) 완전히 같은 문장이 연달아 나오는 구간은 전사문 어디에 있어도, 비율과 무관하게 감지한다.
+	//    (기존 로직은 마지막 문장과 이어지는 구간만 확인해서, 반복 뒤에 다른 문장이
+	//     한 줄이라도 붙으면 환각을 놓쳤다. whisper의 반복 루프는 대부분 완전 일치다.)
+	exactRun, exactSample, exactAtTail := longestRepeatedTranscriptRun(units, sameTranscriptLine)
+	if exactRun >= transcriptAbsoluteRepeatUnits {
+		return true, fmt.Sprintf(
+			"%s 구간에서 같은 문장이 %d회 연속 반복되었습니다(전체의 %.0f%%): %q",
+			transcriptRunPosition(exactAtTail), exactRun,
+			float64(exactRun)/float64(len(units))*100, truncateTranscriptSample(exactSample),
+		)
+	}
+
+	// 2) 조금씩 다른 문장이 반복되는 경우는 오탐 여지가 있어 비율 기준을 함께 본다.
+	similarRun, similarSample, similarAtTail := longestRepeatedTranscriptRun(units, similarTranscriptLine)
+	similarRatio := float64(similarRun) / float64(len(units))
+	if similarRun >= transcriptMinRepeatUnits && similarRatio >= transcriptRepeatFailureRatio {
+		return true, fmt.Sprintf(
+			"%s 구간에서 유사 문장이 %d회 연속 반복되었습니다(전체의 %.0f%%): %q",
+			transcriptRunPosition(similarAtTail), similarRun,
+			similarRatio*100, truncateTranscriptSample(similarSample),
+		)
+	}
+
+	// 3) 연속은 아니지만 같은 문장이 전사문 전반에 반복되는 경우.
+	if len(units) >= transcriptMinUnitsForDuplicate {
+		dupRatio, dupSample := duplicateTranscriptRatio(units)
+		if dupRatio >= transcriptDuplicateFailureRatio {
+			return true, fmt.Sprintf(
+				"중복 문장이 전체의 %.0f%%를 차지합니다: %q",
+				dupRatio*100, truncateTranscriptSample(dupSample),
+			)
+		}
 	}
 
 	return false, ""
+}
+
+// transcriptUnits는 전사문을 비교 단위(문장)로 나눈다.
+// whisper는 보통 세그먼트마다 한 줄을 쓰지만, 반복 구간이 한 줄에 몰려 나오는
+// 경우도 있어 문장 부호 기준으로 한 번 더 나눈다.
+func transcriptUnits(text string) []string {
+	units := []string{}
+	for _, line := range transcriptLines(text) {
+		for _, sentence := range transcriptSentenceSpliter.Split(line, -1) {
+			sentence = strings.TrimSpace(sentence)
+			if sentence == "" {
+				continue
+			}
+			units = append(units, sentence)
+		}
+	}
+	return units
 }
 
 func transcriptLines(text string) []string {
@@ -214,20 +291,84 @@ func transcriptLines(text string) []string {
 	return lines
 }
 
-func trailingRepeatedTranscriptLines(lines []string) int {
-	if len(lines) == 0 {
-		return 0
+// longestRepeatedTranscriptRun은 가장 긴 연속 반복 구간의 길이와 대표 문장,
+// 그리고 그 구간이 전사문 끝에 붙어 있는지를 돌려준다.
+// 비교는 구간의 첫 문장(anchor) 기준으로 해서 조금씩 흘러가는 문장이
+// 하나의 반복 구간으로 이어 붙지 않도록 한다.
+func longestRepeatedTranscriptRun(units []string, equal func(a, b string) bool) (int, string, bool) {
+	if len(units) == 0 {
+		return 0, "", false
 	}
 
-	lastLine := lines[len(lines)-1]
-	count := 1
-	for i := len(lines) - 2; i >= 0; i-- {
-		if !similarTranscriptLine(lines[i], lastLine) {
-			break
+	best, bestSample, bestEnd := 1, units[0], 0
+	anchor, run := 0, 1
+
+	for i := 1; i < len(units); i++ {
+		if equal(units[i], units[anchor]) {
+			run++
+		} else {
+			anchor, run = i, 1
 		}
-		count++
+		if run > best {
+			best, bestSample, bestEnd = run, units[anchor], i
+		}
 	}
-	return count
+
+	return best, bestSample, bestEnd == len(units)-1
+}
+
+func transcriptRunPosition(atTail bool) string {
+	if atTail {
+		return "마지막"
+	}
+	return "중간"
+}
+
+// duplicateTranscriptRatio는 앞서 나온 문장과 같은 문장이 차지하는 비율을 돌려준다.
+func duplicateTranscriptRatio(units []string) (float64, string) {
+	seen := map[string]int{}
+	duplicates := 0
+	topKey, topCount := "", 0
+
+	for _, unit := range units {
+		key := strings.Join(canonicalTranscriptLineTokens(unit), " ")
+		if key == "" {
+			key = unit
+		}
+		seen[key]++
+		if seen[key] > 1 {
+			duplicates++
+		}
+		if seen[key] > topCount {
+			topKey, topCount = unit, seen[key]
+		}
+	}
+
+	if topCount < 2 {
+		return 0, ""
+	}
+	return float64(duplicates) / float64(len(units)), topKey
+}
+
+func truncateTranscriptSample(sample string) string {
+	sample = strings.TrimSpace(sample)
+	runes := []rune(sample)
+	if len(runes) <= transcriptReasonSampleRunes {
+		return sample
+	}
+	return string(runes[:transcriptReasonSampleRunes]) + "..."
+}
+
+// sameTranscriptLine은 문장 부호/대소문자만 다른 완전 일치를 판단한다.
+// 길이 조건을 두지 않는다. ("감사합니다", "네" 처럼 짧은 문구가 whisper 환각의
+// 대표 패턴이라, 기존의 8자 이상 조건 때문에 정작 흔한 환각을 놓쳤다.)
+func sameTranscriptLine(a, b string) bool {
+	aTokens := canonicalTranscriptLineTokens(a)
+	bTokens := canonicalTranscriptLineTokens(b)
+	if len(aTokens) == 0 || len(bTokens) == 0 {
+		return strings.TrimSpace(a) == strings.TrimSpace(b)
+	}
+	return strings.Join(aTokens, " ") == strings.Join(bTokens, " ")
 }
 
 func similarTranscriptLine(a, b string) bool {
@@ -238,7 +379,7 @@ func similarTranscriptLine(a, b string) bool {
 	}
 
 	if strings.Join(aTokens, " ") == strings.Join(bTokens, " ") {
-		return utf8RuneCount(strings.Join(aTokens, "")) >= 8
+		return true
 	}
 
 	overlap := transcriptTokenOverlap(aTokens, bTokens)

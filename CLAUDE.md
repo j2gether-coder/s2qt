@@ -72,6 +72,8 @@ The app bundles Windows executables: `ffmpeg.exe`, `ffprobe.exe`, `yt-dlp.exe`, 
 
 All runtime data lives under `var/` (gitignored): SQLite database (`db/s2qt.db`), config (`conf/`), temp files (`temp/`), templates (`template/`), logs (`log/`), and generated documents (`doc/`).
 
+Step 3의 PDF/PNG 산출물만 예외적으로 프로젝트 루트의 `reports/` (gitignored)에 `report.pdf` / `report.png`로 저장됩니다 (`AppPaths.ReportPdf` / `AppPaths.ReportPng`).
+
 ### Path Resolution
 
 `util/path.go` defines `AppPaths` which resolves all runtime paths relative to the project root (found by locating `go.mod` or `wails.json`).

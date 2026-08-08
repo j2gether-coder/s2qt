@@ -861,7 +861,7 @@ func (s *PDFService) SaveHtmlAndMakePDFWithFooter(html string, footerOverride *Q
 	}
 	defer os.Remove(pdfSourcePath)
 
-	if err := s.makePDFWithEdge(pdfSourcePath, s.Paths.TempPdf); err != nil {
+	if err := s.makePDFWithEdge(pdfSourcePath, s.Paths.ReportPdf); err != nil {
 		return nil, err
 	}
 
@@ -870,14 +870,14 @@ func (s *PDFService) SaveHtmlAndMakePDFWithFooter(html string, footerOverride *Q
 		Message:  "PDF 생성이 완료되었습니다.",
 		MdFile:   s.Paths.TempMd,
 		HtmlFile: s.Paths.TempHtml,
-		PdfFile:  s.Paths.TempPdf,
+		PdfFile:  s.Paths.ReportPdf,
 	}, nil
 }
 
 func (s *PDFService) cleanupPDFTemps() error {
 	files := []string{
 		s.Paths.TempMd,
-		s.Paths.TempPdf,
+		s.Paths.ReportPdf,
 		buildPDFSourcePath(s.Paths.TempHtml),
 		buildPDFSourceJSONPath(s.Paths.TempHtml),
 	}

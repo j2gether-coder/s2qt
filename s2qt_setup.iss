@@ -35,9 +35,11 @@ Name: "{app}\var\data"
 Name: "{app}\var\db"
 Name: "{app}\var\log"
 Name: "{app}\var\temp"
+Name: "{app}\reports"
 
 ; 설치 경로가 보호된 경로일 때를 대비해 runtime 폴더에 쓰기 권한 부여
 Name: "{app}\var"; Permissions: users-modify
+Name: "{app}\reports"; Permissions: users-modify
 
 [Files]
 ; --- bin ---
@@ -86,3 +88,4 @@ Filename: "{app}\bin\{#MyAppExeName}"; Description: "{#MyAppName} 실행"; Flags
 ; runtime 생성 파일/로그 정리
 Type: filesandordirs; Name: "{app}\var\log"
 Type: filesandordirs; Name: "{app}\var\temp"
+Type: filesandordirs; Name: "{app}\reports"

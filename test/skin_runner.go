@@ -28,7 +28,7 @@ type SkinTestInput struct {
 	OutputPNGPath string `json:"output_png_path"`
 	OutputPDFPath string `json:"output_pdf_path"`
 
-	// 전경(temp.png)이 들어갈 영역
+	// 전경(report.png)이 들어갈 영역
 	ForegroundLeftPX   int `json:"foreground_left_px"`
 	ForegroundTopPX    int `json:"foreground_top_px"`
 	ForegroundWidthPX  int `json:"foreground_width_px"`
@@ -118,8 +118,8 @@ func runSkinTest(paths *util.AppPaths, db *sql.DB, skin *SkinTestInput) []string
 		return outputs
 	}
 
-	if _, err := os.Stat(paths.TempPng); err != nil {
-		fmt.Printf("[WARN] skin test skipped: temp.png not found: %v\n", err)
+	if _, err := os.Stat(paths.ReportPng); err != nil {
+		fmt.Printf("[WARN] skin test skipped: report.png not found: %v\n", err)
 		return outputs
 	}
 
@@ -133,7 +133,7 @@ func runSkinTest(paths *util.AppPaths, db *sql.DB, skin *SkinTestInput) []string
 
 	fmt.Println("=== Skin Composite Start ===")
 	fmt.Printf("template png : %s\n", skin.SkinImagePath)
-	fmt.Printf("foreground   : %s\n", paths.TempPng)
+	fmt.Printf("foreground   : %s\n", paths.ReportPng)
 	fmt.Printf("output png   : %s\n", skin.OutputPNGPath)
 	fmt.Printf("fit mode     : %s\n", skin.FitMode)
 	fmt.Printf("rect         : left=%d, top=%d, width=%d, height=%d\n",
@@ -146,7 +146,7 @@ func runSkinTest(paths *util.AppPaths, db *sql.DB, skin *SkinTestInput) []string
 
 	if err := composeTemplateAndForeground(
 		skin.SkinImagePath,
-		paths.TempPng,
+		paths.ReportPng,
 		skin.OutputPNGPath,
 		skin,
 	); err != nil {
@@ -156,16 +156,16 @@ func runSkinTest(paths *util.AppPaths, db *sql.DB, skin *SkinTestInput) []string
 		outputs = append(outputs, skin.OutputPNGPath)
 	}
 
-	// 비교용으로 안정적인 temp.pdf를 temp_skin.pdf로 복사
-	if _, err := os.Stat(paths.TempPdf); err == nil {
-		if err := copyFile(paths.TempPdf, skin.OutputPDFPath); err != nil {
+	// 비교용으로 안정적인 report.pdf를 temp_skin.pdf로 복사
+	if _, err := os.Stat(paths.ReportPdf); err == nil {
+		if err := copyFile(paths.ReportPdf, skin.OutputPDFPath); err != nil {
 			fmt.Printf("[WARN] skin pdf copy failed: %v\n", err)
 		} else {
 			fmt.Printf("[OK] skin pdf : %s\n", skin.OutputPDFPath)
 			outputs = append(outputs, skin.OutputPDFPath)
 		}
 	} else {
-		fmt.Printf("[WARN] temp.pdf not found, skip pdf copy: %v\n", err)
+		fmt.Printf("[WARN] report.pdf not found, skip pdf copy: %v\n", err)
 	}
 
 	fmt.Println("=== Skin Composite Done ===")
@@ -196,7 +196,7 @@ func composeTemplateAndForeground(templatePath, foregroundPath, outputPath strin
 	}
 
 	// 핵심:
-	// 최종 캔버스는 foreground(temp.png) 기준으로 고정
+	// 최종 캔버스는 foreground(report.png) 기준으로 고정
 	canvas := image.NewRGBA(image.Rect(0, 0, fgW, fgH))
 
 	// template.png를 foreground 캔버스 크기로 먼저 정규화해서 배경으로 깐다
@@ -245,7 +245,7 @@ func composeTemplateAndForeground(templatePath, foregroundPath, outputPath strin
 		dstRect.Dy(),
 	)
 
-	// temp.png를 지정 rect 안에 contain/cover로 배치
+	// report.png를 지정 rect 안에 contain/cover로 배치
 	xdraw.CatmullRom.Scale(
 		canvas,
 		dstRect,

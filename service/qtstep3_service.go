@@ -88,7 +88,7 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 			result.PDF = QTStep3FileResult{
 				Success:  true,
 				Status:   "완료",
-				FilePath: s.Paths.TempPdf,
+				FilePath: s.Paths.ReportPdf,
 			}
 			LogInfo("step3: pdf generation completed")
 		}
@@ -108,7 +108,7 @@ func (s *QTStep3Service) Run(req *QTStep3Request) (*QTStep3Result, error) {
 			result.PNG = QTStep3FileResult{
 				Success:  true,
 				Status:   "완료",
-				FilePath: s.Paths.TempPng,
+				FilePath: s.Paths.ReportPng,
 			}
 			LogInfo("step3: png generation completed")
 		}

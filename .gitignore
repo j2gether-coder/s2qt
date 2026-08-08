@@ -29,6 +29,7 @@
 /var/template/
 /var/log/
 /var/db/
+/reports/
 
 ####################################
 # Env / Logs

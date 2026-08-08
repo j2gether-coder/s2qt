@@ -78,7 +78,7 @@ func (s *PNGService) GenerateFromTempHTML(dpi int) (*PNGGenerateResult, error) {
 }
 
 func (s *PNGService) GenerateFromTempPDF(dpi int) (*PNGGenerateResult, error) {
-	return s.GenerateFromPDFFile(s.Paths.TempPdf, s.Paths.TempPng, dpi)
+	return s.GenerateFromPDFFile(s.Paths.ReportPdf, s.Paths.ReportPng, dpi)
 }
 
 func (s *PNGService) GenerateFromPDFFile(pdfPath, pngPath string, dpi int) (*PNGGenerateResult, error) {
@@ -838,7 +838,7 @@ func (s *PNGService) GenerateFromTempHTMLWithFooterAndBG(dpi int, footerOverride
 	// 1순위: PDF 기준 PNG 생성
 	// 단, transparentBG는 기존 HTML 기반 경로를 유지
 	if !transparentBG {
-		if _, err := os.Stat(s.Paths.TempPdf); err == nil {
+		if _, err := os.Stat(s.Paths.ReportPdf); err == nil {
 			result, pdfErr := s.GenerateFromTempPDF(dpi)
 			if pdfErr == nil {
 				return result, nil
@@ -855,7 +855,7 @@ func (s *PNGService) GenerateFromTempHTMLWithFooterAndBG(dpi int, footerOverride
 	}
 	defer os.Remove(sourcePath)
 
-	return s.GenerateFromHTMLFile(sourcePath, s.Paths.TempPng, dpi, transparentBG)
+	return s.GenerateFromHTMLFile(sourcePath, s.Paths.ReportPng, dpi, transparentBG)
 }
 
 const (

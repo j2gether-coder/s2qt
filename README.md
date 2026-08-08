@@ -133,8 +133,11 @@ go test ./service/ -run TestName
 - `var/temp/temp.txt`: 입력 원문
 - `var/temp/temp.json`: LLM 생성 QT JSON
 - `var/temp/temp.html`: 미리보기/HTML 출력
-- `var/temp/temp.pdf`: PDF 출력
-- `var/temp/temp.png`: PNG 출력
+
+Step3 산출물 중 PDF/PNG는 프로젝트 루트의 `reports/`에 저장됩니다.
+
+- `reports/report.pdf`: PDF 출력
+- `reports/report.png`: PNG 출력
 
 설정과 데이터 파일은 다음 위치에 저장됩니다.
 
