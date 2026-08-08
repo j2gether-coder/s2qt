@@ -65,7 +65,7 @@ func (s *VideoService) downloadVideo(url string) (string, error) {
 	args := []string{
 		"-f", "mp4/bestvideo+bestaudio/best",
 		"--merge-output-format", "mp4",
-		"--newline",
+		"--newline", "--no-part",
 		"-o", s.Paths.TempVideo,
 		url,
 	}
