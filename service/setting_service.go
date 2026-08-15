@@ -226,6 +226,12 @@ func (s *SettingsService) WipeAllSecretValues() ([]string, error) {
 		}
 		keys = append(keys, k)
 	}
+	// 순회가 중간에 끊기면 keys가 불완전해진다. 아래 UPDATE는 모든 비밀값을 지우므로
+	// 불완전한 목록을 그대로 반환하면 감사 로그가 실제 삭제 범위와 어긋난다.
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("failed to iterate secret settings: %w", err)
+	}
 	rows.Close()
 
 	if _, err := s.db.Exec(`

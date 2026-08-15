@@ -5,7 +5,14 @@ import {
   DeleteHistory,
   PrepareReworkFromHistory,
 } from "../../../wailsjs/go/main/App";
-import { appState, getMenuLabel, setAudienceStep, setBasicInfoField, setSelectedMenu } from "../../state/appState";
+import {
+  appState,
+  getMenuLabel,
+  setAudienceStep,
+  setAudienceStepStatus,
+  setBasicInfoField,
+  setSelectedMenu,
+} from "../../state/appState";
 import { showToast, setInlineMessage, clearInlineMessage } from "../../common/uiMessage";
 import { mountAppShell } from "../appShell";
 
@@ -525,6 +532,14 @@ async function handleReworkSelected() {
     };
 
     setSelectedMenu(audienceId);
+
+    // 재작업은 PrepareReworkFromHistory가 방금 temp.json을 복원한 상태이므로
+    // Step2가 disk에서 로드하도록 step1을 done으로 표시한다.
+    // (Step2는 같은 세션에서 step1=done일 때만 temp.json을 읽는다)
+    setAudienceStepStatus(audienceId, "step1", "done");
+    setAudienceStepStatus(audienceId, "step2", "idle");
+    setAudienceStepStatus(audienceId, "step3", "idle");
+
     setAudienceStep(audienceId, "step2");
     showToast("작업을 불러왔습니다.", "success");
     mountAppShell("app");

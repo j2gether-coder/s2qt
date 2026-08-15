@@ -335,6 +335,11 @@ func mergeUtilCheckResults(a, b *service.UtilCheckResult) *service.UtilCheckResu
 		b.Installed...,
 	)
 
+	merged.Updated = appendUniqueStrings(
+		append([]string{}, a.Updated...),
+		b.Updated...,
+	)
+
 	if merged.Versions == nil {
 		merged.Versions = map[string]string{}
 	}

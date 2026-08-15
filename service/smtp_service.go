@@ -262,7 +262,8 @@ func buildMIMEMessage(from string, to []string, subject string, plainBody string
 		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		buf.WriteString(`Content-Type: text/plain; charset="utf-8"` + "\r\n")
 		buf.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-		buf.WriteString(plain + "\r\n")
+		buf.WriteString(plain)
+		buf.WriteString("\r\n")
 	}
 
 	html := strings.TrimSpace(htmlBody)
@@ -270,7 +271,8 @@ func buildMIMEMessage(from string, to []string, subject string, plainBody string
 		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		buf.WriteString(`Content-Type: text/html; charset="utf-8"` + "\r\n")
 		buf.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-		buf.WriteString(html + "\r\n")
+		buf.WriteString(html)
+		buf.WriteString("\r\n")
 	}
 
 	buf.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))

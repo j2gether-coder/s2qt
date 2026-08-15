@@ -103,6 +103,15 @@ func blogSupportScriptures(m blogMetadata) []BlogSupportScripture {
 	return out
 }
 
+// writeWrapped는 여는 태그/내용/닫는 태그를 중간 문자열 생성 없이 그대로 이어 쓴다.
+// strings.Builder에 `open + content + close`를 넘기면 임시 문자열을 한 번 더 만들게 되므로,
+// 반복되는 태그 조립을 이 헬퍼로 통일한다.
+func writeWrapped(sb *strings.Builder, open, content, close string) {
+	sb.WriteString(open)
+	sb.WriteString(content)
+	sb.WriteString(close)
+}
+
 func buildBlogBody(doc *blogDoc) string {
 	m := doc.Metadata
 
@@ -116,7 +125,7 @@ func buildBlogBody(doc *blogDoc) string {
 
 	// temp.html과 동일한 qt-* 클래스 구조를 사용해 loadQTHTMLStyle() CSS를 그대로 적용받는다.
 	sb.WriteString(`<div class="qt-wrap">`)
-	sb.WriteString(`<div class="qt-title">` + escapeHTML(titleText) + `</div>`)
+	writeWrapped(&sb, `<div class="qt-title">`, escapeHTML(titleText), `</div>`)
 
 	// 상단 메타 정보 (본문 성구 / 찬송)
 	subboxParts := make([]string, 0)
@@ -127,7 +136,7 @@ func buildBlogBody(doc *blogDoc) string {
 		subboxParts = append(subboxParts, "찬송: "+escapeHTML(hymnText))
 	}
 	if len(subboxParts) > 0 {
-		sb.WriteString(`<div class="qt-subbox">` + strings.Join(subboxParts, "<br />") + `</div>`)
+		writeWrapped(&sb, `<div class="qt-subbox">`, strings.Join(subboxParts, "<br />"), `</div>`)
 	}
 
 	// 섹션(요약/메시지/묵상/기도)
@@ -139,9 +148,9 @@ func buildBlogBody(doc *blogDoc) string {
 		sb.WriteString(`<h2 class="qt-section-title">성경본문</h2>`)
 		sb.WriteString(`<div class="qt-bible-passage">`)
 		if bibleText != "" {
-			sb.WriteString(`<div class="qt-bible-passage-title">` + escapeHTML(bibleText) + `</div>`)
+			writeWrapped(&sb, `<div class="qt-bible-passage-title">`, escapeHTML(bibleText), `</div>`)
 		}
-		sb.WriteString(`<p>` + nl2br(escapeHTML(passageText)) + `</p>`)
+		writeWrapped(&sb, `<p>`, nl2br(escapeHTML(passageText)), `</p>`)
 		sb.WriteString(`</div>`)
 	}
 
@@ -151,10 +160,10 @@ func buildBlogBody(doc *blogDoc) string {
 		for _, item := range supports {
 			sb.WriteString(`<div class="qt-bible-passage">`)
 			if item.Reference != "" {
-				sb.WriteString(`<div class="qt-bible-passage-title">` + escapeHTML(item.Reference) + `</div>`)
+				writeWrapped(&sb, `<div class="qt-bible-passage-title">`, escapeHTML(item.Reference), `</div>`)
 			}
 			if item.Text != "" {
-				sb.WriteString(`<p>` + nl2br(escapeHTML(item.Text)) + `</p>`)
+				writeWrapped(&sb, `<p>`, nl2br(escapeHTML(item.Text)), `</p>`)
 			}
 			sb.WriteString(`</div>`)
 		}
@@ -178,7 +187,7 @@ func buildBlogSections(sections []QTSectionData) string {
 				continue
 			}
 			sb.WriteString(`<h2 class="qt-section-title">📖 말씀의 길잡이</h2>`)
-			sb.WriteString(`<div class="qt-body"><p>` + nl2br(escapeHTML(body)) + `</p></div>`)
+			writeWrapped(&sb, `<div class="qt-body"><p>`, nl2br(escapeHTML(body)), `</p></div>`)
 
 		case "message":
 			sb.WriteString(`<h2 class="qt-section-title">✨ 오늘의 메시지</h2>`)
@@ -189,9 +198,9 @@ func buildBlogSections(sections []QTSectionData) string {
 					continue
 				}
 				if blk.Type == "message_title" {
-					sb.WriteString(`<h3 class="qt-message-title">` + escapeHTML(text) + `</h3>`)
+					writeWrapped(&sb, `<h3 class="qt-message-title">`, escapeHTML(text), `</h3>`)
 				} else {
-					sb.WriteString(`<div class="qt-body"><p>` + nl2br(escapeHTML(text)) + `</p></div>`)
+					writeWrapped(&sb, `<div class="qt-body"><p>`, nl2br(escapeHTML(text)), `</p></div>`)
 				}
 			}
 
@@ -213,7 +222,7 @@ func buildBlogSections(sections []QTSectionData) string {
 			sb.WriteString(`<h2 class="qt-section-title">🔍 깊은 묵상과 적용</h2>`)
 			sb.WriteString(`<div class="qt-box qt-reflection"><ul class="qt-list">`)
 			for _, it := range items {
-				sb.WriteString(`<li>` + escapeHTML(it) + `</li>`)
+				writeWrapped(&sb, `<li>`, escapeHTML(it), `</li>`)
 			}
 			sb.WriteString(`</ul></div>`)
 
@@ -226,7 +235,7 @@ func buildBlogSections(sections []QTSectionData) string {
 				continue
 			}
 			sb.WriteString(`<h2 class="qt-section-title">🙏 오늘의 기도</h2>`)
-			sb.WriteString(`<div class="qt-box qt-prayer"><p>` + nl2br(escapeHTML(body)) + `</p></div>`)
+			writeWrapped(&sb, `<div class="qt-box qt-prayer"><p>`, nl2br(escapeHTML(body)), `</p></div>`)
 		}
 	}
 

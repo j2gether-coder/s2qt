@@ -34,9 +34,11 @@ func FetchVideoMeta(ytdlpPath, url string) (*VideoMeta, error) {
 
 	cmd := newHiddenCommand(
 		ytdlpPath,
-		"--no-playlist",
-		"--dump-json",
-		url,
+		buildYtDlpArgs(
+			"--no-playlist",
+			"--dump-json",
+			url,
+		)...,
 	)
 
 	out, err := cmd.Output()

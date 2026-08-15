@@ -161,6 +161,16 @@ func runHiddenCommandStreaming(onLine func(line string), name string, args ...st
 				onLine(line)
 			}
 		}
+
+		// 스캔이 중단되면(예: 한 줄이 버퍼 한도를 초과) 이후 출력이 조용히 사라진다.
+		// 이 출력은 실패 시 에러 메시지로 쓰이므로, 잘렸다는 사실을 남긴다.
+		if err := sc.Err(); err != nil {
+			mu.Lock()
+			buf.WriteString("[출력 읽기 중단] ")
+			buf.WriteString(err.Error())
+			buf.WriteByte('\n')
+			mu.Unlock()
+		}
 	}
 
 	if err := cmd.Start(); err != nil {

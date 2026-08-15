@@ -62,13 +62,13 @@ func (s *VideoService) checkRequiredFiles() error {
 }
 
 func (s *VideoService) downloadVideo(url string) (string, error) {
-	args := []string{
+	args := buildYtDlpArgs(
 		"-f", "mp4/bestvideo+bestaudio/best",
 		"--merge-output-format", "mp4",
 		"--newline", "--no-part",
 		"-o", s.Paths.TempVideo,
 		url,
-	}
+	)
 
 	lastPct := -1
 	return runHiddenCommandStreaming(func(line string) {
@@ -137,12 +137,33 @@ func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
 	logs = append(logs, "[OK] 필수 파일 확인 완료")
 	s.progress("check", "필수 파일 확인 완료")
 
+	// yt-dlp는 버전이 오래되면 YouTube 다운로드가 곧바로 실패하므로,
+	// 다운로드 직전에 최신 버전을 확인하고 필요하면 먼저 갱신한다.
+	// 확인/갱신에 실패해도 기존 실행 파일로 다운로드를 시도한다.
+	ytdlpStart := time.Now()
+	upd, err := EnsureYtDlpLatest(func(message string) {
+		s.progress("download", message)
+	})
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("[WARN] yt-dlp 버전 확인 실패: %v", err))
+	} else {
+		logs = append(logs, fmt.Sprintf("[OK] yt-dlp %s (%d ms)",
+			upd.Message, time.Since(ytdlpStart).Milliseconds()))
+		if upd.Updated {
+			s.progress("download", "yt-dlp 업데이트 완료 ("+upd.Version+")")
+		}
+	}
+
 	s.progress("download", "동영상 다운로드 중...")
 	downloadStart := time.Now()
 	out, err := s.downloadVideo(url)
 	downloadMs := time.Since(downloadStart).Milliseconds()
 	logs = append(logs, fmt.Sprintf("=== yt-dlp (%d ms) ===\n%s", downloadMs, out))
 	if err != nil {
+		// JS 런타임이 없으면 YouTube가 HTTP 403을 돌려주므로, 원인을 함께 안내한다.
+		if hint := ytDlpJSRuntimeHint(); hint != "" {
+			return nil, fmt.Errorf("동영상 다운로드 실패 - %s\n%s", hint, out)
+		}
 		return nil, fmt.Errorf("동영상 다운로드 실패\n%s", out)
 	}
 	s.progress("download", fmt.Sprintf("다운로드 완료 (%d ms)", downloadMs))

@@ -1,17 +1,19 @@
 {
-  "last_checked_at": "2026-08-08T17:56:29+09:00",
-  "last_check_mode": "png",
+  "last_checked_at": "2026-08-15T15:36:41+09:00",
+  "last_check_mode": "video",
   "last_check_ok": true,
   "installed": {
     "ffmpeg": true,
     "ffprobe": true,
     "ggml-base.bin": true,
     "ggml-tiny.bin": true,
+    "js-runtime": true,
     "pdfium.dll": true,
     "yt-dlp": true
   },
   "versions": {
-    "yt-dlp": "2026.02.04"
+    "js-runtime": "deno 2.9.5 (stable, release, x86_64-pc-windows-msvc)",
+    "yt-dlp": "2026.07.04"
   },
   "model_installed": true
 }
