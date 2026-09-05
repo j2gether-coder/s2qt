@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"database/sql"
@@ -55,6 +55,7 @@ type ReworkPrepareResponse struct {
 	Success      bool   `json:"success"`
 	HistoryID    int64  `json:"historyId"`
 	Audience     string `json:"audience"`
+	Series       string `json:"series"`
 	Title        string `json:"title"`
 	BibleText    string `json:"bibleText"`
 	Hymn         string `json:"hymn"`
@@ -470,17 +471,23 @@ func (s *HistoryService) PrepareReworkFromHistory(historyID int64, audience stri
 		return resp, err
 	}
 
-	flat, err := parseFlatQTStep2JSON(qtRow.QTResultJSON, audience)
+	doc, llmDoc, err := restoreQTSectionDoc(qtRow.QTResultJSON, audience)
 	if err != nil {
 		return resp, err
 	}
-
-	doc := buildQTSectionDocFromFlat(flat, audience)
 
 	tempPath, err := writeQTSectionDocToTempJSON(doc)
 	if err != nil {
 		return resp, err
 	}
+
+	// 인포그래픽은 저장된 원본에서 다시 렌더한다.
+	// 구버전 이력(llmDoc == nil)이면 파일을 비우기만 한다.
+	restoreInfographicFile(llmDoc, audience, master)
+
+	// series는 metadata에만 있다. history_master.title에는 시리즈가 합쳐진
+	// 라벨이 들어 있어 거기서 되뽑을 수 없다.
+	series := getStringFromMap(doc.Metadata, "series")
 
 	title := getStringFromMap(doc.Metadata, "title")
 	bibleText := getStringFromMap(doc.Metadata, "bible_text")
@@ -489,8 +496,14 @@ func (s *HistoryService) PrepareReworkFromHistory(historyID int64, audience stri
 	churchName := getStringFromMap(doc.Metadata, "church_name")
 	sermonDate := getStringFromMap(doc.Metadata, "sermon_date")
 
+	// master.Title은 "시리즈|||제목" 합친 라벨이므로 그대로 쓰면 제목에 시리즈가 섞인다.
+	labelSeries, labelTitle := splitHistoryTitle(master.Title)
+
+	if stringsTrim(series) == "" {
+		series = labelSeries
+	}
 	if stringsTrim(title) == "" {
-		title = master.Title
+		title = labelTitle
 	}
 	if stringsTrim(bibleText) == "" {
 		bibleText = master.BibleText
@@ -512,6 +525,7 @@ func (s *HistoryService) PrepareReworkFromHistory(historyID int64, audience stri
 		Success:      true,
 		HistoryID:    master.ID,
 		Audience:     audience,
+		Series:       series,
 		Title:        title,
 		BibleText:    bibleText,
 		Hymn:         hymn,
@@ -523,6 +537,108 @@ func (s *HistoryService) PrepareReworkFromHistory(historyID int64, audience stri
 	}
 
 	return resp, nil
+}
+
+// restoreQTSectionDoc는 작업내역에 저장된 JSON을 temp.json용 문서로 되살린다.
+//
+// qt_result_json 컬럼에는 두 가지 포맷이 시간순으로 섞여 있다.
+//
+//	신규(2026-08-31~) : Step1이 저장한 LLM 원본. sections 배열이 있다.
+//	구버전            : Step2가 저장한 평면 페이로드. sections가 없다.
+//
+// sections 유무로 갈리며, 구버전 경로는 지금까지 쌓인 이력의 유일한 복원 수단이므로
+// 그대로 유지한다.
+//
+// 두 번째 반환값은 신규 포맷일 때만 채워지며, 인포그래픽 복원에 쓴다.
+// 구버전 이력에는 인포그래픽 데이터가 없으므로 nil이다.
+func restoreQTSectionDoc(jsonText string, audience string) (*QTSectionDoc, *QTLLMDoc, error) {
+	if stringsTrim(jsonText) == "" {
+		return nil, nil, fmt.Errorf("qt result json is empty")
+	}
+
+	var probe struct {
+		Sections []json.RawMessage `json:"sections"`
+	}
+	_ = json.Unmarshal([]byte(jsonText), &probe)
+
+	if len(probe.Sections) == 0 {
+		flat, err := parseFlatQTStep2JSON(jsonText, audience)
+		if err != nil {
+			return nil, nil, err
+		}
+		return buildQTSectionDocFromFlat(flat, audience), nil, nil
+	}
+
+	var doc QTLLMDoc
+	if err := json.Unmarshal([]byte(jsonText), &doc); err != nil {
+		return nil, nil, fmt.Errorf("invalid llm result json: %w", err)
+	}
+
+	qt := doc.QTSectionDoc
+	qt.Version = "1.0"
+	if stringsTrim(qt.DocType) == "" {
+		qt.DocType = "qt"
+	}
+	if stringsTrim(qt.Audience) == "" {
+		qt.Audience = stringsTrim(audience)
+	}
+	if stringsTrim(qt.Template) == "" {
+		qt.Template = "qt_classic"
+	}
+
+	return &qt, &doc, nil
+}
+
+// restoreInfographicFile은 재작업 시 sermon_summary.md를 다시 만든다.
+// 조건을 만족하지 않으면 파일을 0바이트로 비워, 이전 설교의 인포그래픽이
+// 이번 작업의 산출물로 오인되지 않게 한다.
+//
+// 재작업에서도 인포그래픽이 살아나는 것은 md를 전사문이 아니라
+// 저장된 JSON에서 렌더하기 때문이다. (전사문은 작업내역에 저장되지 않는다)
+//
+// 제목과 성경본문은 이력 마스터에 저장된 값(= Step1 당시 화면 기본정보)을 쓴다.
+func restoreInfographicFile(doc *QTLLMDoc, audience string, master HistoryMaster) {
+	paths, err := util.GetAppPaths()
+	if err != nil || paths == nil {
+		LogError("rework: app paths 조회 실패로 sermon_summary.md를 갱신하지 못했습니다")
+		return
+	}
+
+	truncateFile(paths.TempSermonSummary)
+
+	if doc == nil || stringsTrim(audience) != AudienceAdult {
+		return
+	}
+
+	if reasons := ValidateInfographic(doc.Infographic); len(reasons) > 0 {
+		LogWarn("rework: infographic 생성 건너뜀 — " + strings.Join(reasons, ", "))
+		return
+	}
+
+	// 시리즈와 제목은 복원된 문서의 metadata에서 가져온다.
+	// master.Title은 "시리즈|||제목" 합친 라벨이므로 되나눠 폴백으로만 쓴다.
+	series, title := splitHistoryTitle(master.Title)
+	bibleText := master.BibleText
+
+	if doc.Metadata != nil {
+		if s := strings.TrimSpace(getStringFromMap(doc.Metadata, "series")); s != "" {
+			series = s
+		}
+		if t := strings.TrimSpace(getStringFromMap(doc.Metadata, "title")); t != "" {
+			title = t
+		}
+		if b := strings.TrimSpace(getStringFromMap(doc.Metadata, "bible_text")); b != "" {
+			bibleText = b
+		}
+	}
+
+	content := RenderInfographicMD(doc.Infographic, series, title, bibleText)
+	if err := os.WriteFile(paths.TempSermonSummary, []byte(content), 0o644); err != nil {
+		LogError("rework: sermon_summary.md 저장 실패: " + err.Error())
+		return
+	}
+
+	LogInfo("rework: sermon_summary.md 복원 완료 path=" + paths.TempSermonSummary)
 }
 
 func parseFlatQTStep2JSON(jsonText string, expectedAudience string) (*flatQTStep2Data, error) {

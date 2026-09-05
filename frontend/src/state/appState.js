@@ -8,16 +8,27 @@ const DEFAULT_MENU_CONFIG = {
   settings: { visible: true, label: "환경 설정" },
 };
 
+// todayISODate는 오늘 날짜를 "YYYY-MM-DD"로 반환한다.
+// toISOString()은 UTC 기준이라 한국 시간대에서 하루가 어긋날 수 있어 로컬 값으로 만든다.
+export function todayISODate() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function createDefaultSourceState() {
   return {
     sourceType: "video", // video | audio | text
     basicInfo: {
+      // series는 시리즈 설교일 때만 사용한다. 비어 있으면 산출물에 표시하지 않는다.
+      series: "",
       title: "",
       bibleText: "",
       hymn: "",
       preacher: "",
       churchName: "",
-      sermonDate: "",
+      // 설교일은 오늘 날짜로 시작한다. 필요하면 사용자가 바꾼다.
+      sermonDate: todayISODate(),
     },
     transcript: {
       rawText: "",

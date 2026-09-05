@@ -35,10 +35,11 @@ func (s *VideoService) progress(stage, message string) {
 
 func (s *VideoService) cleanupTempFiles() error {
 	files := []string{
-		s.Paths.TempVideo,
+		s.Paths.TempAudioSrc,
 		s.Paths.TempWav,
 		s.Paths.TempTxt,
 	}
+	files = append(files, s.Paths.LegacyTempFiles...)
 
 	for _, f := range files {
 		_ = os.Remove(f)
@@ -61,12 +62,23 @@ func (s *VideoService) checkRequiredFiles() error {
 	return NewWhisperTranscriber(s.Paths, s.OnProgress).CheckRequiredFiles()
 }
 
-func (s *VideoService) downloadVideo(url string) (string, error) {
+// downloadAudio는 URL에서 오디오 트랙만 내려받는다.
+// 이후 단계가 전사뿐이라 영상은 쓰이지 않으므로, 영상까지 받으면
+// 다운로드 용량과 시간만 수십 배로 늘어난다.
+func (s *VideoService) downloadAudio(url string) (string, error) {
 	args := buildYtDlpArgs(
-		"-f", "mp4/bestvideo+bestaudio/best",
-		"--merge-output-format", "mp4",
+		// ba(bestaudio)를 우선하되, 오디오 전용 포맷이 없는 사이트를 위해
+		// b(영상+오디오 통합)로 물러선다. 어느 쪽이든 오디오는 반드시 포함된다.
+		// 확장자만 적은 `-f mp4`는 yt-dlp가 "영상 전용" mp4로 대체 선택할 수 있어
+		// 오디오 없는 파일을 받게 되므로 쓰지 않는다.
+		"-f", "ba[ext=m4a]/ba/b",
+		// m4a 컨테이너 보정(FixupM4a)에 ffmpeg가 필요하다.
+		// PATH에 ffmpeg가 없는 배포 환경을 위해 번들 실행 파일을 지정한다.
+		"--ffmpeg-location", s.Paths.FfmpegExe,
+		// 재생목록 URL이 들어와도 영상 한 개만 받는다.
+		"--no-playlist",
 		"--newline", "--no-part",
-		"-o", s.Paths.TempVideo,
+		"-o", s.Paths.TempAudioSrc,
 		url,
 	)
 
@@ -74,23 +86,13 @@ func (s *VideoService) downloadVideo(url string) (string, error) {
 	return runHiddenCommandStreaming(func(line string) {
 		if pct, ok := parseYtDlpProgress(line); ok && pct != lastPct {
 			lastPct = pct
-			s.progress("download", fmt.Sprintf("동영상 다운로드 중 %d%%", pct))
+			s.progress("download", fmt.Sprintf("오디오 다운로드 중 %d%%", pct))
 		}
 	}, s.Paths.YtDlpExe, args...)
 }
 
 func (s *VideoService) convertToWav() (string, error) {
-	args := []string{
-		"-y",
-		"-i", s.Paths.TempVideo,
-		"-ar", "16000",
-		"-ac", "1",
-		"-c:a", "pcm_s16le",
-		s.Paths.TempWav,
-	}
-
-	out, err := newHiddenCommand(s.Paths.FfmpegExe, args...).CombinedOutput()
-	return string(out), err
+	return convertMediaToWav(s.Paths, s.Paths.TempAudioSrc, s.Paths.TempWav)
 }
 
 func (s *VideoService) countText(text string) (charCount, wordCount, lineCount, estimatedTokens int) {
@@ -115,7 +117,7 @@ func (s *VideoService) countText(text string) (charCount, wordCount, lineCount, 
 }
 
 func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
-	url = strings.TrimSpace(url)
+	url = NormalizeVideoURL(url)
 	if url == "" {
 		return nil, fmt.Errorf("URL이 비어 있습니다")
 	}
@@ -154,17 +156,17 @@ func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
 		}
 	}
 
-	s.progress("download", "동영상 다운로드 중...")
+	s.progress("download", "오디오 다운로드 중...")
 	downloadStart := time.Now()
-	out, err := s.downloadVideo(url)
+	out, err := s.downloadAudio(url)
 	downloadMs := time.Since(downloadStart).Milliseconds()
 	logs = append(logs, fmt.Sprintf("=== yt-dlp (%d ms) ===\n%s", downloadMs, out))
 	if err != nil {
 		// JS 런타임이 없으면 YouTube가 HTTP 403을 돌려주므로, 원인을 함께 안내한다.
 		if hint := ytDlpJSRuntimeHint(); hint != "" {
-			return nil, fmt.Errorf("동영상 다운로드 실패 - %s\n%s", hint, out)
+			return nil, fmt.Errorf("오디오 다운로드 실패 - %s\n%s", hint, out)
 		}
-		return nil, fmt.Errorf("동영상 다운로드 실패\n%s", out)
+		return nil, fmt.Errorf("오디오 다운로드 실패\n%s", out)
 	}
 	s.progress("download", fmt.Sprintf("다운로드 완료 (%d ms)", downloadMs))
 
@@ -174,7 +176,9 @@ func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
 	convertMs := time.Since(convertStart).Milliseconds()
 	logs = append(logs, fmt.Sprintf("=== ffmpeg (%d ms) ===\n%s", convertMs, out))
 	if err != nil {
-		return nil, fmt.Errorf("WAV 변환 실패\n%s", out)
+		// convertMediaToWav가 이미 원인을 담은 메시지를 만들어 준다.
+		// 배너로 가득한 원본 출력을 그대로 노출하면 실제 오류가 묻힌다.
+		return nil, err
 	}
 	s.progress("convert", fmt.Sprintf("WAV 변환 완료 (%d ms)", convertMs))
 
@@ -204,7 +208,7 @@ func (s *VideoService) Run(url string) (*VideoPipelineResult, error) {
 	return &VideoPipelineResult{
 		Success:         true,
 		Message:         "정상 처리되었습니다.",
-		VideoFile:       s.Paths.TempVideo,
+		AudioFile:       s.Paths.TempAudioSrc,
 		WavFile:         s.Paths.TempWav,
 		TranscriptFile:  s.Paths.TempTxt,
 		TranscriptText:  text,

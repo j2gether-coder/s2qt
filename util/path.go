@@ -45,7 +45,8 @@ type AppPaths struct {
 	WhisperModels        []WhisperModelConfig
 
 	// fixed temp files
-	TempVideo       string
+	// TempAudioSrc는 URL에서 내려받은 원본 오디오다(전사에 영상은 필요 없다).
+	TempAudioSrc    string
 	TempWav         string
 	TempTxt         string
 	TempJson        string
@@ -53,8 +54,14 @@ type AppPaths struct {
 	TempHtml        string
 	TempDocx        string
 	TempPptx        string
-	TempBlog        string
-	TempInfographic string
+	// TempExtendedHtml은 성구 전체 본문을 포함한 확장판 QT다(구 blog.html).
+	// TempSermonSummary는 인포그래픽 제작에 넣을 설교요약문이다(구 infographic.md).
+	TempExtendedHtml  string
+	TempSermonSummary string
+
+	// LegacyTempFiles는 이전 버전이 남긴 임시 파일이다(예: 영상 전체를 받던 시절의 video.mp4).
+	// 정리 대상으로만 사용한다.
+	LegacyTempFiles []string
 
 	// fixed report files (프로젝트 루트 reports 폴더)
 	ReportPdf string
@@ -120,20 +127,27 @@ func GetAppPaths() (*AppPaths, error) {
 		SecurityFile:    filepath.Join(confDir, "security.json"),
 		EventLogFile:    filepath.Join(logDir, "event.log"),
 
-		TempVideo: filepath.Join(tempDir, "video.mp4"),
-		TempWav:   filepath.Join(tempDir, "audio.wav"),
-		TempTxt:   filepath.Join(tempDir, "temp.txt"),
-		TempJson:  filepath.Join(tempDir, "temp.json"),
-		TempMd:    filepath.Join(tempDir, "temp.md"),
-		TempHtml:  filepath.Join(tempDir, "temp.html"),
-		TempDocx:  filepath.Join(tempDir, "temp.docx"),
-		TempPptx:  filepath.Join(tempDir, "temp.pptx"),
-		TempBlog:  filepath.Join(tempDir, "blog.html"),
+		TempAudioSrc: filepath.Join(tempDir, "source.m4a"),
+		TempWav:      filepath.Join(tempDir, "audio.wav"),
+		TempTxt:      filepath.Join(tempDir, "temp.txt"),
+		TempJson:     filepath.Join(tempDir, "temp.json"),
+		TempMd:       filepath.Join(tempDir, "temp.md"),
+		TempHtml:     filepath.Join(tempDir, "temp.html"),
+		TempDocx:     filepath.Join(tempDir, "temp.docx"),
+		TempPptx:     filepath.Join(tempDir, "temp.pptx"),
+		TempExtendedHtml: filepath.Join(tempDir, "extended.html"),
+
+		LegacyTempFiles: []string{
+			filepath.Join(tempDir, "video.mp4"),
+			// 2026-09-05 이름 변경 이전 산출물. 새 작업 시작 시 정리한다.
+			filepath.Join(tempDir, "blog.html"),
+			filepath.Join(tempDir, "infographic.md"),
+		},
 
 		ReportPdf: filepath.Join(reportsDir, "report.pdf"),
 		ReportPng: filepath.Join(reportsDir, "report.png"),
 
-		TempInfographic: filepath.Join(tempDir, "infographic.md"),
+		TempSermonSummary: filepath.Join(tempDir, "sermon_summary.md"),
 
 		SiteLogoFile:    filepath.Join(imageDir, "site_logo.png"),
 		SiteQRFile:      filepath.Join(imageDir, "site_qr.png"),

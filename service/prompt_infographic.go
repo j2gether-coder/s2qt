@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"os"
@@ -8,11 +8,25 @@ import (
 	"s2qt/util"
 )
 
-// 인포그래픽용 프롬프트는 var/conf/prompt_infographic.md에서 읽는다.
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │ 사용하지 않는 코드 (2026-08-31 통합 프롬프트 도입)                    │
+// │                                                                     │
+// │ 인포그래픽은 이제 QT와 함께 하나의 통합 프롬프트로 생성되며,           │
+// │ sermon_summary.md는 Step1에서 LLM 원본 JSON을 렌더해 만든다.            │
+// │   - 프롬프트 조립: defaultQTPromptInfographic (prompt_qt_json.go)     │
+// │   - MD 렌더링   : RenderInfographicMD() (infographic_service.go)     │
+// │                                                                     │
+// │ 이 파일의 함수는 어디에서도 호출하지 않는다.                          │
+// │ var/conf/prompt_sermon_summary.md와 함께 작성 규칙 참고용으로만 남긴다.  │
+// │ (확정 8 — 코드에서는 참조하지 않음)                                   │
+// └─────────────────────────────────────────────────────────────────────┘
+//
+// 아래는 이전 방식의 설명이다.
+// 인포그래픽용 프롬프트는 var/conf/prompt_sermon_summary.md에서 읽는다.
 // app.yaml의 prompt_infographic_file로 경로를 바꿀 수 있으며,
 // 파일이 없으면 아래 기본 프롬프트로 새로 생성한다(var/는 배포 시 비어 있을 수 있음).
 
-const defaultInfographicPromptFile = "prompt_infographic.md"
+const defaultInfographicPromptFile = "prompt_sermon_summary.md"
 
 const defaultInfographicPrompt = `# [역할]
 

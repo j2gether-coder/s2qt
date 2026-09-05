@@ -19,6 +19,7 @@ function resolveInitialReadonlyTitle(audienceId, basicInfo) {
 export function renderQTStep2(audienceId, appState) {
   const basicInfo = appState?.source?.basicInfo || {};
   const titleText = resolveInitialReadonlyTitle(audienceId, basicInfo);
+  const seriesText = basicInfo.series || '';
   const bibleText = basicInfo.bibleText || '';
   const hymnText = basicInfo.hymn || '';
 
@@ -36,6 +37,26 @@ export function renderQTStep2(audienceId, appState) {
         </div>
 
         <div class="section-edit-group topgap">
+          ${
+            seriesText
+              ? `
+          <div class="section-edit-card">
+            <label class="form-label">시리즈</label>
+            <div class="hint topgap-sm">
+              QT 준비에서 입력한 시리즈입니다. 필요 시 수정합니다.
+            </div>
+            <input
+              id="series"
+              type="text"
+              class="topgap-sm"
+              value="${escapeHtml(seriesText)}"
+              placeholder="예) 본받고 싶은 교회(1)"
+            />
+          </div>
+          `
+              : ''
+          }
+
           <div class="section-edit-card">
             <label class="form-label">제목</label>
             <div class="hint topgap-sm">

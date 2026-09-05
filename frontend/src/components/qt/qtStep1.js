@@ -7,15 +7,35 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+// buildBasicInfoSummary는 이번 작업에 쓰일 기본정보를 한 줄로 정리한다.
+// 시리즈가 있으면 맨 앞에 붙이고, 없으면 제목과 본문 성구만 보여 준다.
+function buildBasicInfoSummary(basicInfo) {
+  const parts = [
+    (basicInfo?.series || '').trim(),
+    (basicInfo?.title || '').trim(),
+    (basicInfo?.bibleText || '').trim(),
+  ].filter(Boolean);
+
+  return parts.join(' · ');
+}
+
 export function renderQTStep1(audienceId, appState) {
   const hasApiKey = false; // 추후 실제 값 연결
   const modeText = hasApiKey ? '자동' : '수동';
+
+  const basicInfo = appState?.source?.basicInfo || {};
+  const summaryText = buildBasicInfoSummary(basicInfo);
 
   return `
     <section class="workspace-step-panel">
       <section class="card card-plain">
         <div class="step-badge">Step1. AI(LLM) 이용</div>
         <p class="body-note topgap-sm">AI(LLM)를 이용하여 초안 작업을 합니다.</p>
+        ${
+          summaryText
+            ? `<p class="body-note step1-basic-summary">${escapeHtml(summaryText)}</p>`
+            : `<p class="body-note step1-basic-summary is-empty">기본정보에서 제목과 본문 성구를 먼저 입력해 주세요.</p>`
+        }
         <div id="qt-step1-message" class="ui-inline-message hidden"></div>
       </section>
 

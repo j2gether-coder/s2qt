@@ -1,4 +1,4 @@
-import { RunQTStep3, OpenGeneratedFile, SaveGeneratedFile, FinishCurrentRun } from '../../../wailsjs/go/main/App';
+﻿import { RunQTStep3, OpenGeneratedFile, SaveGeneratedFile, FinishCurrentRun } from '../../../wailsjs/go/main/App';
 import { Quit } from '../../../wailsjs/runtime/runtime';
 import {
   appState,
@@ -142,8 +142,7 @@ function updateOutputState(result) {
   appState.output.htmlFile = result?.html?.filePath || '';
   appState.output.pdfFile = result?.pdf?.filePath || '';
   appState.output.pngFile = result?.png?.filePath || '';
-  appState.output.blogFile = result?.blog?.filePath || '';
-  appState.output.infographicFile = result?.infographic?.filePath || '';
+  appState.output.extendedFile = result?.extended?.filePath || '';
 }
 
 function updateStep3ButtonState() {

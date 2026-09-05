@@ -76,21 +76,7 @@ func (s *AudioService) convertToWav(inputAudioPath string) (string, error) {
 	// whisper-cli의 입력 포맷 지원 여부는 빌드 옵션에 따라 달라질 수 있으므로
 	// 입력 파일이 mp3/wav/m4a 등 무엇이든 간에 내부적으로 16kHz mono PCM WAV로
 	// 표준화한 뒤 전사한다. 이렇게 하면 Windows 배포 환경에서 포맷별 예외를 줄일 수 있다.
-	args := []string{
-		"-y",
-		"-i", inputAudioPath,
-		"-ar", "16000",
-		"-ac", "1",
-		"-c:a", "pcm_s16le",
-		s.Paths.TempWav,
-	}
-
-	out, err := newHiddenCommand(s.Paths.FfmpegExe, args...).CombinedOutput()
-	if err != nil {
-		return string(out), fmt.Errorf("WAV 변환 실패: %w", err)
-	}
-
-	return string(out), nil
+	return convertMediaToWav(s.Paths, inputAudioPath, s.Paths.TempWav)
 }
 
 func (s *AudioService) ResolveRawText(audioPath string) (string, error) {

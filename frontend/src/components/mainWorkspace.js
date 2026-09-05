@@ -156,11 +156,20 @@ async function enrichVideoBasicInfoFromMeta() {
   const meta = await GetVideoMeta(url);
   if (!meta) return null;
 
+  // yt-dlp가 돌려준 표준 URL(재생목록 파라미터가 제거된 영상 단일 URL)로 입력값을
+  // 정리한다. 다운로드 대상과 메타의 source_url에만 쓰이며,
+  // 하단 출처 링크/QR은 footer 설정(교회 홈페이지 / 기본 주소)을 그대로 사용한다.
+  const canonicalUrl = (meta.webpageUrl || '').trim();
+  const effectiveUrl = canonicalUrl || url;
+  if (effectiveUrl !== url) {
+    setSourceUrl(effectiveUrl);
+  }
+
   const basicInfo = appState?.source?.basicInfo || {};
   // URL이 이전에 메타정보를 가져온 URL과 다르면(=새 영상이면) 메타 파생 필드를
   // 새 값으로 덮어쓴다. 같은 URL을 다시 실행할 때는 비어 있는 필드만 채워
   // 사용자가 직접 수정한 값을 보존한다.
-  const isNewVideo = (appState?.source?.basicInfoMetaUrl || '') !== url;
+  const isNewVideo = (appState?.source?.basicInfoMetaUrl || '') !== effectiveUrl;
   let changed = false;
 
   const applyMetaField = (field, value) => {
@@ -174,7 +183,7 @@ async function enrichVideoBasicInfoFromMeta() {
   applyMetaField('sermonDate', meta.uploadDateText);
   applyMetaField('churchName', meta.channel);
 
-  appState.source.basicInfoMetaUrl = url;
+  appState.source.basicInfoMetaUrl = effectiveUrl;
 
   if (changed) {
     clearBasicInfoSavedState();
@@ -223,16 +232,22 @@ async function runQtPrepare() {
       setRawText(result.rawText);
     }
 
-    setSourceStatus(result?.status || 'COMPLETED');
-
-    if (result?.success) {
-      appState.source.lastSavedAt = new Date().toLocaleString();
-      showToast("자료 준비가 완료되었습니다.", "success");
+    // 백엔드가 오류 대신 실패 결과만 돌려주는 경우에도 catch에서 상태를 되돌리도록 한다.
+    if (!result?.success) {
+      throw new Error(result?.message || "자료 처리에 실패했습니다.");
     }
+
+    setSourceStatus(result?.status || 'COMPLETED');
+    appState.source.lastSavedAt = new Date().toLocaleString();
+    showToast("자료 준비가 완료되었습니다.", "success");
 
     mountAppShell('app');
   } catch (error) {
     console.error(error);
+    // updateQtPrepareStatus()는 RUNNING이면 조기 반환하므로, 실패 시 먼저 RUNNING을
+    // 해제해야 입력값 기준으로 상태가 다시 계산되고 실행 버튼이 재활성화된다.
+    // (동영상 다운로드 404/403/JS 런타임 오류 등)
+    setSourceStatus('NOT_READY');
     updateQtPrepareStatus();
     setInlineMessage("workspace-message", error?.message || "자료 처리 중 오류가 발생했습니다.", "error");
     mountAppShell('app');
@@ -384,6 +399,28 @@ function renderCompletionGuide() {
   `;
 }
 
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+// formatDateWithWeekday는 "2026-09-05" → "2026-09-05(토)"로 만든다.
+//
+// <input type="date">의 표시 형식은 브라우저 로캘이 정하므로 요일을 넣을 수 없다.
+// 그래서 입력란 옆에 이 문자열을 따로 보여 준다.
+// 저장되는 값 자체는 "YYYY-MM-DD"를 유지한다 — 파일명·프롬프트·DB가 이 형식을 쓴다.
+export function formatDateWithWeekday(isoDate) {
+  const value = String(isoDate ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+
+  const [year, month, day] = value.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+
+  // 존재하지 않는 날짜(예: 2026-02-31)는 다른 날로 굴러가므로 되돌려 확인한다.
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+    return '';
+  }
+
+  return `${value}(${WEEKDAY_LABELS[d.getDay()]})`;
+}
+
 function renderQtPrepareLayout() {
   const { basicInfo, sourceStatus } = appState.source;
   const isRunning = sourceStatus === 'RUNNING';
@@ -433,6 +470,11 @@ function renderQtPrepareLayout() {
               </div>
 
               <div class="form-field">
+                <label class="form-label">시리즈</label>
+                <input type="text" id="series-input" value="${escapeHtml(basicInfo.series || '')}" placeholder="예: 본받고 싶은 교회(1)" ${isRunning ? 'disabled' : ''} />
+              </div>
+
+              <div class="form-field">
                 <label class="form-label">찬송</label>
                 <input type="text" id="hymn-input" value="${escapeHtml(basicInfo.hymn || '')}" placeholder="찬송을 입력해 주세요." ${isRunning ? 'disabled' : ''} />
               </div>
@@ -449,7 +491,10 @@ function renderQtPrepareLayout() {
 
               <div class="form-field">
                 <label class="form-label">설교일</label>
-                <input type="date" id="sermon-date-input" value="${escapeHtml(basicInfo.sermonDate || '')}" ${isRunning ? 'disabled' : ''} />
+                <div class="field-with-note">
+                  <input type="date" id="sermon-date-input" value="${escapeHtml(basicInfo.sermonDate || '')}" ${isRunning ? 'disabled' : ''} />
+                  <span class="field-inline-note" id="sermon-date-note">${escapeHtml(formatDateWithWeekday(basicInfo.sermonDate))}</span>
+                </div>
               </div>
             </div>
 
@@ -584,6 +629,17 @@ function bindQtPrepareEvents() {
     });
   }
 
+  const seriesInput = document.getElementById('series-input');
+  if (seriesInput) {
+    seriesInput.addEventListener('input', (e) => {
+      if (appState?.source?.sourceStatus === 'RUNNING') return;
+      clearInlineMessage("workspace-message");
+      setBasicInfoField('series', e.target.value);
+      clearBasicInfoSavedState();
+      updateQtPrepareStatus();
+    });
+  }
+
   const titleInput = document.getElementById('title-input');
   if (titleInput) {
     titleInput.addEventListener('input', (e) => {
@@ -642,6 +698,13 @@ function bindQtPrepareEvents() {
       if (appState?.source?.sourceStatus === 'RUNNING') return;
       clearInlineMessage("workspace-message");
       setBasicInfoField('sermonDate', e.target.value);
+
+      // 요일 표기는 입력란이 직접 못 보여 주므로 옆의 문구를 갱신한다.
+      const note = document.getElementById('sermon-date-note');
+      if (note) {
+        note.textContent = formatDateWithWeekday(e.target.value);
+      }
+
       clearBasicInfoSavedState();
     });
   }

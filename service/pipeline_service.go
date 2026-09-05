@@ -13,6 +13,10 @@ import (
 type PipelineService struct {
 	Paths      *util.AppPaths
 	OnProgress func(stage, message string)
+
+	// History는 API 자동 생성 경로에서 작업내역을 남길 때 쓴다.
+	// nil이면 파일만 저장하고 이력은 남기지 않는다.
+	History *HistoryService
 }
 
 func NewPipelineService(onProgress func(stage, message string)) (*PipelineService, error) {
@@ -36,9 +40,10 @@ func (s *PipelineService) progress(stage, message string) {
 func (s *PipelineService) cleanupSourcePrepareTempFiles() {
 	files := []string{
 		s.Paths.TempTxt,
-		s.Paths.TempVideo,
+		s.Paths.TempAudioSrc,
 		s.Paths.TempWav,
 	}
+	files = append(files, s.Paths.LegacyTempFiles...)
 	for _, f := range files {
 		if strings.TrimSpace(f) != "" {
 			_ = os.Remove(f)
@@ -58,14 +63,6 @@ func (s *PipelineService) saveTempText(rawText string) error {
 		return fmt.Errorf("raw text가 비어 있습니다")
 	}
 	return os.WriteFile(s.Paths.TempTxt, []byte(rawText), 0644)
-}
-
-func (s *PipelineService) saveTempJSON(jsonText string) error {
-	jsonText = strings.TrimSpace(jsonText)
-	if jsonText == "" {
-		return fmt.Errorf("json 결과가 비어 있습니다")
-	}
-	return os.WriteFile(s.Paths.TempJson, []byte(jsonText), 0644)
 }
 
 func countPreparedText(text string) (charCount, wordCount, lineCount, estimatedTokens int) {
@@ -317,6 +314,7 @@ func (s *PipelineService) RunLLMPrepare(req *LLMPrepareRequest) (*LLMPrepareResu
 	}
 
 	meta := QTMeta{
+		Series:     strings.TrimSpace(req.Series),
 		Title:      strings.TrimSpace(req.Title),
 		BibleText:  strings.TrimSpace(req.BibleText),
 		Hymn:       strings.TrimSpace(req.Hymn),
@@ -373,8 +371,31 @@ func (s *PipelineService) RunLLMPrepare(req *LLMPrepareRequest) (*LLMPrepareResu
 		}, err
 	}
 
-	addStep("save", "temp.json 저장 중")
-	if err := s.saveTempJSON(jsonText); err != nil {
+	// 수동 붙여넣기 경로와 동일하게 분리 저장한다.
+	// (temp.json에 원본을 통째로 쓰면 infographic이 Step2 저장에서 유실된다)
+	addStep("save", "결과 분리 저장 중")
+	step1Svc, err := NewQTStep1ServiceWithHistory(s.History)
+	if err != nil {
+		addStep("error", err.Error())
+		return &LLMPrepareResult{
+			Success: false,
+			Message: err.Error(),
+			Status:  "FAILED",
+			Steps:   steps,
+		}, err
+	}
+
+	if _, err := step1Svc.Save(&QTStep1SaveRequest{
+		Audience:   meta.Audience,
+		Title:      meta.Title,
+		BibleText:  meta.BibleText,
+		Hymn:       meta.Hymn,
+		Preacher:   meta.Preacher,
+		ChurchName: meta.ChurchName,
+		SermonDate: meta.SermonDate,
+		SourceURL:  meta.SourceURL,
+		JSONText:   jsonText,
+	}); err != nil {
 		addStep("error", err.Error())
 		return &LLMPrepareResult{
 			Success: false,

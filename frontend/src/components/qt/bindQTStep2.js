@@ -2,7 +2,6 @@ import {
   LoadQTStep2Data,
   SaveQTStep2Data,
   OpenTempHTMLPreview,
-  SaveHistory,
 } from '../../../wailsjs/go/main/App';
 import {
   appState,
@@ -113,6 +112,7 @@ function getLoadedStep2Meta() {
 
 function setLoadedStep2Meta(meta = {}) {
   appState.qtStep2LoadedMeta = {
+    series: (meta.series || '').trim(),
     title: (meta.title || '').trim(),
     bibleText: (meta.bibleText || '').trim(),
     biblePassageText: meta.biblePassageText || '',
@@ -144,6 +144,7 @@ function buildStep2Payload(audienceId) {
   return {
     audience: audienceId,
 
+    series: getValue('series').trim() || (basicInfo.series || loadedMeta.series || '').trim(),
     title: finalTitle,
     bibleText: getValue('bibleText').trim() || (basicInfo.bibleText || loadedMeta.bibleText || '').trim(),
     bible_passage_text: getValue('biblePassageText'),
@@ -175,25 +176,9 @@ function buildStep2Payload(audienceId) {
   };
 }
 
-function buildHistoryPayload(audienceId, step2Payload) {
-  const basicInfo = getBasicInfo();
-  const loadedMeta = getLoadedStep2Meta();
-
-  const historyTitle = ensureQTTitlePrefix(
-    step2Payload?.title || basicInfo.title || getLoadedStep2TitleCandidate() || ''
-  );
-
-  return {
-    title: historyTitle,
-    bibleText: (step2Payload?.bibleText || basicInfo.bibleText || loadedMeta.bibleText || '').trim(),
-    hymn: (step2Payload?.hymn || basicInfo.hymn || loadedMeta.hymn || '').trim(),
-    preacher: (step2Payload?.preacher || basicInfo.preacher || loadedMeta.preacher || '').trim(),
-    churchName: (step2Payload?.churchName || basicInfo.churchName || loadedMeta.churchName || '').trim(),
-    sermonDate: (step2Payload?.sermonDate || basicInfo.sermonDate || loadedMeta.sermonDate || '').trim(),
-    audience: audienceId,
-    qtResultJson: JSON.stringify(step2Payload),
-  };
-}
+// 작업내역 저장은 Step1 결과저장에서만 한다.
+// Step2는 temp.json / temp.html만 갱신하며 DB를 건드리지 않는다.
+// (재작업은 Step1이 남긴 LLM 원본에서 복원한다)
 
 async function loadStep2Data(audienceId) {
   const data = await LoadQTStep2Data();
@@ -219,6 +204,7 @@ async function loadStep2Data(audienceId) {
   syncReadonlyStep2Meta(finalTitle, finalBibleText, finalHymn);
 
   setLoadedStep2Meta({
+    series: data?.series || '',
     title: data?.title || '',
     bibleText: data?.bibleText || '',
     biblePassageText: data?.bible_passage_text || '',
@@ -230,6 +216,7 @@ async function loadStep2Data(audienceId) {
     supportScriptures: data?.support_scriptures || [],
   });
 
+  setValue('series', data?.series || basicInfo.series || '');
   setValue('title', finalTitle);
   setValue('bibleText', finalBibleText);
   setValue('hymn', finalHymn);
@@ -320,15 +307,6 @@ export async function bindQTStep2Events(audienceId) {
 
         // SaveQTStep2Data 내부에서 temp.json + temp.html 처리
         await SaveQTStep2Data(step2Payload);
-
-        const historyReq = buildHistoryPayload(audienceId, step2Payload);
-        const historyId = await SaveHistory(historyReq);
-
-        appState.historySelected = {
-          historyId,
-          audienceId,
-          step1ResultJson: historyReq.qtResultJson || '',
-        };
 
         setAudienceStepStatus(audienceId, 'step2', 'done');
 

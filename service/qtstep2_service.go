@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"encoding/json"
@@ -17,6 +17,14 @@ type QTSectionDoc struct {
 	Template string          `json:"template_id"`
 	Metadata map[string]any  `json:"metadata"`
 	Sections []QTSectionData `json:"sections"`
+}
+
+// QTLLMDoc는 LLM이 생성한 원본 문서(v1.1)다.
+// QTSectionDoc를 임베딩하므로, QTSectionDoc만 마샬하면 infographic이 자동으로 빠진다.
+// Step1은 이 성질을 이용해 QT(temp.json)와 인포그래픽(sermon_summary.md)을 분리한다.
+type QTLLMDoc struct {
+	QTSectionDoc
+	Infographic *InfographicData `json:"infographic,omitempty"`
 }
 
 type QTSectionData struct {
@@ -61,6 +69,7 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 
 	// metadata 복원
 	if doc.Metadata != nil {
+		out.Series = strings.TrimSpace(getStringFromMap(doc.Metadata, "series"))
 		out.Title = ensureQTTitlePrefix(step2firstNonEmpty(getStringFromMap(doc.Metadata, "title")))
 		out.BibleText = normalizeBibleReference(getStringFromMap(doc.Metadata, "bible_text"))
 		out.BiblePassageText = getStringFromMap(doc.Metadata, "bible_passage_text")
@@ -185,6 +194,9 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		Audience: strings.TrimSpace(req.Audience),
 		Template: "qt_classic",
 		Metadata: map[string]any{
+			// series는 Step2 UI에서 편집하지만, Save()가 doc을 통째로 새로 만들므로
+			// 여기에 넣지 않으면 저장 한 번에 유실된다.
+			"series":             strings.TrimSpace(req.Series),
 			"title":              finalTitle,
 			"bible_text":         finalBibleText,
 			"bible_passage_text": strings.TrimSpace(req.BiblePassageText),
@@ -341,9 +353,17 @@ func buildQTStep2HTML(req *QTStep2Data) string {
 		prayerTitleHTML = `<div class="qt-prayer-title">` + escapeHTML(prayerTitle) + `</div>`
 	}
 
+	// 시리즈가 없으면 블록 자체를 넣지 않는다.
+	// 빈 div를 남기면 margin만큼 여백이 생겨 레이아웃이 달라진다.
+	seriesHTML := ""
+	if s := strings.TrimSpace(req.Series); s != "" {
+		seriesHTML = `<div class="qt-series">` + escapeHTML(s) + `</div>
+  `
+	}
+
 	return `
 <div class="qt-wrap">
-  <div class="qt-title">` + escapeHTML(titleText) + `</div>
+  ` + seriesHTML + `<div class="qt-title">` + escapeHTML(titleText) + `</div>
   ` + subbox + `
   ` + passageHTML + `
 

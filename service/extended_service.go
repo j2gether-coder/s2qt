@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"encoding/json"
@@ -9,85 +9,86 @@ import (
 	"s2qt/util"
 )
 
-// blog.html은 기존 HTML/PDF/PNG와 완전히 분리된 산출물이다.
+// extended.html은 기존 HTML/PDF/PNG와 완전히 분리된 산출물이다.
 // temp.json의 내부 전용 필드(bible_passage_full, support_scriptures_full)를 사용해
 // 성구 전체 본문을 그대로 담는다. 기존 산출물 경로는 이 필드를 읽지 않는다.
 
-type BlogSupportScripture struct {
+type ExtendedSupportScripture struct {
 	Reference string `json:"reference"`
 	Text      string `json:"text"`
 }
 
-type blogMetadata struct {
+type extendedMetadata struct {
+	Series                string                 `json:"series"`
 	Title                 string                 `json:"title"`
 	BibleText             string                 `json:"bible_text"`
 	BiblePassageText      string                 `json:"bible_passage_text"`
 	Hymn                  string                 `json:"hymn"`
 	SupportScriptures     []string               `json:"support_scriptures"`
-	SupportScripturesFull []BlogSupportScripture `json:"support_scriptures_full"`
+	SupportScripturesFull []ExtendedSupportScripture `json:"support_scriptures_full"`
 	Preacher              string                 `json:"preacher"`
 	ChurchName            string                 `json:"church_name"`
 	SermonDate            string                 `json:"sermon_date"`
 	SourceURL             string                 `json:"source_url"`
 }
 
-type blogDoc struct {
-	Metadata blogMetadata    `json:"metadata"`
+type extendedDoc struct {
+	Metadata extendedMetadata    `json:"metadata"`
 	Sections []QTSectionData `json:"sections"`
 }
 
-type BlogService struct {
+type ExtendedService struct {
 	Paths *util.AppPaths
 }
 
-func NewBlogService() (*BlogService, error) {
+func NewExtendedService() (*ExtendedService, error) {
 	paths, err := util.GetAppPaths()
 	if err != nil {
 		return nil, err
 	}
-	return &BlogService{Paths: paths}, nil
+	return &ExtendedService{Paths: paths}, nil
 }
 
-// BuildBlogHTML는 temp.json을 읽어 blog.html을 생성하고 경로를 반환한다.
-func (s *BlogService) BuildBlogHTML() (string, error) {
+// BuildExtendedHTML는 temp.json을 읽어 extended.html을 생성하고 경로를 반환한다.
+func (s *ExtendedService) BuildExtendedHTML() (string, error) {
 	b, err := os.ReadFile(s.Paths.TempJson)
 	if err != nil {
 		return "", fmt.Errorf("temp.json 읽기 실패: %w", err)
 	}
 
-	var doc blogDoc
+	var doc extendedDoc
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return "", fmt.Errorf("temp.json 파싱 실패: %w", err)
 	}
 
-	body := buildBlogBody(&doc)
-	full := wrapBlogHTMLDocument(body)
+	body := buildExtendedBody(&doc)
+	full := wrapExtendedHTMLDocument(body)
 
-	if err := os.WriteFile(s.Paths.TempBlog, []byte(full), 0644); err != nil {
-		return "", fmt.Errorf("blog.html 저장 실패: %w", err)
+	if err := os.WriteFile(s.Paths.TempExtendedHtml, []byte(full), 0644); err != nil {
+		return "", fmt.Errorf("extended.html 저장 실패: %w", err)
 	}
 
-	return s.Paths.TempBlog, nil
+	return s.Paths.TempExtendedHtml, nil
 }
 
-// blogPassageText는 blog 전용 전체 본문을 반환한다.
+// extendedPassageText는 확장판 전용 전체 본문을 반환한다.
 // bible_passage_text는 전체 본문을 보관하며(기존 산출물만 렌더링 시 축약),
 // 블로그는 축약 없이 전체를 그대로 사용한다.
-func blogPassageText(m blogMetadata) string {
+func extendedPassageText(m extendedMetadata) string {
 	return strings.TrimSpace(m.BiblePassageText)
 }
 
-// blogSupportScriptures는 전체 본문이 있으면 그것을, 없으면 참조만 반환한다.
-func blogSupportScriptures(m blogMetadata) []BlogSupportScripture {
+// extendedSupportScriptures는 전체 본문이 있으면 그것을, 없으면 참조만 반환한다.
+func extendedSupportScriptures(m extendedMetadata) []ExtendedSupportScripture {
 	if len(m.SupportScripturesFull) > 0 {
-		out := make([]BlogSupportScripture, 0, len(m.SupportScripturesFull))
+		out := make([]ExtendedSupportScripture, 0, len(m.SupportScripturesFull))
 		for _, item := range m.SupportScripturesFull {
 			ref := normalizeBibleReference(item.Reference)
 			text := strings.TrimSpace(item.Text)
 			if ref == "" && text == "" {
 				continue
 			}
-			out = append(out, BlogSupportScripture{Reference: ref, Text: text})
+			out = append(out, ExtendedSupportScripture{Reference: ref, Text: text})
 		}
 		if len(out) > 0 {
 			return out
@@ -96,9 +97,9 @@ func blogSupportScriptures(m blogMetadata) []BlogSupportScripture {
 
 	// 폴백: 참조만 표시
 	refs := normalizeBibleRefSlice(m.SupportScriptures)
-	out := make([]BlogSupportScripture, 0, len(refs))
+	out := make([]ExtendedSupportScripture, 0, len(refs))
 	for _, ref := range refs {
-		out = append(out, BlogSupportScripture{Reference: ref})
+		out = append(out, ExtendedSupportScripture{Reference: ref})
 	}
 	return out
 }
@@ -112,19 +113,25 @@ func writeWrapped(sb *strings.Builder, open, content, close string) {
 	sb.WriteString(close)
 }
 
-func buildBlogBody(doc *blogDoc) string {
+func buildExtendedBody(doc *extendedDoc) string {
 	m := doc.Metadata
 
 	titleText := ensureQTTitlePrefix(step2firstNonEmpty(m.Title, "QT"))
 	bibleText := normalizeBibleReference(m.BibleText)
 	hymnText := normalizeHymnText(m.Hymn)
-	passageText := blogPassageText(m)
-	supports := blogSupportScriptures(m)
+	passageText := extendedPassageText(m)
+	supports := extendedSupportScriptures(m)
 
 	var sb strings.Builder
 
 	// temp.html과 동일한 qt-* 클래스 구조를 사용해 loadQTHTMLStyle() CSS를 그대로 적용받는다.
 	sb.WriteString(`<div class="qt-wrap">`)
+
+	// 시리즈가 없으면 블록 자체를 넣지 않는다(temp.html과 동일 규칙).
+	if s := strings.TrimSpace(m.Series); s != "" {
+		writeWrapped(&sb, `<div class="qt-series">`, escapeHTML(s), `</div>`)
+	}
+
 	writeWrapped(&sb, `<div class="qt-title">`, escapeHTML(titleText), `</div>`)
 
 	// 상단 메타 정보 (본문 성구 / 찬송)
@@ -140,7 +147,7 @@ func buildBlogBody(doc *blogDoc) string {
 	}
 
 	// 섹션(요약/메시지/묵상/기도)
-	sb.WriteString(buildBlogSections(doc.Sections))
+	sb.WriteString(buildExtendedSections(doc.Sections))
 
 	// 성경본문/관련 성구는 오늘의 기도 아래에 배치한다.
 	// 본문 성구 전체 (관련 성구와 동일한 구조: 섹션 타이틀 → 성경 장:절 → 본문)
@@ -173,7 +180,7 @@ func buildBlogBody(doc *blogDoc) string {
 	return sb.String()
 }
 
-func buildBlogSections(sections []QTSectionData) string {
+func buildExtendedSections(sections []QTSectionData) string {
 	var sb strings.Builder
 
 	for _, sec := range sections {
@@ -242,8 +249,8 @@ func buildBlogSections(sections []QTSectionData) string {
 	return sb.String()
 }
 
-// wrapBlogHTMLDocument는 temp.html과 동일한 QT HTML 스타일(loadQTHTMLStyle)을 임베드한다.
-func wrapBlogHTMLDocument(body string) string {
+// wrapExtendedHTMLDocument는 temp.html과 동일한 QT HTML 스타일(loadQTHTMLStyle)을 임베드한다.
+func wrapExtendedHTMLDocument(body string) string {
 	cssText := loadQTHTMLStyle()
 
 	return `<!doctype html>
@@ -251,7 +258,7 @@ func wrapBlogHTMLDocument(body string) string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>S2QT Blog</title>
+  <title>S2QT Extended</title>
 </head>
 <body>
 <style>

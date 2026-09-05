@@ -320,6 +320,15 @@ html, body{
   word-break: keep-all;
 }
 
+.qt-series{
+  text-align: center;
+  color: var(--qt-title);
+  font-size: 13px;
+  font-weight: 600;
+  opacity: .75;
+  margin: 0 0 2px 0;
+}
+
 .qt-title{
   text-align: center;
   color: var(--qt-title);
@@ -687,6 +696,15 @@ const defaultQTPDFStyle = `
 
 .qt-main{
   width: 100%;
+}
+
+.qt-series{
+  text-align: center;
+  color: var(--qt-title);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .75;
+  margin: 0 0 2px 0;
 }
 
 .qt-title{
@@ -1609,6 +1627,7 @@ func extractParagraphText(html string) string {
 
 func removeKnownTopLevelBlocks(html string) string {
 	patterns := []string{
+		`(?is)<[^>]*class="[^"]*qt-series[^"]*"[^>]*>.*?</[^>]+>`,
 		`(?is)<[^>]*class="[^"]*qt-title[^"]*"[^>]*>.*?</[^>]+>`,
 		`(?is)<[^>]*class="[^"]*qt-subbox[^"]*"[^>]*>.*?</[^>]+>`,
 		`(?is)<[^>]*class="[^"]*qt-footer[^"]*"[^>]*>.*?</div>`,

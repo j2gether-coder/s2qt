@@ -46,4 +46,4 @@
 *.dll
 *.so
 *.dylib
-"*.zip" 
+*.zip 

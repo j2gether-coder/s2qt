@@ -28,6 +28,8 @@ func FetchVideoMeta(ytdlpPath, url string) (*VideoMeta, error) {
 	if ytdlpPath == "" {
 		return nil, errors.New("yt-dlp path not set")
 	}
+	// 재생목록 파라미터를 제거해 영상 하나의 메타정보만 조회한다.
+	url = NormalizeVideoURL(url)
 	if url == "" {
 		return nil, errors.New("URL is empty")
 	}

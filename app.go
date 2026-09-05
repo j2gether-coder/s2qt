@@ -1,9 +1,8 @@
-package main
+﻿package main
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -480,6 +479,9 @@ func (a *App) RunLLMPrepare(req service.LLMPrepareRequest) (*service.LLMPrepareR
 		return nil, err
 	}
 
+	// API 자동 생성도 수동 붙여넣기와 동일하게 작업내역을 남긴다.
+	pipeline.History = a.historySvc
+
 	result, err := pipeline.RunLLMPrepare(&req)
 	if err != nil {
 		service.LogError("step1: llm prepare failed: " + err.Error())
@@ -513,6 +515,7 @@ func (a *App) BuildQTPrompt(req service.LLMPrepareRequest) (string, error) {
 	}
 
 	meta := service.QTMeta{
+		Series:     strings.TrimSpace(req.Series),
 		Title:      strings.TrimSpace(req.Title),
 		BibleText:  strings.TrimSpace(req.BibleText),
 		Hymn:       strings.TrimSpace(req.Hymn),
@@ -547,37 +550,28 @@ func (a *App) BuildQTPrompt(req service.LLMPrepareRequest) (string, error) {
 	return prompt, nil
 }
 
-func (a *App) SaveManualLLMResult(jsonText string) error {
+// SaveManualLLMResult는 사용자가 외부 LLM에서 받아 붙여 넣은 결과를 저장한다.
+// 화면 기본정보를 함께 받는 이유는 두 가지다.
+//   - 작업내역 DB가 제목/본문 성구/연령대를 필수로 요구한다
+//   - sermon_summary.md의 제목·본문을 LLM 출력 대신 사용자 입력에서 가져온다
+func (a *App) SaveManualLLMResult(req service.QTStep1SaveRequest) error {
 	service.LogInfo("step1: manual result save started")
 
-	paths, err := util.GetAppPaths()
+	svc, err := service.NewQTStep1ServiceWithHistory(a.historySvc)
 	if err != nil {
-		service.LogError("step1: get app paths failed: " + err.Error())
+		service.LogError("step1: service create failed: " + err.Error())
 		return err
 	}
 
-	jsonText = strings.TrimSpace(jsonText)
-	if jsonText == "" {
-		err := errors.New("저장할 JSON 결과가 비어 있습니다")
-		service.LogError("step1: manual result empty")
+	result, err := svc.Save(&req)
+	if err != nil {
+		service.LogError("step1: manual result save failed: " + err.Error())
 		return err
 	}
 
-	// 코드펜스 제거 + LLM 구조적 콤마 누락 보정
-	jsonText = service.CleanLLMJSONOutput(jsonText)
-
-	var js any
-	if err := json.Unmarshal([]byte(jsonText), &js); err != nil {
-		service.LogError("step1: invalid json result")
-		return errors.New("유효한 JSON 형식이 아닙니다")
-	}
-
-	if err := os.WriteFile(paths.TempJson, []byte(jsonText), 0o644); err != nil {
-		service.LogError("step1: temp.json write failed: " + err.Error())
-		return err
-	}
-
-	service.LogInfo("step1: manual result save completed")
+	service.LogInfo(fmt.Sprintf(
+		"step1: manual result save completed history_id=%d infographic=%t",
+		result.HistoryID, result.InfographicPath != ""))
 	return nil
 }
 

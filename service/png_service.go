@@ -383,6 +383,15 @@ func loadQTBaseStyle() string {
   color: var(--qt-text);
 }
 
+.qt-series{
+  text-align: center;
+  color: var(--qt-title);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .75;
+  margin: 0 0 2px 0;
+}
+
 .qt-title{
   text-align: center;
   color: var(--qt-title);

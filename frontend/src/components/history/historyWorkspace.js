@@ -59,6 +59,38 @@ function formatDisplay(value, fallback = "-") {
   return text || fallback;
 }
 
+// history_master.title은 "시리즈|||제목" 형태로 저장된다.
+// 구분자는 사람이 쓰지 않는 문자열이라 되나누기가 안전하다.
+// 구분자가 없으면 전체가 제목이다(시리즈 없음 / 시리즈 도입 이전 이력).
+const HISTORY_SERIES_SEPARATOR = "|||";
+
+function splitHistoryTitle(label) {
+  const text = safeValue(label).trim();
+  const idx = text.indexOf(HISTORY_SERIES_SEPARATOR);
+  if (idx < 0) return { series: "", title: text };
+
+  return {
+    series: text.slice(0, idx).trim(),
+    title: text.slice(idx + HISTORY_SERIES_SEPARATOR.length).trim(),
+  };
+}
+
+function formatHistoryTitleTooltip(label) {
+  const { series, title } = splitHistoryTitle(label);
+  if (!series) return formatDisplay(title);
+  return `${series} / ${formatDisplay(title)}`;
+}
+
+// 목록에서는 시리즈를 제목 위 작은 글자로 보여 준다.
+function renderHistoryTitleCell(label) {
+  const { series, title } = splitHistoryTitle(label);
+  const titleHtml = escapeHtml(formatDisplay(title));
+
+  if (!series) return titleHtml;
+
+  return `<span class="history-title-series">${escapeHtml(series)}</span>${titleHtml}`;
+}
+
 function formatDateOnly(value) {
   const text = formatDisplay(value, "-");
   if (text === "-") return text;
@@ -275,8 +307,8 @@ function renderTableBodyContent(items) {
             />
           </td>
 
-          <td class="history-col-title" title="${escapeHtml(formatDisplay(item.title))}">
-            ${escapeHtml(formatDisplay(item.title))}
+          <td class="history-col-title" title="${escapeHtml(formatHistoryTitleTooltip(item.title))}">
+            ${renderHistoryTitleCell(item.title)}
           </td>
 
           <td class="history-col-bible" title="${escapeHtml(formatDisplay(item.bibleText))}">
@@ -518,6 +550,7 @@ async function handleReworkSelected() {
     const audienceId = audienceIds[0];
     const result = await PrepareReworkFromHistory(historyId, audienceId);
 
+    setBasicInfoField("series", result.series || "");
     setBasicInfoField("title", result.title || "");
     setBasicInfoField("bibleText", result.bibleText || "");
     setBasicInfoField("hymn", result.hymn || "");
@@ -541,7 +574,8 @@ async function handleReworkSelected() {
     setAudienceStepStatus(audienceId, "step3", "idle");
 
     setAudienceStep(audienceId, "step2");
-    showToast("작업을 불러왔습니다.", "success");
+    // 재작업은 Step2 편집본이 아니라 Step1이 저장한 LLM 원본에서 복원한다.
+    showToast("LLM 원본에서 작업을 다시 시작합니다.", "success");
     mountAppShell("app");
   } catch (error) {
     console.error(error);

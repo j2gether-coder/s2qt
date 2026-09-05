@@ -1,6 +1,6 @@
 {
-  "last_checked_at": "2026-08-15T15:36:41+09:00",
-  "last_check_mode": "video",
+  "last_checked_at": "2026-09-05T10:54:54+09:00",
+  "last_check_mode": "png",
   "last_check_ok": true,
   "installed": {
     "ffmpeg": true,
@@ -13,7 +13,7 @@
   },
   "versions": {
     "js-runtime": "deno 2.9.5 (stable, release, x86_64-pc-windows-msvc)",
-    "yt-dlp": "2026.07.04"
+    "yt-dlp": "2026.08.19"
   },
   "model_installed": true
 }

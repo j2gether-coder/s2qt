@@ -120,9 +120,18 @@ STRUCTURE:
 4. prayer.blocks: exactly 1 block with type "paragraph"
 
 METADATA RULES:
+- series: 시리즈 설교의 시리즈명. 입력값을 그대로 복사한다.
+  비어 있으면 "" 로 출력한다. 전사문에서 추론하거나 지어내지 않는다.
+  Example: "본받고 싶은 교회(1)" 또는 ""
+
 - title: Must start with "[QT] " + Korean title
   Example: "[QT] 주님의 사랑에 응답하는 삶"
-  
+
+  series가 주어진 경우, 그 시리즈명을 title에 반복하지 않는다.
+  title은 이번 회차의 내용만 담는다.
+    ✗ "[QT] 본받고 싶은 교회(1) 데살로니가서를 시작하며"
+    ✓ "[QT] 데살로니가서를 시작하며"
+
 - bible_text: Must exactly equal input {{bible_text}}
   Example: "마가복음 5:1-20"
   
@@ -144,6 +153,36 @@ METADATA RULES:
     {"reference": "요한복음 14:1", "text": "너희 마음에 근심하지 말라..."}
   ]
 
+METADATA FIDELITY - CRITICAL:
+앱이 제공한 메타정보는 확정된 사실이다. 아래 필드는 입력값을 그대로 복사한다.
+
+  series / preacher / church_name / sermon_date / source_url / month_name / month_accent
+
+규칙:
+1. 제공된 입력값을 글자 그대로 복사한다.
+2. 입력값이 비어 있으면 빈 문자열 ""을 출력한다.
+3. 전사문에서 추론하지 않는다.
+4. 그럴듯한 값을 지어내지 않는다.
+5. 빈 값을 예시값으로 대체하지 않는다.
+6. 존재하지 않는 사람, 교회, 날짜, URL을 만들지 않는다.
+
+입력 preacher = ""  일 때
+  ✓ "preacher": ""
+  ✗ "preacher": "김신일 목사"     ← 날조. 절대 금지
+
+입력 source_url = ""  일 때
+  ✓ "source_url": ""
+  ✗ "source_url": "https://youtu.be/example"     ← 날조. 절대 금지
+
+month_accent:
+- 제공된 16진수 색상값을 그대로 복사한다. 형식은 "#RRGGBB"
+- 한글 단어나 임의 문자열로 바꾸지 않는다.
+  ✓ "#C97A3D"
+  ✗ "오"   ✗ "말씀과 함께"   ✗ "파란색"
+
+이 문서는 교회 주보로 배포된다. 지어낸 설교자명이나 교회명이 실리면 안 된다.
+정확성이 완성도보다 중요하다.
+
 [JSON Schema Template - KOREAN EXAMPLE]
 {
   "version": "1.0",
@@ -151,6 +190,7 @@ METADATA RULES:
   "audience": "{{audience}}",
   "template_id": "qt_classic",
   "metadata": {
+    "series": "{{series}}",
     "title": "[QT] 주님의 사랑에 응답하는 삶",
     "bible_text": "{{bible_text}}",
     "bible_passage_text": "1절 설명\n2절 설명",
@@ -245,6 +285,73 @@ QUALITY CHECKS:
 ✓ Quotation marks in text are escaped properly
 ✓ Reflection items use Korean format: "XXX을/를 하고 있는지 생각해봅시다"
 ✓ Prayer is natural Korean with reverent tone`
+
+// defaultQTPromptInfographic은 장년(adult) 실행에서만 프롬프트 뒤에 덧붙인다.
+// 이 블록이 붙으면 LLM은 version을 "1.1"로 올리고 최상위에 infographic 객체를 추가한다.
+// 다른 연령대에서는 이 블록 자체를 넣지 않으므로 출력이 기존과 동일하게 유지된다.
+const defaultQTPromptInfographic = `[Infographic Output Contract - adult only]
+
+이 블록이 있는 실행에서는 "version" 값을 "1.0"이 아니라 "1.1"로 출력한다.
+sections[] 와 별개로 최상위에 "infographic" 객체를 하나 추가하며,
+이 객체를 JSON의 마지막 필드로 둔다.
+
+infographic은 같은 전사문에서 뽑되, QT 본문과 독립적으로 다시 쓴다.
+QT 문장의 어미만 바꿔 옮기지 않는다.
+
+  ✗ QT message  : "두려움은 현실을 왜곡시키고 미래를 불안하게 만듭니다."
+    infographic : "두려움은 현실을 왜곡시키고 미래를 불안하게 만든다."
+    → 어미만 바꾼 복사. 금지.
+
+  ✓ infographic : "다윗은 두려움에 끌려 자신의 판단을 앞세웠지만,
+                   위기의 자리에서 다시 하나님께 시선을 돌린다."
+
+용어 고정: 말씀의 길잡이 / 말씀을 따라 / 더하는 말씀 / 말씀의 핵심 / 오늘의 적용 / 오늘의 기도
+금지어(이 블록에 한함): "설교", "설교 흐름", "설교 예화", "설교자"
+  - 말씀, 본문, 묵상, 삶, 믿음, 공동체 중심의 표현을 쓴다.
+  - 설교자 본인의 이야기는 제3자 시점으로 바꾼다.
+    예) "제가 병원에 입원했을 때..." → "한 목회자는 병원에 입원했을 때..."
+
+문체:
+  guide, prayer                : 높임체 (~합니다 / ~습니다)
+  follow, extra, core, apply   : 평서형 단정 (~한다 / ~이다)
+
+필드 규칙:
+- guide  : 2~3문장. 본문의 배경과 상황을 정리하고 왜 이 말씀이 필요한지 설명한다.
+           QT summary(5~6문장)보다 짧게 줄여 쓰며, 그대로 복사하지 않는다.
+- follow : 3~5개. 각 항목은 완결된 한 문장.
+           말씀의 흐름이 순서대로 이어지게 한다.
+           ✗ "생각은 말씀으로 지키기"                    (명사구 - message_title 형식)
+           ✓ "성령께서 우리의 연약함을 도우시며 친히 간구하신다."
+- extra  : 0~3개. 전사문에 실제로 등장한 예화만 정리한다. 없으면 빈 배열 [].
+           예화가 본문 메시지를 어떻게 뒷받침하는지 함께 서술한다.
+           채우기 위해 이야기를 지어내지 않는다.
+- core   : 한 문장. 명제형으로 단정한다.
+           ✓ "하나님의 평강은 두려움 가운데서도 우리를 붙드신다."
+- apply  : 2~3개. 오늘 실천할 수 있는 평서형 행동 문장.
+           ✗ "...하고 있는지 생각해봅시다."               (QT reflection 형식)
+           ✓ "주의 이름을 부르며 성령의 탄식에 나를 맡긴다."
+- prayer : 2~3문장. QT prayer(5~6문장)를 잘라 쓰지 않고 따로 작성한다.
+
+[Infographic Field Template]
+  "infographic": {
+    "guide": "...",
+    "follow": ["...", "...", "..."],
+    "extra": ["...", "..."],
+    "core": "...",
+    "apply": ["...", "..."],
+    "prayer": "..."
+  }
+
+QUALITY CHECKS (infographic):
+✓ version 이 "1.1" 이다
+✓ infographic 이 최상위 마지막 필드로 존재한다
+✓ 6개 필드(guide/follow/extra/core/apply/prayer)가 모두 있다
+✓ follow 는 3~5개, apply 는 2~3개, extra 는 0~3개이다
+✓ guide 와 prayer 는 2~3문장이다
+✓ apply 항목이 "생각해봅시다/살펴봅시다/확인해봅시다"로 끝나지 않는다
+✓ follow 가 QT message 문장의 어미만 바꾼 것이 아니다
+✓ 이 블록 안에 "설교"라는 단어가 없다
+✓ extra 의 모든 예화가 전사문에 실제로 존재한다`
 
 const defaultQTPromptTranscript = `[Sermon Transcript]
 {{raw_text}}`
@@ -532,15 +639,21 @@ func BuildQTPromptJSON(meta QTMeta) string {
 	transcriptPrompt := strings.TrimSpace(defaultQTPromptTranscript)
 
 	// Construct prompt in optimal order for all LLMs
-	prompt := strings.Join([]string{
-		basePrompt,
-		audienceRules,
-		schemaPrompt,
-		transcriptPrompt,
-	}, "\n\n")
+	parts := []string{basePrompt, audienceRules, schemaPrompt}
+
+	// 인포그래픽은 장년용으로 한정한다. 다른 연령대에서는 블록 자체를 넣지 않아
+	// 프롬프트/출력 길이를 기존과 동일하게 유지한다.
+	// 응답이 잘려도 QT 본체가 온전하도록 전사문 바로 앞(JSON 계약의 마지막)에 붙인다.
+	if strings.TrimSpace(meta.Audience) == AudienceAdult {
+		parts = append(parts, strings.TrimSpace(defaultQTPromptInfographic))
+	}
+
+	parts = append(parts, transcriptPrompt)
+	prompt := strings.Join(parts, "\n\n")
 
 	// Template replacement
 	replacer := strings.NewReplacer(
+		"{{series}}", meta.Series,
 		"{{title}}", meta.Title,
 		"{{bible_text}}", meta.BibleText,
 		"{{hymn}}", meta.Hymn,

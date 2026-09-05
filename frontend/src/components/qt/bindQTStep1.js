@@ -17,6 +17,7 @@ function buildLLMRequest(audienceId) {
 
   return {
     audience: audienceId,
+    series: info.series || '',
     title: info.title || '',
     bibleText: info.bibleText || '',
     hymn: info.hymn || '',
@@ -101,8 +102,20 @@ export function bindQTStep1Events(audienceId) {
           return;
         }
 
+        // 결과저장은 작업내역 DB에도 기록하므로 제목과 본문 성구가 반드시 있어야 한다.
+        // (프롬프트 생성을 거치지 않고 결과만 붙여 넣는 경우를 막는다)
+        const info = appState?.source?.basicInfo || {};
+        if (!(info.title || '').trim() || !(info.bibleText || '').trim()) {
+          setInlineMessage(
+            "qt-step1-message",
+            '제목과 본문 성구를 먼저 입력해 주세요.',
+            "warning"
+          );
+          return;
+        }
+
         setAudienceStepStatus(audienceId, 'step1', 'running');
-        await SaveManualLLMResult(jsonText);
+        await SaveManualLLMResult({ ...buildLLMRequest(audienceId), jsonText });
         setAudienceStepStatus(audienceId, 'step1', 'done');
 
         if (goStep2Btn) {

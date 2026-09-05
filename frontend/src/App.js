@@ -17,7 +17,7 @@ export default function App() {
   const [result, setResult] = useState("");
   const [log, setLog] = useState("");
   const [files, setFiles] = useState({
-    videoFile: "",
+    audioFile: "",
     wavFile: "",
     transcriptFile: "",
     markdownFile: "",
@@ -36,7 +36,7 @@ export default function App() {
       setResult("");
       setLog("");
       setFiles({
-        videoFile: "",
+        audioFile: "",
         wavFile: "",
         transcriptFile: "",
         markdownFile: "",
@@ -48,7 +48,7 @@ export default function App() {
       setResult(res.transcriptText || "");
       setLog(res.log || "");
       setFiles({
-        videoFile: res.videoFile || "",
+        audioFile: res.audioFile || "",
         wavFile: res.wavFile || "",
         transcriptFile: res.transcriptFile || "",
         markdownFile: res.markdownFile || "",
@@ -88,7 +88,7 @@ export default function App() {
       <section className="grid">
         <div className="card">
           <h2>결과 파일</h2>
-          <div className="fileitem"><strong>Video:</strong> {files.videoFile || "-"}</div>
+          <div className="fileitem"><strong>Audio:</strong> {files.audioFile || "-"}</div>
           <div className="fileitem"><strong>WAV:</strong> {files.wavFile || "-"}</div>
           <div className="fileitem"><strong>TXT:</strong> {files.transcriptFile || "-"}</div>
           <div className="fileitem"><strong>MD:</strong> {files.markdownFile || "-"}</div>
