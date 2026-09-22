@@ -136,8 +136,22 @@ func (s *QTStep1Service) Save(req *QTStep1SaveRequest) (*QTStep1SaveResult, erro
 // version을 1.0으로 고정해 Step2가 지금까지와 똑같이 읽고 쓰도록 한다.
 //
 // metadata는 호출자가 이미 확정한 상태로 넘어온다(series 덮어쓰기 포함).
+//
+// 인포그래픽은 Step2가 md를 다시 쓸 때 필요하므로 metadata에 실어 보낸다.
+// Step2 UI는 이 키를 모르며, preserveInternalMetaFields()가 저장 때마다 보존한다.
+// metadata에 담으므로 version은 그대로 1.0이고 Step2 동작도 달라지지 않는다.
 func (s *QTStep1Service) writeTempJSON(doc *QTLLMDoc, audience string) error {
 	qt := doc.QTSectionDoc
+
+	// Metadata는 맵이라 얕은 복사만으로는 doc와 같은 것을 가리킨다.
+	// 아래에서 키를 추가하므로, doc.Metadata(작업내역 DB에 직렬화될 원본)가
+	// 함께 바뀌지 않도록 복사한다 — saveHistory와의 순서 의존을 없앤다.
+	qt.Metadata = copyMetadata(doc.Metadata)
+
+	// 유효할 때만 넣는다. 그래야 Step2의 규칙이 "있으면 쓴다"로 끝난다.
+	if audience == AudienceAdult && len(ValidateInfographic(doc.Infographic)) == 0 {
+		qt.Metadata["infographic"] = doc.Infographic
+	}
 
 	qt.Version = "1.0"
 	if strings.TrimSpace(qt.DocType) == "" {
@@ -187,7 +201,13 @@ func (s *QTStep1Service) writeSermonSummary(doc *QTLLMDoc, audience, series, tit
 
 	// 시리즈·제목·성경본문은 LLM 출력이 아니라 화면 기본정보를 쓴다.
 	// LLM이 메타정보를 날조하는 사례가 있어 사용자 입력을 신뢰한다.
-	content := RenderInfographicMD(doc.Infographic, series, title, bibleText)
+	// 관련 성구만은 화면 입력이 아니므로 LLM 출력에서 가져온다.
+	content := RenderInfographicMD(doc.Infographic, SermonSummaryMeta{
+		Series:            series,
+		Title:             title,
+		BibleText:         bibleText,
+		SupportScriptures: getStringSliceFromMap(doc.Metadata, "support_scriptures"),
+	})
 
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		msg := "sermon_summary.md 저장 실패: " + err.Error()

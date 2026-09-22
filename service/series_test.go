@@ -12,7 +12,11 @@ const testSeries = "본받고 싶은 교회(1)"
 // ── 렌더러 ────────────────────────────────────────────────
 
 func TestRenderInfographicMD_SeriesAboveTitle(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), testSeries, "[QT] 데살로니가서를 시작하며", "살전 1:1-10")
+	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+		Series:    testSeries,
+		Title:     "[QT] 데살로니가서를 시작하며",
+		BibleText: "살전 1:1-10",
+	})
 
 	want := testSeries + "\n\n# 데살로니가서를 시작하며\n"
 	if !strings.HasPrefix(md, want) {
@@ -24,7 +28,11 @@ func TestRenderInfographicMD_SeriesAboveTitle(t *testing.T) {
 // 문서가 빈 줄로 시작하면 제목을 못 잡는 도구가 있다.
 func TestRenderInfographicMD_OmitsEmptySeries(t *testing.T) {
 	for _, series := range []string{"", "   "} {
-		md := RenderInfographicMD(validInfographic(), series, "데살로니가서를 시작하며", "살전 1:1-10")
+		md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+			Series:    series,
+			Title:     "데살로니가서를 시작하며",
+			BibleText: "살전 1:1-10",
+		})
 
 		if !strings.HasPrefix(md, "# 데살로니가서를 시작하며\n") {
 			t.Errorf("series=%q: 문서가 제목으로 시작하지 않습니다:\n%s", series, firstLines(md, 3))

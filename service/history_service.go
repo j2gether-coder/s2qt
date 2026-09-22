@@ -586,6 +586,13 @@ func restoreQTSectionDoc(jsonText string, audience string) (*QTSectionDoc, *QTLL
 		qt.Template = "qt_classic"
 	}
 
+	// 재작업은 writeTempJSON을 거치지 않으므로 인포그래픽을 여기서 실어 준다.
+	// 빠뜨리면 재작업 직후 Step2에서 저장할 때 md가 갱신되지 않는다.
+	qt.Metadata = copyMetadata(doc.Metadata)
+	if qt.Audience == AudienceAdult && len(ValidateInfographic(doc.Infographic)) == 0 {
+		qt.Metadata["infographic"] = doc.Infographic
+	}
+
 	return &qt, &doc, nil
 }
 
@@ -617,22 +624,25 @@ func restoreInfographicFile(doc *QTLLMDoc, audience string, master HistoryMaster
 
 	// 시리즈와 제목은 복원된 문서의 metadata에서 가져온다.
 	// master.Title은 "시리즈|||제목" 합친 라벨이므로 되나눠 폴백으로만 쓴다.
-	series, title := splitHistoryTitle(master.Title)
-	bibleText := master.BibleText
+	meta := SermonSummaryMeta{
+		SupportScriptures: getStringSliceFromMap(doc.Metadata, "support_scriptures"),
+	}
+	meta.Series, meta.Title = splitHistoryTitle(master.Title)
+	meta.BibleText = master.BibleText
 
 	if doc.Metadata != nil {
 		if s := strings.TrimSpace(getStringFromMap(doc.Metadata, "series")); s != "" {
-			series = s
+			meta.Series = s
 		}
 		if t := strings.TrimSpace(getStringFromMap(doc.Metadata, "title")); t != "" {
-			title = t
+			meta.Title = t
 		}
 		if b := strings.TrimSpace(getStringFromMap(doc.Metadata, "bible_text")); b != "" {
-			bibleText = b
+			meta.BibleText = b
 		}
 	}
 
-	content := RenderInfographicMD(doc.Infographic, series, title, bibleText)
+	content := RenderInfographicMD(doc.Infographic, meta)
 	if err := os.WriteFile(paths.TempSermonSummary, []byte(content), 0o644); err != nil {
 		LogError("rework: sermon_summary.md 저장 실패: " + err.Error())
 		return

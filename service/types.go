@@ -161,6 +161,18 @@ type InfographicData struct {
 	Prayer string   `json:"prayer"`
 }
 
+// SermonSummaryMeta는 sermon_summary.md의 머리말과 꼬리말에 들어가는 값이다.
+// 인포그래픽 본문(InfographicData)과 달리 이 값들은 LLM 출력이 아니거나,
+// 사람이 나중에 고칠 수 있는 값이다.
+//
+// 인자를 나열하면 문자열 3개가 연달아 순서 실수를 잡아내지 못하므로 구조체로 받는다.
+type SermonSummaryMeta struct {
+	Series            string   // 화면 입력. 비면 줄 자체를 생략
+	Title             string   // 장년은 화면 입력, 비장년은 LLM 제목
+	BibleText         string   // 화면 입력
+	SupportScriptures []string // LLM 출력 → Step2에서 편집 가능. 0개가 정상
+}
+
 // QTStep1SaveRequest는 Step1 결과저장의 입력이다.
 // 화면 기본정보를 함께 받아 LLM이 날조한 메타정보 대신 사용하고,
 // 작업내역 DB 저장에 필요한 필수값(Title/BibleText/Audience)을 확보한다.

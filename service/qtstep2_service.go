@@ -139,9 +139,13 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 	return out, nil
 }
 
-// preserveInternalBlogFields는 기존 temp.json의 blog 전용 내부 필드(support_scriptures_full)를
-// 새로 저장할 metadata 맵에 복사해 유실을 방지한다.
-func preserveInternalBlogFields(tempJsonPath string, metadata map[string]any) {
+// preserveInternalMetaFields는 기존 temp.json의 내부 전용 필드를 새로 저장할 metadata 맵에
+// 복사해 유실을 방지한다. Step2 UI가 편집하지 않는 값들이며, Save()가 doc을 통째로 새로
+// 만들기 때문에 여기서 옮겨 주지 않으면 저장 한 번에 사라진다.
+//
+//	support_scriptures_full : extended.html이 쓰는 관련 성구 전체 본문
+//	infographic             : sermon_summary.md를 다시 렌더하는 데 쓰는 원본
+func preserveInternalMetaFields(tempJsonPath string, metadata map[string]any) {
 	if metadata == nil {
 		return
 	}
@@ -163,6 +167,10 @@ func preserveInternalBlogFields(tempJsonPath string, metadata map[string]any) {
 		if arr, ok := v.([]any); ok && len(arr) > 0 {
 			metadata["support_scriptures_full"] = arr
 		}
+	}
+
+	if v, ok := prev.Metadata["infographic"]; ok && v != nil {
+		metadata["infographic"] = v
 	}
 }
 
@@ -251,10 +259,10 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		},
 	}
 
-	// blog 전용 내부 필드(support_scriptures_full)는 Step2 UI에서 편집하지 않으므로,
-	// 기존 temp.json에 있던 값을 그대로 보존한다.
-	// (Step1 LLM이 생성한 관련 성구 전체 본문이 Step2 저장 시 유실되지 않도록 함)
-	preserveInternalBlogFields(s.Paths.TempJson, doc.Metadata)
+	// 내부 전용 필드(support_scriptures_full, infographic)는 Step2 UI에서 편집하지
+	// 않으므로, 기존 temp.json에 있던 값을 그대로 보존한다.
+	// 빠뜨리면 첫 저장은 정상이고 두 번째 저장부터 조용히 망가진다.
+	preserveInternalMetaFields(s.Paths.TempJson, doc.Metadata)
 
 	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -264,6 +272,10 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 	if err := os.WriteFile(s.Paths.TempJson, b, 0644); err != nil {
 		return fmt.Errorf("temp.json 저장 실패: %w", err)
 	}
+
+	// Step2에서 고친 관련 성구·제목·시리즈를 sermon_summary.md에도 반영한다.
+	// temp.json 저장이 성공한 뒤에만 수행한다.
+	s.rewriteSermonSummary(doc.Metadata)
 
 	// 저장 버튼은 필수 절차이므로 temp.html도 함께 최신 상태로 갱신
 	htmlReq := *req
@@ -278,6 +290,34 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 	}
 
 	return nil
+}
+
+// rewriteSermonSummary는 Step2 저장 내용으로 sermon_summary.md를 다시 렌더한다.
+//
+// metadata.infographic이 없으면 파일을 건드리지 않는다. 비장년이거나 Step1의
+// 인포그래픽 검증이 실패한 경우이며, 그때 md는 이미 0바이트다.
+//
+// 실패해도 저장 자체를 되돌리지 않는다 — temp.json과 temp.html은 이미 정상이고
+// md는 부수 산출물이다.
+func (s *QTStep2Service) rewriteSermonSummary(metadata map[string]any) {
+	data := getInfographicFromMap(metadata, "infographic")
+	if data == nil {
+		return
+	}
+
+	content := RenderInfographicMD(data, SermonSummaryMeta{
+		Series:            getStringFromMap(metadata, "series"),
+		Title:             getStringFromMap(metadata, "title"),
+		BibleText:         getStringFromMap(metadata, "bible_text"),
+		SupportScriptures: getStringSliceFromMap(metadata, "support_scriptures"),
+	})
+
+	if err := os.WriteFile(s.Paths.TempSermonSummary, []byte(content), 0o644); err != nil {
+		LogError("step2: sermon_summary.md 갱신 실패: " + err.Error())
+		return
+	}
+
+	LogInfo("step2: sermon_summary.md 갱신 완료 path=" + s.Paths.TempSermonSummary)
 }
 
 func (s *QTStep2Service) BuildHTML(req *QTStep2Data) (string, error) {
@@ -457,6 +497,38 @@ func getStringSliceFromMap(m map[string]any, key string) []string {
 	default:
 		return []string{}
 	}
+}
+
+// copyMetadata는 metadata 맵을 얕게 복사한다.
+// 맵은 참조 타입이라 구조체를 복사해도 같은 맵을 가리킨다. 한쪽에만 키를 더하고
+// 싶을 때 이것을 거치지 않으면 다른 쪽도 조용히 함께 바뀐다.
+func copyMetadata(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m)+1)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// getInfographicFromMap은 metadata에 실린 인포그래픽을 꺼낸다.
+// 값은 방금 넣은 *InfographicData일 수도, 파일에서 읽은 map[string]any일 수도 있어
+// 재마샬로 한 가지 형태로 통일한다.
+func getInfographicFromMap(m map[string]any, key string) *InfographicData {
+	if m == nil || m[key] == nil {
+		return nil
+	}
+
+	b, err := json.Marshal(m[key])
+	if err != nil {
+		return nil
+	}
+
+	var out InfographicData
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+
+	return &out
 }
 
 func cleanStringSlice(items []string) []string {

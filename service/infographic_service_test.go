@@ -17,7 +17,10 @@ func validInfographic() *InfographicData {
 }
 
 func TestRenderInfographicMD_Structure(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), "", "[QT] 내가 무너져도 성령은 일하신다", "로마서 8:26-28")
+	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+		Title:     "[QT] 내가 무너져도 성령은 일하신다",
+		BibleText: "로마서 8:26-28",
+	})
 
 	// 제목에서 [QT] 접두어가 제거되어야 한다.
 	if !strings.HasPrefix(md, "# 내가 무너져도 성령은 일하신다\n") {
@@ -50,7 +53,10 @@ func TestRenderInfographicMD_Structure(t *testing.T) {
 }
 
 func TestRenderInfographicMD_ListsUseBullets(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), "", "제목", "로마서 8:26-28")
+	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+		Title:     "제목",
+		BibleText: "로마서 8:26-28",
+	})
 
 	if !strings.Contains(md, "- 성령께서 친히 간구하신다.") {
 		t.Errorf("follow가 불릿으로 렌더되지 않았습니다")
@@ -73,7 +79,10 @@ func TestRenderInfographicMD_OmitsEmptyExtra(t *testing.T) {
 	data := validInfographic()
 	data.Extra = []string{}
 
-	md := RenderInfographicMD(data, "", "제목", "로마서 8:26-28")
+	md := RenderInfographicMD(data, SermonSummaryMeta{
+		Title:     "제목",
+		BibleText: "로마서 8:26-28",
+	})
 
 	if strings.Contains(md, "## 더하는 말씀") {
 		t.Errorf("extra가 비었는데 섹션이 남아 있습니다")
@@ -84,7 +93,7 @@ func TestRenderInfographicMD_OmitsEmptyExtra(t *testing.T) {
 }
 
 func TestRenderInfographicMD_NilReturnsEmpty(t *testing.T) {
-	if got := RenderInfographicMD(nil, "", "제목", "본문"); got != "" {
+	if got := RenderInfographicMD(nil, SermonSummaryMeta{Title: "제목", BibleText: "본문"}); got != "" {
 		t.Errorf("nil 입력에 빈 문자열이 아닌 값이 반환되었습니다: %q", got)
 	}
 }
