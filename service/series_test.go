@@ -12,7 +12,7 @@ const testSeries = "본받고 싶은 교회(1)"
 // ── 렌더러 ────────────────────────────────────────────────
 
 func TestRenderInfographicMD_SeriesAboveTitle(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+	md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 		Series:    testSeries,
 		Title:     "[QT] 데살로니가서를 시작하며",
 		BibleText: "살전 1:1-10",
@@ -28,7 +28,7 @@ func TestRenderInfographicMD_SeriesAboveTitle(t *testing.T) {
 // 문서가 빈 줄로 시작하면 제목을 못 잡는 도구가 있다.
 func TestRenderInfographicMD_OmitsEmptySeries(t *testing.T) {
 	for _, series := range []string{"", "   "} {
-		md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+		md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 			Series:    series,
 			Title:     "데살로니가서를 시작하며",
 			BibleText: "살전 1:1-10",

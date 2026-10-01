@@ -13,7 +13,7 @@ import (
 // ── 렌더러 ────────────────────────────────────────────────
 
 func TestRenderInfographicMD_SupportScriptures(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+	md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 		Title:             "제목",
 		BibleText:         "로마서 8:26-28",
 		SupportScriptures: []string{"시편 27:8", "요한복음 14:9", "고린도후서 3:18"},
@@ -39,7 +39,7 @@ func TestRenderInfographicMD_SupportScriptures(t *testing.T) {
 // 제목만 남지 않도록 섹션째 생략하고, 기도가 마지막 섹션으로 돌아가야 한다.
 func TestRenderInfographicMD_OmitsEmptySupportScriptures(t *testing.T) {
 	for _, refs := range [][]string{nil, {}, {"  ", ""}} {
-		md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+		md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 			Title:             "제목",
 			BibleText:         "로마서 8:26-28",
 			SupportScriptures: refs,
@@ -53,7 +53,7 @@ func TestRenderInfographicMD_OmitsEmptySupportScriptures(t *testing.T) {
 		}
 
 		// 기도가 마지막이면 예전과 똑같이 개행 하나로 끝나야 한다.
-		if !strings.HasSuffix(md, validInfographic().Prayer+"\n") {
+		if !strings.HasSuffix(md, validSermonSummaryQT().Prayer+"\n") {
 			t.Errorf("refs=%q: 기도로 끝나지 않거나 개행이 하나가 아닙니다:\n%q", refs, md)
 		}
 	}
@@ -62,7 +62,7 @@ func TestRenderInfographicMD_OmitsEmptySupportScriptures(t *testing.T) {
 // 표기는 다른 산출물과 같아야 한다. 정규화를 거치지 않으면
 // md만 "살전 1:1"이고 나머지는 "데살로니가전서 1:1"이 된다.
 func TestRenderInfographicMD_NormalizesSupportScriptures(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+	md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 		Title:     "제목",
 		BibleText: "로마서 8:26-28",
 		// 약어 + 중복

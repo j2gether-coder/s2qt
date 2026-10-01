@@ -44,6 +44,10 @@ func llmJSON(audience string, withInfographic bool) string {
 			{"type": "summary", "title": "말씀의 길잡이", "blocks": []map[string]any{
 				{"type": "paragraph", "text": "요약 본문입니다."},
 			}},
+			// 설교요약문이 reflection을 재활용하므로 테스트 문서에도 있어야 한다.
+			{"type": "reflection", "title": "깊은 묵상과 적용", "blocks": []map[string]any{
+				{"type": "list", "items": []string{"첫째 묵상입니다.", "둘째 묵상입니다."}},
+			}},
 			{"type": "prayer", "title": "오늘의 기도", "blocks": []map[string]any{
 				{"type": "paragraph", "text": "기도문입니다."},
 			}},

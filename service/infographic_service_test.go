@@ -5,19 +5,35 @@ import (
 	"testing"
 )
 
+// validInfographic은 2026-10-01 이후 프롬프트가 내는 3필드 형태다.
 func validInfographic() *InfographicData {
 	return &InfographicData{
-		Guide:  "우리는 연약함을 절감합니다. 성령께서 도우십니다.",
 		Follow: []string{"성령께서 친히 간구하신다.", "성령께서 우리 마음을 아신다.", "모든 것이 합력하여 선을 이룬다."},
 		Extra:  []string{"한 목회자는 수술 중에 성령의 탄식을 경험했다.", "한 선교사는 아이들의 이름만 듣고도 필요를 알았다."},
 		Core:   "내가 무너져도 성령께서 나를 위해 기도하신다.",
+	}
+}
+
+// legacyInfographic은 2026-10-01 이전에 저장된 6필드 형태다. 폴백 확인에만 쓴다.
+func legacyInfographic() *InfographicData {
+	d := validInfographic()
+	d.Guide = "저장된 길잡이입니다."
+	d.Apply = []string{"저장된 적용 하나.", "저장된 적용 둘."}
+	d.Prayer = "저장된 기도입니다."
+	return d
+}
+
+// validSermonSummaryQT는 QT 섹션에서 재활용되는 본문이다.
+func validSermonSummaryQT() SermonSummaryQT {
+	return SermonSummaryQT{
+		Guide:  "우리는 연약함을 절감합니다. 성령께서 도우십니다.",
 		Apply:  []string{"기도할 바를 모를 때 주의 이름을 부른다.", "일어나는 일을 합력하여 선을 이루시는 과정으로 믿는다."},
 		Prayer: "아버지 하나님, 성령을 보내 주셔서 감사합니다. 오늘도 성령을 따라 순종하게 하옵소서.",
 	}
 }
 
 func TestRenderInfographicMD_Structure(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+	md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 		Title:     "[QT] 내가 무너져도 성령은 일하신다",
 		BibleText: "로마서 8:26-28",
 	})
@@ -35,7 +51,7 @@ func TestRenderInfographicMD_Structure(t *testing.T) {
 		"## 말씀을 따라",
 		"## 더하는 말씀",
 		"## 말씀의 핵심",
-		"## 오늘의 적용",
+		"## 깊은 묵상과 적용",
 		"## 오늘의 기도",
 	}
 
@@ -53,7 +69,7 @@ func TestRenderInfographicMD_Structure(t *testing.T) {
 }
 
 func TestRenderInfographicMD_ListsUseBullets(t *testing.T) {
-	md := RenderInfographicMD(validInfographic(), SermonSummaryMeta{
+	md := RenderInfographicMD(validInfographic(), validSermonSummaryQT(), SermonSummaryMeta{
 		Title:     "제목",
 		BibleText: "로마서 8:26-28",
 	})
@@ -79,7 +95,7 @@ func TestRenderInfographicMD_OmitsEmptyExtra(t *testing.T) {
 	data := validInfographic()
 	data.Extra = []string{}
 
-	md := RenderInfographicMD(data, SermonSummaryMeta{
+	md := RenderInfographicMD(data, validSermonSummaryQT(), SermonSummaryMeta{
 		Title:     "제목",
 		BibleText: "로마서 8:26-28",
 	})
@@ -93,7 +109,7 @@ func TestRenderInfographicMD_OmitsEmptyExtra(t *testing.T) {
 }
 
 func TestRenderInfographicMD_NilReturnsEmpty(t *testing.T) {
-	if got := RenderInfographicMD(nil, SermonSummaryMeta{Title: "제목", BibleText: "본문"}); got != "" {
+	if got := RenderInfographicMD(nil, validSermonSummaryQT(), SermonSummaryMeta{Title: "제목", BibleText: "본문"}); got != "" {
 		t.Errorf("nil 입력에 빈 문자열이 아닌 값이 반환되었습니다: %q", got)
 	}
 }
@@ -114,11 +130,8 @@ func TestValidateInfographic_ReportsEachViolation(t *testing.T) {
 		{"follow 초과", func(d *InfographicData) {
 			d.Follow = []string{"문장1", "문장2", "문장3", "문장4", "문장5", "문장6"}
 		}, "follow가 6개입니다"},
-		{"apply 부족", func(d *InfographicData) { d.Apply = []string{"하나만"} }, "apply가 1개입니다"},
 		{"extra 초과", func(d *InfographicData) { d.Extra = []string{"1", "2", "3", "4"} }, "extra가 4개입니다"},
 		{"core 공백", func(d *InfographicData) { d.Core = "   " }, "core가 비어 있습니다"},
-		{"guide 공백", func(d *InfographicData) { d.Guide = "" }, "guide가 비어 있습니다"},
-		{"prayer 공백", func(d *InfographicData) { d.Prayer = "" }, "prayer가 비어 있습니다"},
 	}
 
 	for _, tt := range tests {

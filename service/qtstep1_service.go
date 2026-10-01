@@ -202,7 +202,12 @@ func (s *QTStep1Service) writeSermonSummary(doc *QTLLMDoc, audience, series, tit
 	// 시리즈·제목·성경본문은 LLM 출력이 아니라 화면 기본정보를 쓴다.
 	// LLM이 메타정보를 날조하는 사례가 있어 사용자 입력을 신뢰한다.
 	// 관련 성구만은 화면 입력이 아니므로 LLM 출력에서 가져온다.
-	content := RenderInfographicMD(doc.Infographic, SermonSummaryMeta{
+	//
+	// 길잡이·적용·기도는 QT 섹션에서 온다. 새 프롬프트는 이 셋을 만들지 않지만,
+	// 옛 형식 JSON을 손으로 붙여넣는 경우가 있어 폴백을 거친다.
+	qt := resolveSermonSummaryQT(doc.Infographic, doc.Sections)
+
+	content := RenderInfographicMD(doc.Infographic, qt, SermonSummaryMeta{
 		Series:            series,
 		Title:             title,
 		BibleText:         bibleText,

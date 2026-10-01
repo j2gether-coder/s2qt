@@ -85,9 +85,7 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 		switch strings.TrimSpace(sec.Type) {
 		case "summary":
 			out.SummaryTitle = step2firstNonEmpty(sec.Title, "말씀의 길잡이")
-			if len(sec.Blocks) > 0 {
-				out.SummaryBody = strings.TrimSpace(sec.Blocks[0].Text)
-			}
+			out.SummaryBody = firstParagraphText(sec.Blocks)
 
 		case "message":
 			msgIdx := 0
@@ -113,26 +111,20 @@ func (s *QTStep2Service) Load() (*QTStep2Data, error) {
 			}
 
 		case "reflection":
-			for _, blk := range sec.Blocks {
-				if blk.Type == "list" {
-					if len(blk.Items) > 0 {
-						out.ReflectionItem1 = strings.TrimSpace(blk.Items[0])
-					}
-					if len(blk.Items) > 1 {
-						out.ReflectionItem2 = strings.TrimSpace(blk.Items[1])
-					}
-					if len(blk.Items) > 2 {
-						out.ReflectionItem3 = strings.TrimSpace(blk.Items[2])
-					}
-					break
-				}
+			items := firstListItems(sec.Blocks)
+			if len(items) > 0 {
+				out.ReflectionItem1 = items[0]
+			}
+			if len(items) > 1 {
+				out.ReflectionItem2 = items[1]
+			}
+			if len(items) > 2 {
+				out.ReflectionItem3 = items[2]
 			}
 
 		case "prayer":
 			out.PrayerTitle = step2firstNonEmpty(sec.Title, "오늘의 기도")
-			if len(sec.Blocks) > 0 {
-				out.PrayerBody = strings.TrimSpace(sec.Blocks[0].Text)
-			}
+			out.PrayerBody = firstParagraphText(sec.Blocks)
 		}
 	}
 
@@ -273,9 +265,9 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 		return fmt.Errorf("temp.json 저장 실패: %w", err)
 	}
 
-	// Step2에서 고친 관련 성구·제목·시리즈를 sermon_summary.md에도 반영한다.
+	// Step2 편집 내용을 sermon_summary.md에도 반영한다.
 	// temp.json 저장이 성공한 뒤에만 수행한다.
-	s.rewriteSermonSummary(doc.Metadata)
+	s.rewriteSermonSummary(doc)
 
 	// 저장 버튼은 필수 절차이므로 temp.html도 함께 최신 상태로 갱신
 	htmlReq := *req
@@ -294,18 +286,23 @@ func (s *QTStep2Service) Save(req *QTStep2Data) error {
 
 // rewriteSermonSummary는 Step2 저장 내용으로 sermon_summary.md를 다시 렌더한다.
 //
+// 조립이 끝난 doc을 통째로 받는다. 길잡이·적용·기도를 sections에서 가져오므로
+// Step2에서 고친 QT 본문이 그대로 md에 반영된다.
+//
 // metadata.infographic이 없으면 파일을 건드리지 않는다. 비장년이거나 Step1의
 // 인포그래픽 검증이 실패한 경우이며, 그때 md는 이미 0바이트다.
 //
 // 실패해도 저장 자체를 되돌리지 않는다 — temp.json과 temp.html은 이미 정상이고
 // md는 부수 산출물이다.
-func (s *QTStep2Service) rewriteSermonSummary(metadata map[string]any) {
+func (s *QTStep2Service) rewriteSermonSummary(doc QTSectionDoc) {
+	metadata := doc.Metadata
+
 	data := getInfographicFromMap(metadata, "infographic")
 	if data == nil {
 		return
 	}
 
-	content := RenderInfographicMD(data, SermonSummaryMeta{
+	content := RenderInfographicMD(data, resolveSermonSummaryQT(data, doc.Sections), SermonSummaryMeta{
 		Series:            getStringFromMap(metadata, "series"),
 		Title:             getStringFromMap(metadata, "title"),
 		BibleText:         getStringFromMap(metadata, "bible_text"),
@@ -497,6 +494,73 @@ func getStringSliceFromMap(m map[string]any, key string) []string {
 	default:
 		return []string{}
 	}
+}
+
+// resolveSermonSummaryQT는 sermon_summary.md가 재활용할 본문을 정한다.
+//
+// 2026-10-01 이전 이력에는 infographic에 guide/apply/prayer가 들어 있다.
+// 있으면 그것이 이긴다 — 재작업했을 때 당시 산출물이 그대로 재현된다.
+// 없으면(= 그 이후 JSON) QT 섹션에서 가져오므로 Step2 편집이 md에 반영된다.
+//
+// 폴백은 여기 한 곳에만 둔다. 호출부 3곳에 흩어 놓으면 한 곳이 빠졌을 때
+// 그 경로에서만 옛 이력이 다르게 나온다.
+func resolveSermonSummaryQT(data *InfographicData, sections []QTSectionData) SermonSummaryQT {
+	out := extractSermonSummaryQT(sections)
+
+	if data == nil {
+		return out
+	}
+
+	if g := strings.TrimSpace(data.Guide); g != "" {
+		out.Guide = g
+	}
+	if a := cleanStringSlice(data.Apply); len(a) > 0 {
+		out.Apply = a
+	}
+	if p := strings.TrimSpace(data.Prayer); p != "" {
+		out.Prayer = p
+	}
+
+	return out
+}
+
+// extractSermonSummaryQT는 QT 섹션에서 md가 재활용할 본문을 꺼낸다.
+// Step1·Step2·재작업이 모두 조립된 QTSectionDoc을 갖고 있으므로 경로는 하나다.
+func extractSermonSummaryQT(sections []QTSectionData) SermonSummaryQT {
+	var out SermonSummaryQT
+
+	for _, sec := range sections {
+		switch strings.TrimSpace(sec.Type) {
+		case "summary":
+			out.Guide = firstParagraphText(sec.Blocks)
+		case "reflection":
+			out.Apply = firstListItems(sec.Blocks)
+		case "prayer":
+			out.Prayer = firstParagraphText(sec.Blocks)
+		}
+	}
+
+	return out
+}
+
+// firstParagraphText는 첫 paragraph 블록의 본문을 돌려준다.
+func firstParagraphText(blocks []QTBlockData) string {
+	for _, blk := range blocks {
+		if strings.TrimSpace(blk.Type) == "paragraph" {
+			return strings.TrimSpace(blk.Text)
+		}
+	}
+	return ""
+}
+
+// firstListItems는 첫 list 블록의 항목을 돌려준다.
+func firstListItems(blocks []QTBlockData) []string {
+	for _, blk := range blocks {
+		if strings.TrimSpace(blk.Type) == "list" {
+			return cleanStringSlice(blk.Items)
+		}
+	}
+	return nil
 }
 
 // copyMetadata는 metadata 맵을 얕게 복사한다.

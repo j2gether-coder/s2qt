@@ -152,13 +152,30 @@ type QTStep2Data struct {
 // InfographicData는 LLM이 생성한 인포그래픽 전용 필드 묶음이다.
 // temp.json에는 저장하지 않고, Step1에서 sermon_summary.md로 렌더한 뒤 버린다.
 // 원본은 작업내역 DB에 JSON 전문으로 보관된다.
+// InfographicData는 LLM이 QT 본문과 별개로 새로 쓰는 부분을 담는다.
 type InfographicData struct {
-	Guide  string   `json:"guide"`
 	Follow []string `json:"follow"`
 	Extra  []string `json:"extra"`
 	Core   string   `json:"core"`
-	Apply  []string `json:"apply"`
-	Prayer string   `json:"prayer"`
+
+	// 아래 3개는 2026-10-01부터 프롬프트가 생성하지 않는다.
+	// 그 이전에 저장된 이력을 재작업할 때 당시 산출물을 재현하려고 읽기만 한다.
+	//
+	// 지우지 말 것 — encoding/json은 모르는 키를 말없이 버리므로,
+	// 필드를 없애면 옛 이력의 폴백이 에러 없이 조용히 사라진다.
+	Guide  string   `json:"guide,omitempty"`
+	Apply  []string `json:"apply,omitempty"`
+	Prayer string   `json:"prayer,omitempty"`
+}
+
+// SermonSummaryQT는 sermon_summary.md가 QT 섹션에서 재활용하는 본문이다.
+// LLM이 따로 쓰지 않으므로 Step2 편집이 그대로 md에 반영된다.
+//
+// 값을 정하는 곳은 resolveSermonSummaryQT() 하나뿐이다.
+type SermonSummaryQT struct {
+	Guide  string   // sections[summary]    — 말씀의 길잡이
+	Apply  []string // sections[reflection] — 깊은 묵상과 적용
+	Prayer string   // sections[prayer]     — 오늘의 기도
 }
 
 // SermonSummaryMeta는 sermon_summary.md의 머리말과 꼬리말에 들어가는 값이다.

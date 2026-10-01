@@ -642,7 +642,12 @@ func restoreInfographicFile(doc *QTLLMDoc, audience string, master HistoryMaster
 		}
 	}
 
-	content := RenderInfographicMD(doc.Infographic, meta)
+	// 확정 4가 실제로 작동하는 자리다.
+	// 2026-10-01 이전 이력은 저장된 guide/apply/prayer가 그대로 복원되고,
+	// 그 이후 이력은 QT 섹션에서 조립된다.
+	qt := resolveSermonSummaryQT(doc.Infographic, doc.Sections)
+
+	content := RenderInfographicMD(doc.Infographic, qt, meta)
 	if err := os.WriteFile(paths.TempSermonSummary, []byte(content), 0o644); err != nil {
 		LogError("rework: sermon_summary.md 저장 실패: " + err.Error())
 		return
