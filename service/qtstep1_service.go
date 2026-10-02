@@ -109,6 +109,16 @@ func (s *QTStep1Service) Save(req *QTStep1SaveRequest) (*QTStep1SaveResult, erro
 		doc.Metadata["title"] = ensureQTTitlePrefix(title)
 	}
 
+	// 찬송가는 조건부다. 화면에 입력이 있으면 사람 값이 이기고,
+	// 비어 있으면 LLM이 본문에 맞춰 추천한 곡을 살린다.
+	//
+	// 여기서 한 번 정규화한 값을 작업내역 DB에도 그대로 넘긴다.
+	// 따로 계산하면 "찬송가:" 접두어를 뗀 경우에만 두 곳이 갈린다.
+	hymn := normalizeHymnText(req.Hymn)
+	if hymn != "" {
+		doc.Metadata["hymn"] = hymn
+	}
+
 	// 3) temp.json — QTSectionDoc만 마샬하므로 infographic이 자동으로 빠진다.
 	if err := s.writeTempJSON(&doc, audience); err != nil {
 		return nil, err
@@ -122,7 +132,7 @@ func (s *QTStep1Service) Save(req *QTStep1SaveRequest) (*QTStep1SaveResult, erro
 
 	// 5) 작업내역 DB
 	//    실패해도 파일 산출물은 이미 정상이므로 저장 자체를 되돌리지 않는다.
-	historyID, err := s.saveHistory(req, &doc)
+	historyID, err := s.saveHistory(req, &doc, hymn)
 	if err != nil {
 		LogError("step1: 작업내역 저장 실패: " + err.Error())
 		return result, err
@@ -230,7 +240,10 @@ func (s *QTStep1Service) writeSermonSummary(doc *QTLLMDoc, audience, series, tit
 // LLM이 준 문자열을 그대로 넣지 않고 doc을 다시 직렬화한다.
 // series는 화면 입력값으로 확정된 상태여야 재작업에서 되살아나기 때문이다.
 // sections·infographic·metadata의 나머지 필드는 파싱→직렬화를 거쳐도 그대로 보존된다.
-func (s *QTStep1Service) saveHistory(req *QTStep1SaveRequest, doc *QTLLMDoc) (int64, error) {
+//
+// hymn은 호출자가 정규화한 값을 그대로 받는다. 여기서 다시 계산하면
+// "찬송가:" 접두어를 뗀 경우에만 목록의 찬송과 산출물의 찬송이 갈린다.
+func (s *QTStep1Service) saveHistory(req *QTStep1SaveRequest, doc *QTLLMDoc, hymn string) (int64, error) {
 	if s.History == nil {
 		// 이력 저장 없이 파일만 쓰는 경로(테스트 등)에서는 건너뛴다.
 		return 0, nil
@@ -252,7 +265,7 @@ func (s *QTStep1Service) saveHistory(req *QTStep1SaveRequest, doc *QTLLMDoc) (in
 	historyID, err := s.History.SaveHistory(SaveHistoryRequest{
 		Title:        buildHistoryTitle(req.Series, labelTitle),
 		BibleText:    strings.TrimSpace(req.BibleText),
-		Hymn:         strings.TrimSpace(req.Hymn),
+		Hymn:         hymn,
 		Preacher:     strings.TrimSpace(req.Preacher),
 		ChurchName:   strings.TrimSpace(req.ChurchName),
 		SermonDate:   strings.TrimSpace(req.SermonDate),

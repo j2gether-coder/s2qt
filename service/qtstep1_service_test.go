@@ -26,6 +26,9 @@ func newTestStep1Service(t *testing.T) *QTStep1Service {
 	}
 }
 
+// llmHymn은 LLM이 추천한 찬송가다. 화면 입력이 비었을 때만 살아남아야 한다.
+const llmHymn = "새찬송가 456장"
+
 func llmJSON(audience string, withInfographic bool) string {
 	doc := map[string]any{
 		"version":     "1.0",
@@ -35,6 +38,7 @@ func llmJSON(audience string, withInfographic bool) string {
 		"metadata": map[string]any{
 			"title":              "[QT] 테스트 제목",
 			"bible_text":         "로마서 8:26-28",
+			"hymn":               llmHymn,
 			"support_scriptures": []string{"마태복음 11:28"},
 			"support_scriptures_full": []map[string]string{
 				{"reference": "마태복음 11:28", "text": "수고하고 무거운 짐진 자들아"},

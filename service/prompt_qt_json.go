@@ -57,10 +57,10 @@ sections[*].blocks[*].items (list items - reflection, etc):
   Example 3: "내 사랑이 주변 공동체를 세우고 강하게 하는지 확인해봅시다."
   ❌ Wrong: "Consider whether you confess your love for the Lord..."
 
-metadata.hymn: 
-  Korean hymn name or standard Korean hymn format
-  Example: "새찬송가 324장"
-  Example: "주의 사랑을 담아"
+metadata.hymn:
+  한국 찬송가 표기 형식. 값 자체는 입력값을 따른다(METADATA FIDELITY 의 hymn 규칙 참조).
+  형식 예: "새찬송가 324장"
+  형식 예: "주의 사랑을 담아"
   ❌ Wrong: "Hymn 456" or "Love Song (사랑의 노래)"
 
 metadata.support_scriptures: 
@@ -140,9 +140,8 @@ METADATA RULES:
   Example:
     "1절 예수께서 건너편으로 가시매...\n2절 나가기를 원하여 공동묘지에 머물렀던 자..."
   
-- hymn: Use {{hymn}} if provided; recommend 1 Korean hymn if empty; use "-" if unsure
-  Example: "새찬송가 456장"
-  
+- hymn: 아래 METADATA FIDELITY 의 hymn 규칙을 따른다
+
 - support_scriptures: Array of 0-3 Korean Bible references (strings), excluding {{bible_text}}
   Example: ["마태복음 11:28", "요한복음 14:1"] or []
   
@@ -180,6 +179,16 @@ month_accent:
   ✓ "#C97A3D"
   ✗ "오"   ✗ "말씀과 함께"   ✗ "파란색"
 
+hymn 은 조건부다. 위 목록과 달리 빈 값을 채워도 되는 유일한 필드다.
+
+  입력값이 있으면     → 글자 그대로 복사한다. 다른 찬송가로 바꾸지 않는다.
+  입력값이 비어 있으면 → 본문에 어울리는 한국 찬송가 1개를 추천한다.
+                        확신이 없으면 "-" 로 둔다.
+
+입력 hymn = "새찬송가 488장"  일 때
+  ✓ "hymn": "새찬송가 488장"
+  ✗ "hymn": "새찬송가 456장"     ← 다른 곡으로 바꿈. 금지
+
 이 문서는 교회 주보로 배포된다. 지어낸 설교자명이나 교회명이 실리면 안 된다.
 정확성이 완성도보다 중요하다.
 
@@ -194,7 +203,7 @@ month_accent:
     "title": "[QT] 주님의 사랑에 응답하는 삶",
     "bible_text": "{{bible_text}}",
     "bible_passage_text": "1절 설명\n2절 설명",
-    "hymn": "새찬송가 456장",
+    "hymn": "{{hymn}}",
     "support_scriptures": ["마태복음 11:28", "요한복음 14:1"],
     "support_scriptures_full": [
       {"reference": "마태복음 11:28", "text": "수고하고..."},
@@ -475,7 +484,9 @@ Bible Passage: MUST reuse the user-provided input passage EXACTLY (본문성구�
 - Set metadata.bible_text to the input {{bible_text}} verbatim — do NOT change the book, chapter, or verse range
 - The QT foundation stays fixed to the originally entered passage
 
-Summary: 5-6 sentences, reverent and thoughtful (모두 한글)
+Summary: 3-4 sentences, about 150-180 Korean characters (모두 한글)
+- 경건하고 사려 깊게. 본문의 상황과 오늘의 의미를 담는다.
+- 문장 수와 글자 수를 모두 지킨다. 한 문장을 길게 늘여 글자 수를 채우지 않는다.
 - Example: "여호사밧은 압도적인 적군을 앞두고도 자신을 바라보지 않았습니다."
 
 Message: 3 points with 3-5 sentences each (완벽한 한글만)
@@ -489,9 +500,11 @@ Reflection: 3 items for personal examination (한글 포맷 필수)
 - Example 2: "내 섬김이 의무가 아닌 진정한 사랑에서 비롯되는지 살펴봅시다."
 - Example 3: "내 사랑이 주변 공동체를 세우고 강하게 하는지 확인해봅시다."
 
-Prayer: 5-6 sentences including repentance, gratitude, petition (한글만)
+Prayer: 3-4 sentences, about 120-150 Korean characters (한글만)
 - Tone: Serious, humble, warm
 - Structure: 경배 → 회개 → 감사 → 간구
+  네 단계를 모두 담되 압축한다. 문장 수를 줄이려고 단계를 빼지 않는다.
+  한 문장이 두 단계를 겸해도 좋다.
 - Example: "주님, 나의 생각을 말씀으로 지켜주세요..."
 
 Style: Warm, reverent, profound; avoid casual or trendy language
